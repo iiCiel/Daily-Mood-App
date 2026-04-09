@@ -1,43 +1,43 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import { MOODS, COLORS } from '../constants/theme';
+import { MOODS } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import MoodFace from './MoodFace';
 
 export default function EntryCard({ entry, onPress }) {
+  const COLORS = useTheme();
   const mood = MOODS.find((m) => m.value === entry.mood) || MOODS[2];
   const date = new Date(entry.date + 'T00:00:00');
-  const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-  const dayNum = date.getDate();
-  const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+  const day = date.getDate();
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.dateBox, { backgroundColor: mood.color + '15' }]}>
-        <Text style={[styles.dayName, { color: mood.color }]}>{dayName}</Text>
-        <Text style={[styles.dayNum, { color: mood.color }]}>{dayNum}</Text>
-        <Text style={[styles.monthName, { color: mood.color }]}>{monthName}</Text>
-      </View>
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <MoodFace color={mood.color} moodValue={mood.value} size={44} />
       <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.emoji}>{mood.emoji}</Text>
+        <View style={styles.row}>
+          <Text style={[styles.dayText, { color: COLORS.text }]}>{weekday} {day}</Text>
           <Text style={[styles.moodLabel, { color: mood.color }]}>{mood.label}</Text>
         </View>
         {entry.note ? (
-          <Text style={styles.note} numberOfLines={2}>
+          <Text style={[styles.note, { color: COLORS.textSecondary }]} numberOfLines={2}>
             {entry.note}
           </Text>
         ) : null}
         {entry.photos && entry.photos.length > 0 && (
           <View style={styles.photoRow}>
             {entry.photos.slice(0, 3).map((photo, i) => (
-              <Image
-                key={photo.id || i}
-                source={{ uri: photo.uri }}
-                style={styles.thumbnail}
-              />
+              <Image key={photo.id || i} source={{ uri: photo.uri }} style={styles.thumbnail} />
             ))}
             {entry.photos.length > 3 && (
-              <View style={styles.morePhotos}>
-                <Text style={styles.moreText}>+{entry.photos.length - 3}</Text>
+              <View style={[styles.morePhotos, { backgroundColor: COLORS.border }]}>
+                <Text style={[styles.moreText, { color: COLORS.textSecondary }]}>
+                  +{entry.photos.length - 3}
+                </Text>
               </View>
             )}
           </View>
@@ -50,81 +50,57 @@ export default function EntryCard({ entry, onPress }) {
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 14,
+    alignItems: 'flex-start',
+    gap: 14,
+    borderRadius: 18,
+    padding: 16,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  dateBox: {
-    width: 56,
-    height: 68,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  dayName: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  dayNum: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  monthName: {
-    fontSize: 11,
-    fontWeight: '500',
+    borderWidth: 1,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
   },
-  header: {
+  row: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
   },
-  emoji: {
-    fontSize: 18,
-    marginRight: 6,
+  dayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   moodLabel: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   note: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     marginBottom: 6,
   },
   photoRow: {
     flexDirection: 'row',
     gap: 4,
-    marginTop: 4,
+    marginTop: 6,
   },
   thumbnail: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 8,
   },
   morePhotos: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 8,
-    backgroundColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   moreText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+    fontSize: 11,
     fontWeight: '600',
   },
 });

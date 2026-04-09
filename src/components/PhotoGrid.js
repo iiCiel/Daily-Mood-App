@@ -1,36 +1,30 @@
-import React from 'react';
-import {
-  View,
-  Image,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  Dimensions,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Image, TouchableOpacity, Text, StyleSheet, Dimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { COLORS } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import PhotoViewer from './PhotoViewer';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PHOTO_SIZE = (SCREEN_WIDTH - 64 - 16) / 3;
 
 export default function PhotoGrid({ photos = [], onPhotosChange, editable = true }) {
+  const COLORS = useTheme();
+  const [viewingUri, setViewingUri] = useState(null);
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('We need photo library access to add photos to your entries.');
+      alert('We need photo library access to add photos.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.7,
       selectionLimit: 10,
     });
-
     if (!result.canceled) {
-      const newUris = result.assets.map((a) => a.uri);
-      onPhotosChange([...photos, ...newUris]);
+      onPhotosChange([...photos, ...result.assets.map((a) => a.uri)]);
     }
   };
 
@@ -40,31 +34,27 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
       alert('We need camera access to take photos.');
       return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.7,
-    });
-
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     if (!result.canceled) {
       onPhotosChange([...photos, result.assets[0].uri]);
     }
   };
 
-  const removePhoto = (index) => {
-    const updated = photos.filter((_, i) => i !== index);
-    onPhotosChange(updated);
-  };
+  const removePhoto = (index) => onPhotosChange(photos.filter((_, i) => i !== index));
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Photos</Text>
+      <PhotoViewer uri={viewingUri} onClose={() => setViewingUri(null)} />
+      <Text style={[styles.label, { color: COLORS.textSecondary }]}>photos</Text>
       <View style={styles.grid}>
         {photos.map((uri, index) => (
           <View key={uri + index} style={styles.photoWrapper}>
-            <Image source={{ uri }} style={styles.photo} />
+            <TouchableOpacity onPress={() => setViewingUri(uri)} activeOpacity={0.85}>
+              <Image source={{ uri }} style={styles.photo} />
+            </TouchableOpacity>
             {editable && (
               <TouchableOpacity
-                style={styles.removeButton}
+                style={[styles.removeBtn, { backgroundColor: COLORS.danger }]}
                 onPress={() => removePhoto(index)}
               >
                 <Text style={styles.removeText}>✕</Text>
@@ -74,13 +64,19 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
         ))}
         {editable && (
           <>
-            <TouchableOpacity style={styles.addButton} onPress={pickImage}>
+            <TouchableOpacity
+              style={[styles.addBtn, { borderColor: COLORS.border }]}
+              onPress={pickImage}
+            >
               <Text style={styles.addIcon}>🖼</Text>
-              <Text style={styles.addText}>Gallery</Text>
+              <Text style={[styles.addText, { color: COLORS.textSecondary }]}>gallery</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.addButton} onPress={takePhoto}>
+            <TouchableOpacity
+              style={[styles.addBtn, { borderColor: COLORS.border }]}
+              onPress={takePhoto}
+            >
               <Text style={styles.addIcon}>📷</Text>
-              <Text style={styles.addText}>Camera</Text>
+              <Text style={[styles.addText, { color: COLORS.textSecondary }]}>camera</Text>
             </TouchableOpacity>
           </>
         )}
@@ -90,60 +86,22 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 20,
+  container: { marginBottom: 20 },
+  label: { fontSize: 13, marginBottom: 10, letterSpacing: 0.3 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  photoWrapper: { position: 'relative' },
+  photo: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 12 },
+  removeBtn: {
+    position: 'absolute', top: -6, right: -6,
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
   },
-  label: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 12,
+  removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  addBtn: {
+    width: PHOTO_SIZE, height: PHOTO_SIZE,
+    borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  photoWrapper: {
-    position: 'relative',
-  },
-  photo: {
-    width: PHOTO_SIZE,
-    height: PHOTO_SIZE,
-    borderRadius: 12,
-  },
-  removeButton: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: COLORS.danger,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  addButton: {
-    width: PHOTO_SIZE,
-    height: PHOTO_SIZE,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addIcon: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  addText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
+  addIcon: { fontSize: 22, marginBottom: 4 },
+  addText: { fontSize: 11, letterSpacing: 0.2 },
 });

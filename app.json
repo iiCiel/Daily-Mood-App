@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "Mood Journal",
+    "name": "mood",
     "slug": "mood-journal",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "scheme": "mood-journal",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FAF7F2"
+      "backgroundColor": "#F0EBE1"
     },
     "ios": {
       "supportsTablet": true,
@@ -23,21 +23,24 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FAF7F2"
+        "backgroundColor": "#F0EBE1"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE"
-      ]
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.iiciel.moodjournal"
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       "expo-sqlite",
+      "expo-notifications",
       [
         "expo-image-picker",
         {
@@ -45,6 +48,12 @@
           "cameraPermission": "Allow Mood Journal to use your camera."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "cf88895e-3ce4-4edb-930b-0f8637e1d522"
+      }
+    }
   }
 }

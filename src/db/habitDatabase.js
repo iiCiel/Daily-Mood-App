@@ -1,0 +1,163 @@
+import * as SQLite from 'expo-sqlite';
+
+let db = null;
+
+async function getDatabase() {
+  if (!db) {
+    db = await SQLite.openDatabaseAsync('mood_journal.db');
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS habits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        emoji TEXT DEFAULT '✦',
+        color TEXT DEFAULT '#C5A8E8',
+        created_at TEXT NOT NULL,
+        archived INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS habit_completions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        habit_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        completed_at TEXT NOT NULL,
+        UNIQUE(habit_id, date)
+      );
+    `);
+  }
+  return db;
+}
+
+export async function getHabits() {
+  const database = await getDatabase();
+  return database.getAllAsync('SELECT * FROM habits WHERE archived = 0 ORDER BY created_at ASC');
+}
+
+export async function createHabit(title, emoji, color) {
+  const database = await getDatabase();
+  await database.runAsync(
+    'INSERT INTO habits (title, emoji, color, created_at) VALUES (?, ?, ?, ?)',
+    [title, emoji || '✦', color || '#C5A8E8', new Date().toISOString()]
+  );
+}
+
+export async function updateHabit(id, title, emoji, color) {
+  const database = await getDatabase();
+  await database.runAsync(
+    'UPDATE habits SET title = ?, emoji = ?, color = ? WHERE id = ?',
+    [title, emoji, color, id]
+  );
+}
+
+export async function archiveHabit(id) {
+  const database = await getDatabase();
+  await database.runAsync('UPDATE habits SET archived = 1 WHERE id = ?', [id]);
+}
+
+export async function toggleCompletion(habitId, date) {
+  const database = await getDatabase();
+  const existing = await database.getFirstAsync(
+    'SELECT id FROM habit_completions WHERE habit_id = ? AND date = ?',
+    [habitId, date]
+  );
+  if (existing) {
+    await database.runAsync(
+      'DELETE FROM habit_completions WHERE habit_id = ? AND date = ?',
+      [habitId, date]
+    );
+    return false;
+  } else {
+    await database.runAsync(
+      'INSERT INTO habit_completions (habit_id, date, completed_at) VALUES (?, ?, ?)',
+      [habitId, date, new Date().toISOString()]
+    );
+    return true;
+  }
+}
+
+export async function getCompletionsForDate(date) {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    'SELECT habit_id FROM habit_completions WHERE date = ?',
+    [date]
+  );
+  const set = new Set();
+  for (const r of rows) set.add(r.habit_id);
+  return set;
+}
+
+export async function getCompletionsForMonth(year, month) {
+  const database = await getDatabase();
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  const rows = await database.getAllAsync(
+    "SELECT habit_id, date FROM habit_completions WHERE date LIKE ? || '%'",
+    [prefix]
+  );
+  // Returns map: date -> Set of habit_ids
+  const map = {};
+  for (const r of rows) {
+    if (!map[r.date]) map[r.date] = new Set();
+    map[r.date].add(r.habit_id);
+  }
+  return map;
+}
+
+export async function getHabitStreak(habitId) {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    'SELECT date FROM habit_completions WHERE habit_id = ? ORDER BY date DESC',
+    [habitId]
+  );
+  if (rows.length === 0) return 0;
+
+  let streak = 0;
+  const today = new Date();
+  let check = new Date(today);
+
+  for (const { date } of rows) {
+    const checkStr = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
+    if (date === checkStr) {
+      streak++;
+      check.setDate(check.getDate() - 1);
+    } else {
+      // Allow today to be missing (check yesterday as start)
+      if (streak === 0) {
+        check.setDate(check.getDate() - 1);
+        const yStr = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
+        if (date === yStr) {
+          streak++;
+          check.setDate(check.getDate() - 1);
+        } else break;
+      } else break;
+    }
+  }
+  return streak;
+}
+
+export async function getHabitHistory(habitId, days = 30) {
+  const database = await getDatabase();
+  const result = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    result.push(str);
+  }
+  const rows = await database.getAllAsync(
+    `SELECT date FROM habit_completions WHERE habit_id = ? AND date IN (${result.map(() => '?').join(',')})`,
+    [habitId, ...result]
+  );
+  const doneSet = new Set(rows.map(r => r.date));
+  return result.map(date => ({ date, done: doneSet.has(date) }));
+}
+
+export async function getCompletionRate(habitId, days = 30) {
+  const database = await getDatabase();
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const sinceStr = `${since.getFullYear()}-${String(since.getMonth()+1).padStart(2,'0')}-${String(since.getDate()).padStart(2,'0')}`;
+  const row = await database.getFirstAsync(
+    'SELECT COUNT(*) as count FROM habit_completions WHERE habit_id = ? AND date >= ?',
+    [habitId, sinceStr]
+  );
+  return Math.round(((row?.count || 0) / days) * 100);
+}

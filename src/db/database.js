@@ -144,9 +144,151 @@ export async function getEntriesForMonth(year, month) {
   return result;
 }
 
+export async function exportMonthAsText(year, month) {
+  const database = await getDatabase();
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  const entries = await database.getAllAsync(
+    "SELECT * FROM entries WHERE date LIKE ? || '%' ORDER BY date ASC",
+    [prefix]
+  );
+  if (!entries.length) return null;
+
+  const MOOD_LABELS = { 5: 'Great', 4: 'Good', 3: 'Okay', 2: 'Low', 1: 'Bad' };
+  const monthName = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  let text = `Mood Journal — ${monthName}\n${'='.repeat(40)}\n\n`;
+  for (const entry of entries) {
+    const dateObj = new Date(entry.date + 'T00:00:00');
+    const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    text += `${dateStr}\n`;
+    text += `Mood: ${MOOD_LABELS[entry.mood] || entry.mood}\n`;
+    if (entry.note) text += `\n${entry.note}\n`;
+    text += `\n${'-'.repeat(30)}\n\n`;
+  }
+  return text;
+}
+
 export async function deleteEntry(id) {
   const database = await getDatabase();
   await database.runAsync('DELETE FROM entries WHERE id = ?', [id]);
+}
+
+export async function getStreak() {
+  const database = await getDatabase();
+  const entries = await database.getAllAsync(
+    'SELECT date FROM entries ORDER BY date DESC'
+  );
+  if (!entries.length) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dateSet = new Set(entries.map((e) => e.date));
+
+  let streak = 0;
+  const cursor = new Date(today);
+
+  // If today is not logged, start checking from yesterday
+  const todayStr = cursor.toISOString().slice(0, 10);
+  if (!dateSet.has(todayStr)) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  while (true) {
+    const str = cursor.toISOString().slice(0, 10);
+    if (!dateSet.has(str)) break;
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+export async function getMonthStats(year, month) {
+  const database = await getDatabase();
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  const entries = await database.getAllAsync(
+    "SELECT mood FROM entries WHERE date LIKE ? || '%'",
+    [prefix]
+  );
+  if (!entries.length) return null;
+
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const e of entries) counts[e.mood] = (counts[e.mood] || 0) + 1;
+
+  const total = entries.length;
+  const avgMood = entries.reduce((sum, e) => sum + e.mood, 0) / total;
+  const topMood = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+
+  return { total, counts, avgMood, topMood: parseInt(topMood[0]) };
+}
+
+export async function getMoodFocusCorrelation() {
+  // Returns { highFocusAvg, lowFocusAvg, highFocusDays, lowFocusDays }
+  // "high focus" = days with >= 60 min focused, "low focus" = days with < 60 min (but > 0)
+  const database = await getDatabase();
+  // Get all mood entries with their dates
+  const moodEntries = await database.getAllAsync('SELECT date, mood FROM entries');
+  if (moodEntries.length < 5) return null; // not enough data
+
+  // Get focus minutes per day (from same db - pomodoro_sessions table)
+  let sessions = [];
+  try {
+    sessions = await database.getAllAsync(
+      'SELECT date, SUM(duration) as mins FROM pomodoro_sessions WHERE completed = 1 GROUP BY date'
+    );
+  } catch { return null; }
+
+  if (sessions.length < 3) return null;
+
+  const focusMap = {};
+  for (const s of sessions) focusMap[s.date] = s.mins;
+
+  const highFocus = [], lowFocus = [];
+  for (const e of moodEntries) {
+    const mins = focusMap[e.date];
+    if (mins === undefined) continue;
+    if (mins >= 60) highFocus.push(e.mood);
+    else if (mins > 0) lowFocus.push(e.mood);
+  }
+
+  if (highFocus.length < 2 || lowFocus.length < 2) return null;
+
+  const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+  return {
+    highFocusAvg: avg(highFocus),
+    lowFocusAvg: avg(lowFocus),
+    highFocusDays: highFocus.length,
+    lowFocusDays: lowFocus.length,
+  };
+}
+
+export async function getEntriesForYear(year) {
+  const database = await getDatabase();
+  const entries = await database.getAllAsync(
+    "SELECT date, mood FROM entries WHERE date LIKE ? || '%'",
+    [String(year)]
+  );
+  const map = {};
+  for (const e of entries) map[e.date] = e.mood;
+  return map;
+}
+
+export async function getLastNDaysMoods(n = 7) {
+  const database = await getDatabase();
+  const days = [];
+  const today = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    days.push(str);
+  }
+  const entries = await database.getAllAsync(
+    `SELECT date, mood FROM entries WHERE date IN (${days.map(() => '?').join(',')})`,
+    days
+  );
+  const map = {};
+  for (const e of entries) map[e.date] = e.mood;
+  return days.map((date) => ({ date, mood: map[date] || null }));
 }
 
 export async function getUnsyncedEntries() {
