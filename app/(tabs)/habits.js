@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import AestheticBackground from '../../src/components/AestheticBackground';
 import {
-  getHabits, createHabit, archiveHabit,
+  getHabits, createHabit, updateHabit, archiveHabit,
   toggleCompletion, getCompletionsForDate,
   getHabitStreak,
 } from '../../src/db/habitDatabase';
@@ -65,7 +65,6 @@ export default function HabitsScreen() {
   async function handleAdd() {
     if (!newTitle.trim()) return;
     if (editingHabit) {
-      const { updateHabit } = require('../../src/db/habitDatabase');
       await updateHabit(editingHabit.id, newTitle.trim(), newEmoji, newColor);
     } else {
       await createHabit(newTitle.trim(), newEmoji, newColor);

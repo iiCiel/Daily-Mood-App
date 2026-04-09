@@ -28,8 +28,46 @@ export async function getDatabase() {
       FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      completed INTEGER NOT NULL DEFAULT 0,
+      target_pomodoros INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+      id TEXT PRIMARY KEY,
+      task_id TEXT,
+      duration INTEGER NOT NULL DEFAULT 25,
+      completed INTEGER NOT NULL DEFAULT 0,
+      date TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS habits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      emoji TEXT DEFAULT '✦',
+      color TEXT DEFAULT '#C5A8E8',
+      created_at TEXT NOT NULL,
+      archived INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS habit_completions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      habit_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      completed_at TEXT NOT NULL,
+      UNIQUE(habit_id, date)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
     CREATE INDEX IF NOT EXISTS idx_photos_entry ON photos(entry_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_date ON pomodoro_sessions(date);
+    CREATE INDEX IF NOT EXISTS idx_sessions_task ON pomodoro_sessions(task_id);
   `);
   return db;
 }

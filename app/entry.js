@@ -76,8 +76,12 @@ export default function EntryScreen() {
     try {
       await saveEntry(date, mood, note, photos);
       setHasExisting(true);
-      const streak = await getStreak();
-      await checkStreakMilestone(streak);
+      try {
+        const streak = await getStreak();
+        await checkStreakMilestone(streak);
+      } catch (e) {
+        // don't block navigation if streak/notification fails
+      }
       router.back();
     } catch (e) {
       Alert.alert('error', 'failed to save. please try again.');

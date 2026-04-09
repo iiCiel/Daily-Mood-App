@@ -1,30 +1,4 @@
-import * as SQLite from 'expo-sqlite';
-
-let db = null;
-
-async function getDatabase() {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync('mood_journal.db');
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS habits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        emoji TEXT DEFAULT '✦',
-        color TEXT DEFAULT '#C5A8E8',
-        created_at TEXT NOT NULL,
-        archived INTEGER DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS habit_completions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        habit_id INTEGER NOT NULL,
-        date TEXT NOT NULL,
-        completed_at TEXT NOT NULL,
-        UNIQUE(habit_id, date)
-      );
-    `);
-  }
-  return db;
-}
+import { getDatabase } from './database';
 
 export async function getHabits() {
   const database = await getDatabase();
@@ -91,7 +65,6 @@ export async function getCompletionsForMonth(year, month) {
     "SELECT habit_id, date FROM habit_completions WHERE date LIKE ? || '%'",
     [prefix]
   );
-  // Returns map: date -> Set of habit_ids
   const map = {};
   for (const r of rows) {
     if (!map[r.date]) map[r.date] = new Set();
@@ -118,7 +91,6 @@ export async function getHabitStreak(habitId) {
       streak++;
       check.setDate(check.getDate() - 1);
     } else {
-      // Allow today to be missing (check yesterday as start)
       if (streak === 0) {
         check.setDate(check.getDate() - 1);
         const yStr = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
