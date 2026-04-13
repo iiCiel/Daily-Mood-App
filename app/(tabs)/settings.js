@@ -1,193 +1,168 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
+  View, Text, TextInput, TouchableOpacity,
+  StyleSheet, Alert, ScrollView, Linking,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initSupabase, syncEntries } from '../../src/lib/supabase';
 import { getUnsyncedEntries, markSynced } from '../../src/db/database';
-import { COLORS } from '../../src/constants/theme';
-import { useTheme } from '../../src/context/ThemeContext';
+import { useTheme, useSetTheme, useThemePref } from '../../src/context/ThemeContext';
 import {
-  requestPermissions,
-  scheduleReminder,
-  cancelReminder,
-  getSavedReminder,
+  requestPermissions, getReminders, addReminder, removeReminder,
 } from '../../src/notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
 
-const STORAGE_KEYS = {
-  SUPABASE_URL: 'supabase_url',
-  SUPABASE_KEY: 'supabase_anon_key',
-};
+const STORAGE_KEYS = { SUPABASE_URL: 'supabase_url', SUPABASE_KEY: 'supabase_anon_key' };
+const APP_VERSION = '1.0.0';
+const PLAY_STORE_URL = 'market://details?id=com.iiciel.moodjournal';
+
+const REMINDER_PRESETS = [
+  { label: '7:00 am', hour: 7, minute: 0 },
+  { label: '9:00 am', hour: 9, minute: 0 },
+  { label: '12:00 pm', hour: 12, minute: 0 },
+  { label: '3:00 pm', hour: 15, minute: 0 },
+  { label: '6:00 pm', hour: 18, minute: 0 },
+  { label: '9:00 pm', hour: 21, minute: 0 },
+];
+
+function Toggle({ value, onToggle, C }) {
+  return (
+    <TouchableOpacity
+      style={[ss.toggle, { backgroundColor: value ? C.text : C.border }]}
+      onPress={onToggle}
+      activeOpacity={0.8}
+    >
+      <View style={[ss.thumb, { left: value ? 18 : 2 }]} />
+    </TouchableOpacity>
+  );
+}
 
 export default function SettingsScreen() {
-  const COLORS = useTheme();
+  const C = useTheme();
+  const setThemePref = useSetTheme();
+  const themePref = useThemePref();
+
   const [supabaseUrl, setSupabaseUrl] = useState('');
   const [supabaseKey, setSupabaseKey] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [reminder, setReminder] = useState(null);
+  const [reminders, setReminders] = useState([]);
   const [lockEnabled, setLockEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
-  const REMINDER_PRESETS = [
-    { label: '8:00 am', hour: 8, minute: 0 },
-    { label: '12:00 pm', hour: 12, minute: 0 },
-    { label: '6:00 pm', hour: 18, minute: 0 },
-    { label: '9:00 pm', hour: 21, minute: 0 },
-  ];
 
   useEffect(() => {
     loadSettings();
-    getSavedReminder().then(setReminder);
-    AsyncStorage.getItem('app_lock_enabled').then((v) => setLockEnabled(v === 'true'));
+    getReminders().then(setReminders);
+    AsyncStorage.getItem('app_lock_enabled').then(v => setLockEnabled(v === 'true'));
     Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync()])
       .then(([hw, enrolled]) => setBiometricsAvailable(hw && enrolled));
   }, []);
 
   async function loadSettings() {
-    try {
-      const url = await AsyncStorage.getItem(STORAGE_KEYS.SUPABASE_URL);
-      const key = await AsyncStorage.getItem(STORAGE_KEYS.SUPABASE_KEY);
-      if (url) setSupabaseUrl(url);
-      if (key) setSupabaseKey(key);
-      if (url && key) {
-        initSupabase(url, key);
-        setSaved(true);
+    const url = await AsyncStorage.getItem(STORAGE_KEYS.SUPABASE_URL);
+    const key = await AsyncStorage.getItem(STORAGE_KEYS.SUPABASE_KEY);
+    if (url) setSupabaseUrl(url);
+    if (key) setSupabaseKey(key);
+    if (url && key) { initSupabase(url, key); setSaved(true); }
+  }
+
+  async function toggleReminder(hour, minute) {
+    const active = reminders.some(r => r.hour === hour && r.minute === minute);
+    if (active) {
+      await removeReminder(hour, minute);
+    } else {
+      const granted = await addReminder(hour, minute);
+      if (!granted) {
+        Alert.alert('permission needed', 'enable notifications in your phone settings.');
+        return;
       }
-    } catch (e) {
-      console.error('Failed to load settings:', e);
     }
+    setReminders(await getReminders());
   }
 
   async function handleSave() {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.SUPABASE_URL, supabaseUrl);
-      await AsyncStorage.setItem(STORAGE_KEYS.SUPABASE_KEY, supabaseKey);
-      if (supabaseUrl && supabaseKey) {
-        initSupabase(supabaseUrl, supabaseKey);
-        setSaved(true);
-      }
-      Alert.alert('saved', 'configuration saved.');
-    } catch (e) {
-      Alert.alert('error', 'failed to save settings.');
-    }
+    await AsyncStorage.setItem(STORAGE_KEYS.SUPABASE_URL, supabaseUrl);
+    await AsyncStorage.setItem(STORAGE_KEYS.SUPABASE_KEY, supabaseKey);
+    if (supabaseUrl && supabaseKey) { initSupabase(supabaseUrl, supabaseKey); setSaved(true); }
+    Alert.alert('saved', 'configuration saved.');
   }
 
   async function handleSync() {
-    if (!supabaseUrl || !supabaseKey) {
-      Alert.alert('not configured', 'please enter your supabase url and key first.');
-      return;
-    }
+    if (!supabaseUrl || !supabaseKey) { Alert.alert('not configured', 'enter your supabase credentials first.'); return; }
     setSyncing(true);
     try {
       const result = await syncEntries(getUnsyncedEntries, markSynced);
-      if (result.success) {
-        Alert.alert('synced', `${result.synced} entries synced to the cloud.`);
-      } else {
-        Alert.alert('sync failed', result.error);
-      }
-    } catch (e) {
-      Alert.alert('error', 'sync failed. check your connection and config.');
-    } finally {
-      setSyncing(false);
-    }
+      Alert.alert(result.success ? 'synced' : 'sync failed', result.success ? `${result.synced} entries synced.` : result.error);
+    } catch { Alert.alert('error', 'sync failed.'); }
+    finally { setSyncing(false); }
   }
 
-  async function handleClearConfig() {
-    Alert.alert('clear config', 'remove supabase configuration?', [
-      { text: 'cancel', style: 'cancel' },
-      {
-        text: 'clear',
-        style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.removeItem(STORAGE_KEYS.SUPABASE_URL);
-          await AsyncStorage.removeItem(STORAGE_KEYS.SUPABASE_KEY);
-          setSupabaseUrl('');
-          setSupabaseKey('');
-          setSaved(false);
-        },
-      },
-    ]);
+  function SectionTitle({ label }) {
+    return <Text style={[ss.sectionTitle, { color: C.textSecondary }]}>{label}</Text>;
   }
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        style={[styles.container, { backgroundColor: COLORS.background }]}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
+      <ScrollView style={[ss.container, { backgroundColor: C.background }]} contentContainerStyle={ss.content} keyboardShouldPersistTaps="handled">
+        <View style={ss.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={[ss.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
+          <Text style={[ss.title, { color: C.text }]}>settings</Text>
         </View>
 
-        <Text style={styles.title}>settings</Text>
-
-        {/* Daily Reminder */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: COLORS.textSecondary }]}>daily reminder</Text>
-          <Text style={[styles.sectionDesc, { color: COLORS.text }]}>
-            get a nudge to log your mood each day.
-          </Text>
-          <View style={styles.reminderRow}>
-            {REMINDER_PRESETS.map((p) => {
-              const active = reminder && reminder.hour === p.hour && reminder.minute === p.minute;
-              return (
-                <TouchableOpacity
-                  key={p.label}
-                  style={[
-                    styles.reminderChip,
-                    { borderColor: COLORS.border, backgroundColor: active ? COLORS.text : COLORS.card },
-                  ]}
-                  onPress={async () => {
-                    const granted = await requestPermissions();
-                    if (!granted) {
-                      Alert.alert('permission needed', 'enable notifications in your phone settings.');
-                      return;
-                    }
-                    await scheduleReminder(p.hour, p.minute);
-                    setReminder({ hour: p.hour, minute: p.minute });
-                  }}
-                >
-                  <Text style={[styles.reminderChipText, { color: active ? COLORS.white : COLORS.textSecondary }]}>
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {reminder && (
+        {/* Appearance */}
+        <SectionTitle label="appearance" />
+        <View style={[ss.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          {(['system', 'light', 'dark']).map((opt, i, arr) => (
             <TouchableOpacity
-              onPress={async () => {
-                await cancelReminder();
-                setReminder(null);
-              }}
+              key={opt}
+              style={[ss.themeRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border }]}
+              onPress={() => setThemePref(opt)}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.clearReminder, { color: COLORS.danger }]}>turn off reminder</Text>
+              <Text style={[ss.themeLabel, { color: C.text }]}>{opt === 'system' ? 'follow system' : opt + ' mode'}</Text>
+              <View style={[ss.radio, { borderColor: C.border }, themePref === opt && { borderColor: C.text, backgroundColor: C.text }]}>
+                {themePref === opt && <View style={ss.radioDot} />}
+              </View>
             </TouchableOpacity>
-          )}
+          ))}
         </View>
+
+        {/* Reminders */}
+        <SectionTitle label="daily reminders" />
+        <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>tap to add or remove. multiple times allowed.</Text>
+        <View style={ss.chipRow}>
+          {REMINDER_PRESETS.map(p => {
+            const active = reminders.some(r => r.hour === p.hour && r.minute === p.minute);
+            return (
+              <TouchableOpacity
+                key={p.label}
+                style={[ss.chip, { borderColor: C.border, backgroundColor: active ? C.text : C.card }]}
+                onPress={() => toggleReminder(p.hour, p.minute)}
+              >
+                <Text style={[ss.chipText, { color: active ? C.white : C.textSecondary }]}>{p.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {reminders.length > 0 && (
+          <Text style={[ss.activeReminders, { color: C.textSecondary }]}>
+            active: {reminders.map(r => {
+              const p = REMINDER_PRESETS.find(x => x.hour === r.hour && x.minute === r.minute);
+              return p?.label || `${r.hour}:${String(r.minute).padStart(2,'0')}`;
+            }).join(', ')}
+          </Text>
+        )}
 
         {/* App Lock */}
         {biometricsAvailable && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: COLORS.textSecondary }]}>app lock</Text>
-            <Text style={[styles.sectionDesc, { color: COLORS.text }]}>
-              require face id or fingerprint to open the app.
-            </Text>
+          <>
+            <SectionTitle label="app lock" />
             <TouchableOpacity
-              style={[styles.lockToggle, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
+              style={[ss.row, { backgroundColor: C.card, borderColor: C.border }]}
               onPress={async () => {
                 const next = !lockEnabled;
                 await AsyncStorage.setItem('app_lock_enabled', next ? 'true' : 'false');
@@ -195,258 +170,88 @@ export default function SettingsScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.lockToggleText, { color: COLORS.text }]}>
-                {lockEnabled ? 'enabled' : 'disabled'}
-              </Text>
-              <View style={[
-                styles.toggle,
-                { backgroundColor: lockEnabled ? COLORS.text : COLORS.border }
-              ]}>
-                <View style={[styles.toggleThumb, { left: lockEnabled ? 18 : 2 }]} />
-              </View>
+              <Text style={[ss.rowLabel, { color: C.text }]}>biometric lock</Text>
+              <Toggle value={lockEnabled} onToggle={async () => {
+                const next = !lockEnabled;
+                await AsyncStorage.setItem('app_lock_enabled', next ? 'true' : 'false');
+                setLockEnabled(next);
+              }} C={C} />
             </TouchableOpacity>
-          </View>
+          </>
         )}
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: COLORS.textSecondary }]}>cloud sync</Text>
-          <Text style={styles.sectionDesc}>
-            connect to supabase to back up your entries. optional — everything is stored locally first.
-          </Text>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>supabase url</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="https://your-project.supabase.co"
-            placeholderTextColor={COLORS.textSecondary}
-            value={supabaseUrl}
-            onChangeText={setSupabaseUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
+        {/* Cloud sync */}
+        <SectionTitle label="cloud sync" />
+        <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>optional. connect supabase to back up your entries.</Text>
+        <View style={ss.inputGroup}>
+          <TextInput style={[ss.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+            placeholder="supabase url" placeholderTextColor={C.textSecondary}
+            value={supabaseUrl} onChangeText={setSupabaseUrl}
+            autoCapitalize="none" autoCorrect={false}
           />
         </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>anon key</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="your-anon-key"
-            placeholderTextColor={COLORS.textSecondary}
-            value={supabaseKey}
-            onChangeText={setSupabaseKey}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
+        <View style={ss.inputGroup}>
+          <TextInput style={[ss.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+            placeholder="anon key" placeholderTextColor={C.textSecondary}
+            value={supabaseKey} onChangeText={setSupabaseKey}
+            autoCapitalize="none" autoCorrect={false} secureTextEntry
           />
         </View>
-
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleSave}>
-          <Text style={styles.primaryBtnText}>save</Text>
+        <TouchableOpacity style={[ss.btn, { backgroundColor: C.text }]} onPress={handleSave}>
+          <Text style={[ss.btnText, { color: C.white }]}>save</Text>
         </TouchableOpacity>
-
         {saved && (
-          <TouchableOpacity
-            style={[styles.secondaryBtn, syncing && { opacity: 0.5 }]}
-            onPress={handleSync}
-            disabled={syncing}
-          >
-            <Text style={styles.secondaryBtnText}>
-              {syncing ? 'syncing...' : 'sync now'}
-            </Text>
+          <TouchableOpacity style={[ss.btn, { backgroundColor: C.success }, syncing && { opacity: 0.5 }]} onPress={handleSync} disabled={syncing}>
+            <Text style={[ss.btnText, { color: '#fff' }]}>{syncing ? 'syncing...' : 'sync now'}</Text>
           </TouchableOpacity>
         )}
 
-        {saved && (
-          <TouchableOpacity style={styles.dangerBtn} onPress={handleClearConfig}>
-            <Text style={styles.dangerBtnText}>clear configuration</Text>
+        {/* About */}
+        <SectionTitle label="about" />
+        <View style={[ss.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => router.push('/privacy')}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>privacy policy</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
-        )}
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>how to set up sync</Text>
-          <Text style={styles.infoText}>
-            1. create a free supabase project at supabase.com{'\n'}
-            2. create an "entries" table: id (text, PK), date (text), mood (int4), note (text), created_at, updated_at{'\n'}
-            3. copy your project URL and anon key from Settings › API{'\n'}
-            4. paste them above and hit save
-          </Text>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => Linking.openURL(PLAY_STORE_URL).catch(() => Alert.alert('', 'app not on store yet.'))}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>rate the app ⭐</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
+          </TouchableOpacity>
+          <View style={ss.aboutRow}>
+            <Text style={[ss.aboutLabel, { color: C.textSecondary }]}>version</Text>
+            <Text style={{ color: C.textSecondary }}>{APP_VERSION}</Text>
+          </View>
         </View>
       </ScrollView>
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  backBtn: {
-    alignSelf: 'flex-start',
-    padding: 4,
-  },
-  backText: {
-    fontSize: 24,
-    color: COLORS.text,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: COLORS.text,
-    letterSpacing: -0.5,
-    marginBottom: 28,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  sectionDesc: {
-    fontSize: 14,
-    color: COLORS.text,
-    lineHeight: 21,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.4,
-    marginBottom: 7,
-  },
-  input: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    padding: 14,
-    fontSize: 14,
-    color: COLORS.text,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  primaryBtn: {
-    backgroundColor: COLORS.text,
-    borderRadius: 999,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  primaryBtnText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-  },
-  secondaryBtn: {
-    backgroundColor: COLORS.success,
-    borderRadius: 999,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  secondaryBtnText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  dangerBtn: {
-    borderRadius: 999,
-    paddingVertical: 15,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.danger,
-    marginBottom: 28,
-  },
-  dangerBtnText: {
-    color: COLORS.danger,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  reminderRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 10,
-  },
-  reminderChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  reminderChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0.2,
-  },
-  lockToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginTop: 12,
-  },
-  lockToggleText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  toggle: {
-    width: 42,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  toggleThumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    top: 3,
-  },
-  clearReminder: {
-    fontSize: 13,
-    letterSpacing: 0.3,
-    marginTop: 2,
-  },
-  infoBox: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  infoTitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  infoText: {
-    fontSize: 13,
-    color: COLORS.text,
-    lineHeight: 22,
-  },
+const ss = StyleSheet.create({
+  container: { flex: 1 },
+  content: { padding: 24, paddingTop: 60, paddingBottom: 50 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 28 },
+  back: { fontSize: 24 },
+  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  sectionTitle: { fontSize: 12, letterSpacing: 0.6, marginTop: 24, marginBottom: 10 },
+  sectionDesc: { fontSize: 13, letterSpacing: 0.2, marginBottom: 12, marginTop: -4 },
+  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 8 },
+  themeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  themeLabel: { fontSize: 15, letterSpacing: 0.1 },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
+  chipText: { fontSize: 13, fontWeight: '500', letterSpacing: 0.2 },
+  activeReminders: { fontSize: 12, letterSpacing: 0.3, marginBottom: 8 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8 },
+  rowLabel: { fontSize: 15, letterSpacing: 0.1 },
+  toggle: { width: 42, height: 26, borderRadius: 13, justifyContent: 'center', position: 'relative' },
+  thumb: { position: 'absolute', width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', top: 3 },
+  inputGroup: { marginBottom: 12 },
+  input: { borderRadius: 14, padding: 14, fontSize: 14, borderWidth: 1 },
+  btn: { borderRadius: 999, paddingVertical: 15, alignItems: 'center', marginBottom: 12 },
+  btnText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
+  aboutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  aboutLabel: { fontSize: 15, letterSpacing: 0.1 },
 });

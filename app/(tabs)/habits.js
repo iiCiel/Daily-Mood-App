@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  TextInput, Modal, Alert, Dimensions,
+  TextInput, Modal, Alert, Dimensions, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -10,7 +10,7 @@ import AestheticBackground from '../../src/components/AestheticBackground';
 import {
   getHabits, createHabit, updateHabit, archiveHabit,
   toggleCompletion, getCompletionsForDate,
-  getHabitStreak,
+  getHabitStreak, getCompletionsForMonth,
 } from '../../src/db/habitDatabase';
 
 const EMOJI_OPTIONS = ['✦', '💧', '📚', '🏃', '🧘', '💊', '🥗', '😴', '✍️', '🎯', '🎸', '🌿', '🧹', '💪', '🫁', '☀️', '🛁', '🍵'];
@@ -19,6 +19,80 @@ const COLOR_OPTIONS = ['#C5A8E8', '#6CC97C', '#F9C74F', '#F4A56A', '#89B4D4', '#
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function buildCalendarDays(year, month) {
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let d = 1; d <= daysInMonth; d++) days.push(d);
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
+}
+
+function HabitCalendar({ calYear, calMonth, habits, monthCompletions, C, onPrev, onNext, todayDate, onDayPress }) {
+  const n = new Date();
+  const isCurrentMonth = calYear === n.getFullYear() && calMonth === n.getMonth() + 1;
+  const monthLabel = new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const calDays = buildCalendarDays(calYear, calMonth);
+  const total = habits.length;
+
+  return (
+    <View style={[styles.calCard, { backgroundColor: C.card, borderColor: C.border }]}>
+      <View style={styles.calHeader}>
+        <TouchableOpacity onPress={onPrev} style={styles.calNavBtn}>
+          <Text style={[styles.calNav, { color: C.text }]}>‹</Text>
+        </TouchableOpacity>
+        <Text style={[styles.calTitle, { color: C.text }]}>{monthLabel}</Text>
+        <TouchableOpacity onPress={onNext} style={styles.calNavBtn} disabled={isCurrentMonth}>
+          <Text style={[styles.calNav, { color: isCurrentMonth ? C.border : C.text }]}>›</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.calDayLabels}>
+        {['S','M','T','W','T','F','S'].map((d, i) => (
+          <Text key={i} style={[styles.calDayLabel, { color: C.textSecondary }]}>{d}</Text>
+        ))}
+      </View>
+      <View style={styles.calGrid}>
+        {calDays.map((day, i) => {
+          if (!day) return <View key={`e${i}`} style={styles.calCell} />;
+          const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isToday = dateStr === todayDate;
+          const isFuture = dateStr > todayDate;
+          const count = monthCompletions[dateStr] || 0;
+          const dotColor = isFuture || count === 0 ? 'transparent'
+            : count >= total ? '#6CC97C'
+            : '#F9C74F';
+          return (
+            <TouchableOpacity
+              key={dateStr}
+              style={[
+                styles.calCell,
+                isToday && { borderWidth: 1.5, borderColor: C.text, borderRadius: 8 },
+              ]}
+              onPress={() => !isFuture && onDayPress(dateStr)}
+              activeOpacity={isFuture ? 1 : 0.6}
+              disabled={isFuture}
+            >
+              <Text style={[styles.calDayNum, { color: isFuture ? C.border : C.text }]}>{day}</Text>
+              <View style={[styles.calDot, { backgroundColor: dotColor }]} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={styles.calLegend}>
+        <View style={styles.calLegendItem}>
+          <View style={[styles.calDot, { backgroundColor: '#6CC97C' }]} />
+          <Text style={[styles.calLegendText, { color: C.textSecondary }]}>all done</Text>
+        </View>
+        <View style={styles.calLegendItem}>
+          <View style={[styles.calDot, { backgroundColor: '#F9C74F' }]} />
+          <Text style={[styles.calLegendText, { color: C.textSecondary }]}>partial</Text>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export default function HabitsScreen() {
@@ -31,6 +105,13 @@ export default function HabitsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingHabit, setEditingHabit] = useState(null);
 
+  const now = new Date();
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [calMonth, setCalMonth] = useState(now.getMonth() + 1);
+  const [monthCompletions, setMonthCompletions] = useState({});
+  const [editingDate, setEditingDate] = useState(null);
+  const [editDateCompletions, setEditDateCompletions] = useState(new Set());
+
   // New habit form
   const [newTitle, setNewTitle] = useState('');
   const [newEmoji, setNewEmoji] = useState('✦');
@@ -39,6 +120,10 @@ export default function HabitsScreen() {
   useFocusEffect(useCallback(() => {
     load();
   }, []));
+
+  useEffect(() => {
+    loadMonthCompletions();
+  }, [calYear, calMonth]);
 
   async function load() {
     const h = await getHabits();
@@ -50,6 +135,49 @@ export default function HabitsScreen() {
       s[habit.id] = await getHabitStreak(habit.id);
     }
     setStreaks(s);
+    loadMonthCompletions();
+  }
+
+  async function loadMonthCompletions() {
+    const data = await getCompletionsForMonth(calYear, calMonth);
+    const counts = {};
+    for (const [date, set] of Object.entries(data)) {
+      counts[date] = set.size;
+    }
+    setMonthCompletions(counts);
+  }
+
+  function prevMonth() {
+    if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
+    else setCalMonth(m => m - 1);
+  }
+
+  function nextMonth() {
+    const n = new Date();
+    const isNow = calYear === n.getFullYear() && calMonth === n.getMonth() + 1;
+    if (isNow) return;
+    if (calMonth === 12) { setCalYear(y => y + 1); setCalMonth(1); }
+    else setCalMonth(m => m + 1);
+  }
+
+  async function handleDayPress(dateStr) {
+    const done = await getCompletionsForDate(dateStr);
+    setEditDateCompletions(done);
+    setEditingDate(dateStr);
+  }
+
+  async function handleDayHabitToggle(habitId) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await toggleCompletion(habitId, editingDate);
+    const done = await getCompletionsForDate(editingDate);
+    setEditDateCompletions(done);
+    loadMonthCompletions();
+    // If editing today, keep the main list in sync too
+    if (editingDate === today) {
+      setCompleted(done);
+      const streak = await getHabitStreak(habitId);
+      setStreaks(s => ({ ...s, [habitId]: streak }));
+    }
   }
 
   async function handleToggle(habitId) {
@@ -57,9 +185,9 @@ export default function HabitsScreen() {
     await toggleCompletion(habitId, today);
     const done = await getCompletionsForDate(today);
     setCompleted(done);
-    // Refresh streak for this habit
     const streak = await getHabitStreak(habitId);
     setStreaks(s => ({ ...s, [habitId]: streak }));
+    loadMonthCompletions();
   }
 
   async function handleAdd() {
@@ -157,6 +285,19 @@ export default function HabitsScreen() {
         </View>
       )}
 
+      {/* Habit Calendar */}
+      {habits.length > 0 && <HabitCalendar
+        calYear={calYear}
+        calMonth={calMonth}
+        habits={habits}
+        monthCompletions={monthCompletions}
+        C={C}
+        onPrev={prevMonth}
+        onNext={nextMonth}
+        todayDate={today}
+        onDayPress={handleDayPress}
+      />}
+
       {/* Habit list */}
       {habits.length === 0 ? (
         <View style={styles.emptyState}>
@@ -236,8 +377,60 @@ export default function HabitsScreen() {
         </View>
       )}
 
+      {/* Day edit modal */}
+      <Modal visible={!!editingDate} transparent animationType="slide">
+        <TouchableOpacity style={styles.overlay} onPress={() => setEditingDate(null)} activeOpacity={1}>
+          <View style={[styles.sheet, { backgroundColor: C.card }]}>
+            <Text style={[styles.sheetTitle, { color: C.text }]}>
+              {editingDate
+                ? new Date(editingDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+                : ''}
+            </Text>
+            <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>tap to toggle</Text>
+            {habits.map(habit => {
+              const done = editDateCompletions.has(habit.id);
+              return (
+                <TouchableOpacity
+                  key={habit.id}
+                  style={[styles.habitRow, {
+                    backgroundColor: C.background,
+                    borderColor: done ? habit.color : C.border,
+                    borderWidth: done ? 1.5 : 1,
+                  }]}
+                  onPress={() => handleDayHabitToggle(habit.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.emojiCircle, {
+                    backgroundColor: done ? habit.color : C.border,
+                    width: 36, height: 36, borderRadius: 18,
+                  }]}>
+                    <Text style={[styles.emoji, { fontSize: 16 }]}>{habit.emoji}</Text>
+                  </View>
+                  <Text style={[
+                    styles.habitTitle, { color: done ? C.textSecondary : C.text, flex: 1 },
+                    done && { textDecorationLine: 'line-through', opacity: 0.7 },
+                  ]}>
+                    {habit.title}
+                  </Text>
+                  <View style={[styles.check,
+                    { borderColor: done ? habit.color : C.border },
+                    done && { backgroundColor: habit.color },
+                  ]}>
+                    {done && <Text style={styles.checkMark}>✓</Text>}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Add/Edit Modal */}
       <Modal visible={showAdd} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
         <TouchableOpacity style={styles.overlay} onPress={resetForm} activeOpacity={1}>
           <View style={[styles.sheet, { backgroundColor: C.card }]}>
             <Text style={[styles.sheetTitle, { color: C.text }]}>
@@ -302,6 +495,7 @@ export default function HabitsScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
   );
@@ -379,4 +573,29 @@ const styles = StyleSheet.create({
   },
   saveBtn: { borderRadius: 999, paddingVertical: 15, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
+  calCard: {
+    borderRadius: 16, borderWidth: 1,
+    padding: 14, marginBottom: 20,
+  },
+  calHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 10,
+  },
+  calNavBtn: { padding: 4 },
+  calNav: { fontSize: 22, fontWeight: '300', paddingHorizontal: 4 },
+  calTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
+  calDayLabels: { flexDirection: 'row', marginBottom: 4 },
+  calDayLabel: { flex: 1, textAlign: 'center', fontSize: 10, letterSpacing: 0.3 },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calCell: {
+    width: '14.285%', aspectRatio: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  calDayNum: { fontSize: 11, fontWeight: '500' },
+  calDot: { width: 5, height: 5, borderRadius: 3, marginTop: 2 },
+  calLegend: {
+    flexDirection: 'row', gap: 14, marginTop: 8, justifyContent: 'flex-end',
+  },
+  calLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  calLegendText: { fontSize: 10, letterSpacing: 0.3 },
 });

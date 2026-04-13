@@ -101,3 +101,33 @@ export async function getTotalFocusMinutes() {
   );
   return result?.total || 0;
 }
+
+export async function getFocusInsights() {
+  const database = await getDatabase();
+
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  const weekStr = `${weekStart.getFullYear()}-${pad(weekStart.getMonth()+1)}-${pad(weekStart.getDate())}`;
+
+  const week = await database.getFirstAsync(
+    'SELECT SUM(duration) as mins, COUNT(*) as sessions FROM pomodoro_sessions WHERE completed = 1 AND date >= ?',
+    [weekStr]
+  );
+  const total = await database.getFirstAsync(
+    'SELECT SUM(duration) as mins, COUNT(*) as sessions FROM pomodoro_sessions WHERE completed = 1'
+  );
+  const best = await database.getAllAsync(
+    'SELECT date, SUM(duration) as mins FROM pomodoro_sessions WHERE completed = 1 GROUP BY date ORDER BY mins DESC LIMIT 1'
+  );
+
+  return {
+    weekMins: week?.mins || 0,
+    weekSessions: week?.sessions || 0,
+    totalMins: total?.mins || 0,
+    totalSessions: total?.sessions || 0,
+    bestDayMins: best[0]?.mins || 0,
+    bestDate: best[0]?.date || null,
+  };
+}

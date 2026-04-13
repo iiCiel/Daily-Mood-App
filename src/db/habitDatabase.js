@@ -133,3 +133,32 @@ export async function getCompletionRate(habitId, days = 30) {
   );
   return Math.round(((row?.count || 0) / days) * 100);
 }
+
+export async function getHabitInsights() {
+  const database = await getDatabase();
+  const habits = await database.getAllAsync('SELECT id FROM habits WHERE archived = 0');
+  if (!habits.length) return { total: 0, rate30: 0, bestStreak: 0, todayDone: 0 };
+
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  const since = new Date(today); since.setDate(today.getDate() - 30);
+  const sinceStr = `${since.getFullYear()}-${pad(since.getMonth()+1)}-${pad(since.getDate())}`;
+
+  const done30 = await database.getFirstAsync(
+    'SELECT COUNT(*) as count FROM habit_completions WHERE date >= ?', [sinceStr]
+  );
+  const rate30 = Math.round(((done30?.count || 0) / (habits.length * 30)) * 100);
+
+  let bestStreak = 0;
+  for (const h of habits) {
+    const s = await getHabitStreak(h.id);
+    if (s > bestStreak) bestStreak = s;
+  }
+
+  const todayDone = await database.getFirstAsync(
+    'SELECT COUNT(*) as count FROM habit_completions WHERE date = ?', [todayStr]
+  );
+
+  return { total: habits.length, rate30, bestStreak, todayDone: todayDone?.count || 0 };
+}

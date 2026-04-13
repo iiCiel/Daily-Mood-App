@@ -1,5 +1,8 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const THEME_KEY = 'theme_pref';
 
 const light = {
   background: '#F0EBE1',
@@ -28,13 +31,36 @@ const dark = {
 };
 
 const ThemeContext = createContext(light);
+const ThemeDispatchContext = createContext(async () => {});
+const ThemePrefContext = createContext('system');
 
 export function ThemeProvider({ children }) {
-  const scheme = useColorScheme();
+  const systemScheme = useColorScheme();
+  const [pref, setPref] = useState('system');
+
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_KEY).then(v => { if (v) setPref(v); });
+  }, []);
+
+  async function setThemePref(newPref) {
+    setPref(newPref);
+    await AsyncStorage.setItem(THEME_KEY, newPref);
+  }
+
+  const scheme = pref === 'system' ? systemScheme : pref;
   const colors = scheme === 'dark' ? dark : light;
-  return <ThemeContext.Provider value={colors}>{children}</ThemeContext.Provider>;
+
+  return (
+    <ThemePrefContext.Provider value={pref}>
+      <ThemeDispatchContext.Provider value={setThemePref}>
+        <ThemeContext.Provider value={colors}>
+          {children}
+        </ThemeContext.Provider>
+      </ThemeDispatchContext.Provider>
+    </ThemePrefContext.Provider>
+  );
 }
 
-export function useTheme() {
-  return useContext(ThemeContext);
-}
+export function useTheme() { return useContext(ThemeContext); }
+export function useSetTheme() { return useContext(ThemeDispatchContext); }
+export function useThemePref() { return useContext(ThemePrefContext); }

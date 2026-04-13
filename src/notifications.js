@@ -1,6 +1,15 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const TIMER_NOTIF_KEY = 'timer_notif_ids';
+
+function fmtEndTime(date) {
+  let h = date.getHours(), m = date.getMinutes();
+  const ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return `${h}:${String(m).padStart(2, '0')} ${ap}`;
+}
+
 const REMINDER_KEY = 'reminder_time';
 export const MOOD_CATEGORY = 'MOOD_QUICK_LOG';
 
@@ -65,6 +74,92 @@ export async function checkStreakMilestone(streak) {
     },
     trigger: null, // immediate
   });
+}
+
+export async function showTimerNotification(secondsLeft, taskTitle) {
+  // Ensure permissions are granted before trying to show anything
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    const { status: newStatus } = await Notifications.requestPermissionsAsync();
+    if (newStatus !== 'granted') return;
+  }
+  await cancelTimerNotification();
+  const endsAt = new Date(Date.now() + secondsLeft * 1000);
+  // Immediate notification showing timer is running
+  const runId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: taskTitle ? `focus · ${taskTitle}` : 'focus timer',
+      body: `ends at ${fmtEndTime(endsAt)}`,
+    },
+    trigger: null,
+  });
+  // Scheduled notification that fires when timer completes
+  const doneId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'session complete 🎉',
+      body: taskTitle ? `"${taskTitle}" — great work! take a break.` : 'great work! take a break.',
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(1, secondsLeft),
+    },
+  });
+  await AsyncStorage.setItem(TIMER_NOTIF_KEY, JSON.stringify({ runId, doneId }));
+}
+
+export async function cancelTimerNotification() {
+  try {
+    const raw = await AsyncStorage.getItem(TIMER_NOTIF_KEY);
+    if (!raw) return;
+    const { runId, doneId } = JSON.parse(raw);
+    if (runId) try { await Notifications.dismissNotificationAsync(runId); } catch {}
+    if (doneId) try { await Notifications.cancelScheduledNotificationAsync(doneId); } catch {}
+    await AsyncStorage.removeItem(TIMER_NOTIF_KEY);
+  } catch {}
+}
+
+const REMINDERS_KEY = 'reminders_v2';
+
+export async function getReminders() {
+  try {
+    const raw = await AsyncStorage.getItem(REMINDERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+export async function addReminder(hour, minute) {
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    const { status: s } = await Notifications.requestPermissionsAsync();
+    if (s !== 'granted') return false;
+  }
+  await registerMoodCategory();
+  const reminders = await getReminders();
+  if (reminders.find(r => r.hour === hour && r.minute === minute)) return true;
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'how are you feeling today?',
+      body: 'tap to log or pick a mood below.',
+      categoryIdentifier: MOOD_CATEGORY,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour,
+      minute,
+    },
+  });
+  reminders.push({ hour, minute, id });
+  await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders));
+  return true;
+}
+
+export async function removeReminder(hour, minute) {
+  const reminders = await getReminders();
+  const idx = reminders.findIndex(r => r.hour === hour && r.minute === minute);
+  if (idx === -1) return;
+  try { await Notifications.cancelScheduledNotificationAsync(reminders[idx].id); } catch {}
+  reminders.splice(idx, 1);
+  await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders));
 }
 
 export async function cancelReminder() {

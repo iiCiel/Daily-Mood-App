@@ -1,14 +1,20 @@
 import * as SQLite from 'expo-sqlite';
 
-let db = null;
+let dbPromise = null;
 
-export async function getDatabase() {
-  if (db) return db;
-  db = await SQLite.openDatabaseAsync('mood_journal.db');
-  await db.execAsync(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
+export function getDatabase() {
+  if (!dbPromise) {
+    dbPromise = _initDatabase();
+  }
+  return dbPromise;
+}
 
+async function _initDatabase() {
+  const database = await SQLite.openDatabaseAsync('mood_journal.db');
+  // Run pragmas separately — mixing them into execAsync with DDL can fail on Android
+  await database.runAsync('PRAGMA journal_mode = WAL');
+  await database.runAsync('PRAGMA foreign_keys = ON');
+  await database.execAsync(`
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
       date TEXT NOT NULL UNIQUE,
@@ -18,7 +24,6 @@ export async function getDatabase() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       synced INTEGER NOT NULL DEFAULT 0
     );
-
     CREATE TABLE IF NOT EXISTS photos (
       id TEXT PRIMARY KEY,
       entry_id TEXT NOT NULL,
@@ -27,15 +32,13 @@ export async function getDatabase() {
       synced INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
     );
-
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       completed INTEGER NOT NULL DEFAULT 0,
-      target_pomodoros INTEGER NOT NULL DEFAULT 1,
+      target_pomodoros INTEGER DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-
     CREATE TABLE IF NOT EXISTS pomodoro_sessions (
       id TEXT PRIMARY KEY,
       task_id TEXT,
@@ -46,7 +49,6 @@ export async function getDatabase() {
       ended_at TEXT,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
     );
-
     CREATE TABLE IF NOT EXISTS habits (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -55,7 +57,6 @@ export async function getDatabase() {
       created_at TEXT NOT NULL,
       archived INTEGER DEFAULT 0
     );
-
     CREATE TABLE IF NOT EXISTS habit_completions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       habit_id INTEGER NOT NULL,
@@ -63,20 +64,22 @@ export async function getDatabase() {
       completed_at TEXT NOT NULL,
       UNIQUE(habit_id, date)
     );
-
     CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
     CREATE INDEX IF NOT EXISTS idx_photos_entry ON photos(entry_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON pomodoro_sessions(date);
     CREATE INDEX IF NOT EXISTS idx_sessions_task ON pomodoro_sessions(task_id);
   `);
-  return db;
+  // Migration: add target_pomodoros to existing tasks tables that predate this column
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN target_pomodoros INTEGER DEFAULT 1'); } catch {}
+  try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
+  return database;
 }
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
 
-export async function saveEntry(date, mood, note, photoUris = []) {
+export async function saveEntry(date, mood, note, photoUris = [], tags = []) {
   const database = await getDatabase();
   const existing = await database.getFirstAsync(
     'SELECT id FROM entries WHERE date = ?',
@@ -85,16 +88,17 @@ export async function saveEntry(date, mood, note, photoUris = []) {
 
   const entryId = existing?.id || generateId();
   const now = new Date().toISOString();
+  const tagsJson = JSON.stringify(tags || []);
 
   if (existing) {
     await database.runAsync(
-      'UPDATE entries SET mood = ?, note = ?, updated_at = ?, synced = 0 WHERE id = ?',
-      [mood, note, now, entryId]
+      'UPDATE entries SET mood = ?, note = ?, tags = ?, updated_at = ?, synced = 0 WHERE id = ?',
+      [mood, note, tagsJson, now, entryId]
     );
   } else {
     await database.runAsync(
-      'INSERT INTO entries (id, date, mood, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [entryId, date, mood, note, now, now]
+      'INSERT INTO entries (id, date, mood, note, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [entryId, date, mood, note, tagsJson, now, now]
     );
   }
 
@@ -142,7 +146,9 @@ export async function getEntry(date) {
     'SELECT * FROM photos WHERE entry_id = ? ORDER BY created_at',
     [entry.id]
   );
-  return { ...entry, photos };
+  let parsedTags = [];
+  try { parsedTags = JSON.parse(entry.tags || '[]'); } catch {}
+  return { ...entry, photos, tags: parsedTags };
 }
 
 export async function getEntries(limit = 50, offset = 0) {
@@ -206,9 +212,9 @@ export async function exportMonthAsText(year, month) {
   return text;
 }
 
-export async function deleteEntry(id) {
+export async function deleteEntry(date) {
   const database = await getDatabase();
-  await database.runAsync('DELETE FROM entries WHERE id = ?', [id]);
+  await database.runAsync('DELETE FROM entries WHERE date = ?', [date]);
 }
 
 export async function getStreak() {
@@ -337,4 +343,77 @@ export async function getUnsyncedEntries() {
 export async function markSynced(id) {
   const database = await getDatabase();
   await database.runAsync('UPDATE entries SET synced = 1 WHERE id = ?', [id]);
+}
+
+export async function searchEntries(query) {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    "SELECT * FROM entries WHERE note LIKE ? OR tags LIKE ? ORDER BY date DESC LIMIT 50",
+    [`%${query}%`, `%${query}%`]
+  );
+  return rows.map(e => {
+    let tags = [];
+    try { tags = JSON.parse(e.tags || '[]'); } catch {}
+    return { ...e, tags };
+  });
+}
+
+export async function getMoodInsights() {
+  const database = await getDatabase();
+  const all = await database.getAllAsync('SELECT date, mood FROM entries ORDER BY date ASC');
+  if (!all.length) return null;
+
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const dateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  const d7 = new Date(today); d7.setDate(today.getDate() - 7);
+  const d30 = new Date(today); d30.setDate(today.getDate() - 30);
+
+  const last7 = all.filter(e => e.date > dateStr(d7));
+  const last30 = all.filter(e => e.date > dateStr(d30));
+
+  const avg = arr => arr.length ? Math.round((arr.reduce((s,v)=>s+v,0)/arr.length)*10)/10 : null;
+
+  const dayMoods = [[], [], [], [], [], [], []];
+  for (const e of all) {
+    const dow = new Date(e.date + 'T00:00:00').getDay();
+    dayMoods[dow].push(e.mood);
+  }
+  const dayAvgs = dayMoods.map(m => avg(m));
+
+  const validIdxs = dayAvgs.map((v, i) => v !== null ? i : -1).filter(i => i >= 0);
+  const bestDow = validIdxs.length ? validIdxs.reduce((b, i) => dayAvgs[i] > dayAvgs[b] ? i : b) : 0;
+  const worstDow = validIdxs.length ? validIdxs.reduce((w, i) => dayAvgs[i] < dayAvgs[w] ? i : w) : 0;
+
+  const dist = {1:0, 2:0, 3:0, 4:0, 5:0};
+  for (const e of all) dist[e.mood] = (dist[e.mood] || 0) + 1;
+
+  let bestStreak = 0, cur = 0, prev = null;
+  for (const e of all) {
+    if (!prev) { cur = 1; }
+    else {
+      const diff = Math.round((new Date(e.date+'T00:00:00') - new Date(prev+'T00:00:00')) / 86400000);
+      cur = diff === 1 ? cur + 1 : 1;
+    }
+    if (cur > bestStreak) bestStreak = cur;
+    prev = e.date;
+  }
+
+  const streak = await getStreak();
+
+  return {
+    total: all.length,
+    avgAll: avg(all.map(e => e.mood)),
+    avg7: avg(last7.map(e => e.mood)),
+    avg30: avg(last30.map(e => e.mood)),
+    logged7: last7.length,
+    logged30: last30.length,
+    dayAvgs,
+    bestDow,
+    worstDow,
+    distribution: dist,
+    bestStreak,
+    currentStreak: streak,
+  };
 }

@@ -30,6 +30,7 @@ const PROMPTS = [
   "what are you proud of today?",
   "what challenged you today?",
 ];
+const ENTRY_TAGS = ['work', 'health', 'social', 'family', 'sleep', 'exercise', 'food', 'learning', 'creative', 'travel'];
 import { getEntry, saveEntry, deleteEntry, getStreak } from '../src/db/database';
 import { checkStreakMilestone } from '../src/notifications';
 import { COLORS, MOODS } from '../src/constants/theme';
@@ -47,6 +48,7 @@ export default function EntryScreen() {
   const [hasExisting, setHasExisting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [promptIndex, setPromptIndex] = useState(() => Math.floor(Math.random() * PROMPTS.length));
+  const [tags, setTags] = useState([]);
 
   useEffect(() => {
     loadEntry();
@@ -60,6 +62,7 @@ export default function EntryScreen() {
         setMood(data.mood);
         setNote(data.note || '');
         setPhotos(data.photos?.map((p) => p.uri) || []);
+        setTags(data.tags || []);
         setHasExisting(true);
       }
     } catch (e) {
@@ -74,7 +77,7 @@ export default function EntryScreen() {
     }
     setSaving(true);
     try {
-      await saveEntry(date, mood, note, photos);
+      await saveEntry(date, mood, note, photos, tags);
       setHasExisting(true);
       try {
         const streak = await getStreak();
@@ -124,7 +127,7 @@ export default function EntryScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         style={[styles.flex, { backgroundColor: COLORS.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           style={[styles.flex, { backgroundColor: COLORS.background }]}
@@ -184,6 +187,31 @@ export default function EntryScreen() {
           </View>
 
           <PhotoGrid photos={photos} onPhotosChange={setPhotos} />
+
+          {/* Tags */}
+          <View style={styles.tagSection}>
+            <Text style={[styles.tagLabel, { color: COLORS.textSecondary }]}>tags</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll}>
+              {ENTRY_TAGS.map(tag => {
+                const sel = tags.includes(tag);
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[styles.tagChip, {
+                      backgroundColor: sel ? COLORS.text : COLORS.card,
+                      borderColor: sel ? COLORS.text : COLORS.border,
+                    }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+                    }}
+                  >
+                    <Text style={[styles.tagChipText, { color: sel ? COLORS.white : COLORS.textSecondary }]}>{tag}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
 
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: COLORS.text }, saving && styles.saveBtnDisabled]}
@@ -303,4 +331,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.8,
   },
+  tagSection: { marginBottom: 16 },
+  tagLabel: { fontSize: 12, letterSpacing: 0.5, marginBottom: 10 },
+  tagScroll: { flexDirection: 'row' },
+  tagChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1,
+    marginRight: 8,
+  },
+  tagChipText: { fontSize: 13, letterSpacing: 0.2 },
 });

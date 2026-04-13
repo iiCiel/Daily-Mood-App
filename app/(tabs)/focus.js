@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../src/context/ThemeContext';
 import { COLORS } from '../../src/constants/theme';
 import AestheticBackground from '../../src/components/AestheticBackground';
+import { showTimerNotification, cancelTimerNotification } from '../../src/notifications';
 import {
   getTasks, createTask, toggleTask, deleteTask,
   saveSession, getSessionsForDay, getTotalFocusMinutes,
@@ -25,6 +27,7 @@ import {
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const DEFAULT_DURATIONS = { focus: 25, short: 5, long: 15 };
+const TIMER_KEY = 'focus_timer_state';
 const MODE_LABELS = { focus: 'focus', short: 'short break', long: 'long break' };
 
 function formatTime(secs) {
@@ -117,18 +120,68 @@ export default function FocusScreen() {
   const appStateRef = useRef(AppState.currentState);
   const bgTimeRef = useRef(null);
   const runningRef = useRef(false);
+  // Refs for reading current state from AppState handler (avoids stale closures)
+  const secondsLeftRef = useRef(DEFAULT_DURATIONS.focus * 60);
+  const modeRef = useRef('focus');
+  const durationsRef = useRef({ ...DEFAULT_DURATIONS });
+  const sessionCountRef = useRef(0);
+  const selectedTaskRef = useRef(null);
 
   runningRef.current = running;
+  secondsLeftRef.current = secondsLeft;
+  modeRef.current = mode;
+  durationsRef.current = durations;
+  sessionCountRef.current = sessionCount;
+  selectedTaskRef.current = selectedTask;
 
   useFocusEffect(useCallback(() => {
     loadTasks();
     loadStats();
   }, []));
 
+  // Restore timer state if app was killed while timer was running
+  useEffect(() => {
+    restoreTimerState();
+  }, []);
+
+  async function restoreTimerState() {
+    try {
+      const raw = await AsyncStorage.getItem(TIMER_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      const newMode = saved.mode || 'focus';
+      const newDurations = saved.durations || { ...DEFAULT_DURATIONS };
+      setMode(newMode);
+      setDurations(newDurations);
+      setSessionCount(saved.sessionCount || 0);
+      if (saved.running && saved.savedAt) {
+        const elapsed = Math.floor((Date.now() - saved.savedAt) / 1000);
+        const remaining = Math.max(0, (saved.secondsLeft || 0) - elapsed);
+        if (remaining > 0) {
+          setSecondsLeft(remaining);
+          setRunning(true);
+        } else {
+          setSecondsLeft(newDurations[newMode] * 60);
+        }
+      } else {
+        setSecondsLeft(saved.secondsLeft != null ? saved.secondsLeft : newDurations[newMode] * 60);
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (appStateRef.current === 'active' && next.match(/inactive|background/)) {
         bgTimeRef.current = Date.now();
+        // Persist timer state so it survives full app kill
+        AsyncStorage.setItem(TIMER_KEY, JSON.stringify({
+          secondsLeft: secondsLeftRef.current,
+          running: runningRef.current,
+          mode: modeRef.current,
+          durations: durationsRef.current,
+          sessionCount: sessionCountRef.current,
+          savedAt: Date.now(),
+        })).catch(() => {});
       } else if (next === 'active' && bgTimeRef.current && runningRef.current) {
         const elapsed = Math.floor((Date.now() - bgTimeRef.current) / 1000);
         setSecondsLeft((s) => Math.max(0, s - elapsed));
@@ -178,6 +231,7 @@ export default function FocusScreen() {
   }
 
   async function handleTimerComplete() {
+    cancelTimerNotification().catch(() => {});
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const isFocus = mode === 'focus';
     if (isFocus) {
@@ -206,16 +260,19 @@ export default function FocusScreen() {
     sessionStartRef.current = new Date().toISOString();
     setRunning(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showTimerNotification(secondsLeftRef.current, selectedTaskRef.current?.title).catch(() => {});
   }
 
   function pauseTimer() {
     setRunning(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    cancelTimerNotification().catch(() => {});
   }
 
   function resetTimer() {
     setRunning(false);
     setSecondsLeft(durations[mode] * 60);
+    cancelTimerNotification().catch(() => {});
   }
 
   function switchMode(m) {
@@ -245,10 +302,14 @@ export default function FocusScreen() {
     const text = newTaskText.trim();
     if (!text) return;
     const target = Math.max(1, parseInt(newTaskTarget) || 1);
-    await createTask(text, target);
-    setNewTaskText('');
-    setNewTaskTarget('1');
-    loadTasks();
+    try {
+      await createTask(text, target);
+      setNewTaskText('');
+      setNewTaskTarget('1');
+      await loadTasks();
+    } catch (e) {
+      Alert.alert('error', `could not add task: ${e?.message || e}`);
+    }
   }
 
   async function handleToggleTask(id) {

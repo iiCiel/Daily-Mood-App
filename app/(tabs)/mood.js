@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -11,7 +12,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, router } from 'expo-router';
-import { getEntriesForMonth, getStreak, getMonthStats, exportMonthAsText } from '../../src/db/database';
+import { getEntriesForMonth, getStreak, getMonthStats, exportMonthAsText, searchEntries } from '../../src/db/database';
 import { COLORS, MOODS } from '../../src/constants/theme';
 import { useTheme } from '../../src/context/ThemeContext';
 import MoodFace from '../../src/components/MoodFace';
@@ -40,6 +41,8 @@ export default function CalendarScreen() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [streak, setStreak] = useState(0);
   const [stats, setStats] = useState(null);
+  const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,6 +74,14 @@ export default function CalendarScreen() {
       console.error(e);
     }
   }
+
+  useEffect(() => {
+    if (search.trim().length > 1) {
+      searchEntries(search.trim()).then(setSearchResults);
+    } else {
+      setSearchResults([]);
+    }
+  }, [search]);
 
   const changeMonthRef = useRef(null);
 
@@ -151,6 +162,9 @@ export default function CalendarScreen() {
           <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={handleCopyMonth}>
             <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>copy month</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={() => router.push('/insights')}>
+            <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>insights</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={() => router.push('/year')}>
             <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>year</Text>
           </TouchableOpacity>
@@ -191,6 +205,52 @@ export default function CalendarScreen() {
 
       <MoodTrend />
       <CorrelationInsight />
+
+      {/* Search */}
+      <View style={[styles.searchBar, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+        <Text style={{ color: COLORS.textSecondary, fontSize: 15, marginRight: 8 }}>🔍</Text>
+        <TextInput
+          style={[styles.searchInput, { color: COLORS.text }]}
+          placeholder="search entries..."
+          placeholderTextColor={COLORS.textSecondary}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 15 }}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {search.trim().length > 1 ? (
+        <View style={{ marginBottom: 24 }}>
+          {searchResults.length === 0 ? (
+            <Text style={[styles.emptyText, { color: COLORS.textSecondary }]}>no results</Text>
+          ) : searchResults.map(entry => {
+            const mood = MOODS.find(m => m.value === entry.mood);
+            const dateObj = new Date(entry.date + 'T00:00:00');
+            const label = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return (
+              <TouchableOpacity
+                key={entry.id}
+                style={[styles.searchResult, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
+                onPress={() => router.push({ pathname: '/entry', params: { date: entry.date } })}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.searchMoodDot, { backgroundColor: mood?.color || COLORS.border }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[{ color: COLORS.textSecondary, fontSize: 11, marginBottom: 2 }]}>{label}</Text>
+                  <Text style={[{ color: COLORS.text, fontSize: 14 }]} numberOfLines={2}>{entry.note || mood?.label || ''}</Text>
+                  {entry.tags?.length > 0 && (
+                    <Text style={[{ color: COLORS.textSecondary, fontSize: 11, marginTop: 3 }]}>{entry.tags.join(' · ')}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
 
       {/* Month nav */}
       <View style={styles.monthNav}>
@@ -419,4 +479,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     marginTop: 16,
   },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 4,
+    marginBottom: 20,
+  },
+  searchInput: { flex: 1, fontSize: 15, paddingVertical: 10 },
+  searchResult: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    borderRadius: 14, borderWidth: 1,
+    padding: 14, marginBottom: 8, gap: 12,
+  },
+  searchMoodDot: { width: 10, height: 10, borderRadius: 5, marginTop: 3 },
 });
