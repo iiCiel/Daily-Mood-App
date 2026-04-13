@@ -49,6 +49,7 @@ export default function EntryScreen() {
   const [saving, setSaving] = useState(false);
   const [promptIndex, setPromptIndex] = useState(() => Math.floor(Math.random() * PROMPTS.length));
   const [tags, setTags] = useState([]);
+  const [gratitude, setGratitude] = useState(['', '', '']);
 
   useEffect(() => {
     loadEntry();
@@ -63,6 +64,8 @@ export default function EntryScreen() {
         setNote(data.note || '');
         setPhotos(data.photos?.map((p) => p.uri) || []);
         setTags(data.tags || []);
+        const g = data.gratitude || [];
+        setGratitude([g[0] || '', g[1] || '', g[2] || '']);
         setHasExisting(true);
       }
     } catch (e) {
@@ -77,7 +80,8 @@ export default function EntryScreen() {
     }
     setSaving(true);
     try {
-      await saveEntry(date, mood, note, photos, tags);
+      const filteredGratitude = gratitude.filter(g => g.trim());
+      await saveEntry(date, mood, note, photos, tags, filteredGratitude);
       setHasExisting(true);
       try {
         const streak = await getStreak();
@@ -213,6 +217,22 @@ export default function EntryScreen() {
             </ScrollView>
           </View>
 
+          {/* Gratitude */}
+          <View style={styles.tagSection}>
+            <Text style={[styles.tagLabel, { color: COLORS.textSecondary }]}>grateful for</Text>
+            {[0, 1, 2].map(i => (
+              <TextInput
+                key={i}
+                style={[styles.gratitudeInput, { backgroundColor: COLORS.card, borderColor: COLORS.border, color: COLORS.text }]}
+                placeholder={i === 0 ? 'something you appreciated today...' : i === 1 ? 'a person, moment, or thing...' : 'anything at all...'}
+                placeholderTextColor={COLORS.textSecondary}
+                value={gratitude[i]}
+                onChangeText={val => { const g = [...gratitude]; g[i] = val; setGratitude(g); }}
+                returnKeyType={i < 2 ? 'next' : 'done'}
+              />
+            ))}
+          </View>
+
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: COLORS.text }, saving && styles.saveBtnDisabled]}
             onPress={handleSave}
@@ -333,6 +353,10 @@ const styles = StyleSheet.create({
   },
   tagSection: { marginBottom: 16 },
   tagLabel: { fontSize: 12, letterSpacing: 0.5, marginBottom: 10 },
+  gratitudeInput: {
+    borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11,
+    fontSize: 14, marginBottom: 8,
+  },
   tagScroll: { flexDirection: 'row' },
   tagChip: {
     paddingHorizontal: 14, paddingVertical: 8,

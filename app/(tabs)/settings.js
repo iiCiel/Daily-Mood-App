@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ScrollView, Linking,
+  StyleSheet, Alert, ScrollView, Linking, Share,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initSupabase, syncEntries } from '../../src/lib/supabase';
-import { getUnsyncedEntries, markSynced } from '../../src/db/database';
+import { getUnsyncedEntries, markSynced, getEntries } from '../../src/db/database';
 import { useTheme, useSetTheme, useThemePref } from '../../src/context/ThemeContext';
 import {
   requestPermissions, getReminders, addReminder, removeReminder,
 } from '../../src/notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { getGoals } from '../../src/db/goalsDatabase';
+import { getNotes } from '../../src/db/notesDatabase';
+import { getRecentSleep } from '../../src/db/sleepDatabase';
 
 const STORAGE_KEYS = { SUPABASE_URL: 'supabase_url', SUPABASE_KEY: 'supabase_anon_key' };
 const APP_VERSION = '1.0.0';
@@ -96,6 +99,28 @@ export default function SettingsScreen() {
       Alert.alert(result.success ? 'synced' : 'sync failed', result.success ? `${result.synced} entries synced.` : result.error);
     } catch { Alert.alert('error', 'sync failed.'); }
     finally { setSyncing(false); }
+  }
+
+  async function handleExport() {
+    try {
+      const [entries, goals, notes, sleep] = await Promise.all([
+        getEntries(1000),
+        getGoals(),
+        getNotes(),
+        getRecentSleep(365),
+      ]);
+      const data = {
+        exported_at: new Date().toISOString(),
+        mood_entries: entries,
+        goals,
+        notes,
+        sleep,
+      };
+      const json = JSON.stringify(data, null, 2);
+      await Share.share({ message: json, title: 'mood journal export' });
+    } catch (e) {
+      Alert.alert('error', 'could not export data.');
+    }
   }
 
   function SectionTitle({ label }) {
@@ -211,6 +236,10 @@ export default function SettingsScreen() {
         <View style={[ss.card, { backgroundColor: C.card, borderColor: C.border }]}>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => router.push('/privacy')}>
             <Text style={[ss.aboutLabel, { color: C.text }]}>privacy policy</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExport}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>export my data</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => Linking.openURL(PLAY_STORE_URL).catch(() => Alert.alert('', 'app not on store yet.'))}>

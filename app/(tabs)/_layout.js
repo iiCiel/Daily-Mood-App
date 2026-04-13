@@ -9,6 +9,7 @@ function TabBar({ state, descriptors, navigation }) {
     { name: 'mood', icon: '◉', label: 'mood' },
     { name: 'habits', icon: '◈', label: 'habits' },
     { name: 'focus', icon: '◎', label: 'focus' },
+    { name: 'life', icon: '◇', label: 'life' },
   ];
 
   return (
@@ -41,6 +42,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="mood" />
       <Tabs.Screen name="habits" />
       <Tabs.Screen name="focus" />
+      <Tabs.Screen name="life" />
       <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );

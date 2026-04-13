@@ -6,6 +6,7 @@ import AestheticBackground from '../src/components/AestheticBackground';
 import { getMoodInsights } from '../src/db/database';
 import { getHabitInsights } from '../src/db/habitDatabase';
 import { getFocusInsights } from '../src/db/focusDatabase';
+import { getSleepInsights } from '../src/db/sleepDatabase';
 import { MOODS } from '../src/constants/theme';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -20,11 +21,12 @@ export default function InsightsScreen() {
   const [mood, setMood] = useState(null);
   const [habits, setHabits] = useState(null);
   const [focus, setFocus] = useState(null);
+  const [sleep, setSleep] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getMoodInsights(), getHabitInsights(), getFocusInsights()])
-      .then(([m, h, f]) => { setMood(m); setHabits(h); setFocus(f); })
+    Promise.all([getMoodInsights(), getHabitInsights(), getFocusInsights(), getSleepInsights()])
+      .then(([m, h, f, sl]) => { setMood(m); setHabits(h); setFocus(f); setSleep(sl); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -163,6 +165,29 @@ export default function InsightsScreen() {
               <View style={s.mini}>
                 <Text style={[s.miniNum, { color: C.text }]}>{focus.totalSessions}</Text>
                 <Text style={[s.miniLbl, { color: C.textSecondary }]}>sessions</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Sleep */}
+        {sleep && (
+          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+            <Text style={[s.secLbl, { color: C.textSecondary }]}>sleep</Text>
+            <View style={s.row}>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>
+                  {sleep.avgHours}h{sleep.avgMinsRemainder > 0 ? ` ${sleep.avgMinsRemainder}m` : ''}
+                </Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>avg duration</Text>
+              </View>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{sleep.avgQuality}/5</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>avg quality</Text>
+              </View>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{sleep.totalLogged}</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>nights logged</Text>
               </View>
             </View>
           </View>

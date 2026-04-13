@@ -115,6 +115,14 @@ export default function FocusScreen() {
   const [todaySessions, setTodaySessions] = useState([]);
   const [totalMinutes, setTotalMinutes] = useState(0);
 
+  // Breathing
+  const [breathingOpen, setBreathingOpen] = useState(false);
+  const [breathPattern, setBreathPattern] = useState('box');
+  const [breathPhase, setBreathPhase] = useState(null); // null = idle, 'inhale'|'hold'|'exhale'|'hold2'
+  const [breathCount, setBreathCount] = useState(0);
+  const [breathCycle, setBreathCycle] = useState(0);
+  const breathIntervalRef = useRef(null);
+
   const intervalRef = useRef(null);
   const sessionStartRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
@@ -321,6 +329,40 @@ export default function FocusScreen() {
     if (selectedTask?.id === id) setSelectedTask(null);
     await deleteTask(id);
     loadTasks();
+  }
+
+  // ── Breathing ─────────────────────────────────────────
+  const BREATH_PATTERNS = {
+    box:   { label: 'box breathing',  phases: ['inhale','hold','exhale','hold2'], durations: [4,4,4,4], phaseLabels: ['inhale','hold','exhale','hold'] },
+    '478': { label: '4-7-8',          phases: ['inhale','hold','exhale'],         durations: [4,7,8],   phaseLabels: ['inhale','hold','exhale'] },
+    calm:  { label: 'calm',           phases: ['inhale','exhale'],                durations: [5,6],     phaseLabels: ['inhale','exhale'] },
+  };
+
+  function startBreathing() {
+    const pattern = BREATH_PATTERNS[breathPattern];
+    let phaseIdx = 0;
+    let secs = pattern.durations[0];
+    setBreathPhase(pattern.phaseLabels[0]);
+    setBreathCount(secs);
+    setBreathCycle(1);
+    clearInterval(breathIntervalRef.current);
+    breathIntervalRef.current = setInterval(() => {
+      secs -= 1;
+      if (secs <= 0) {
+        phaseIdx = (phaseIdx + 1) % pattern.phases.length;
+        secs = pattern.durations[phaseIdx];
+        setBreathPhase(pattern.phaseLabels[phaseIdx]);
+        if (phaseIdx === 0) setBreathCycle(c => c + 1);
+      }
+      setBreathCount(secs);
+    }, 1000);
+  }
+
+  function stopBreathing() {
+    clearInterval(breathIntervalRef.current);
+    setBreathPhase(null);
+    setBreathCount(0);
+    setBreathCycle(0);
   }
 
   const totalSecs = durations[mode] * 60;
@@ -533,6 +575,61 @@ export default function FocusScreen() {
         )}
       </View>
 
+      {/* Breathing */}
+      <TouchableOpacity
+        style={[styles.breathCard, { backgroundColor: C.card, borderColor: C.border }]}
+        onPress={() => { if (breathPhase) stopBreathing(); setBreathingOpen(o => !o); }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.breathHeader}>
+          <Text style={[styles.breathTitle, { color: C.text }]}>breathing</Text>
+          <Text style={[styles.breathChevron, { color: C.border }]}>{breathingOpen ? '↑' : '↓'}</Text>
+        </View>
+      </TouchableOpacity>
+
+      {breathingOpen && (
+        <View style={[styles.breathPanel, { backgroundColor: C.card, borderColor: C.border }]}>
+          {/* Pattern selector */}
+          <View style={styles.breathPatterns}>
+            {Object.entries(BREATH_PATTERNS).map(([key, pat]) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.breathPatBtn, {
+                  backgroundColor: breathPattern === key ? C.text : C.background,
+                  borderColor: C.border,
+                }]}
+                onPress={() => { stopBreathing(); setBreathPattern(key); }}
+              >
+                <Text style={[styles.breathPatText, { color: breathPattern === key ? C.background : C.textSecondary }]}>
+                  {pat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Active state */}
+          {breathPhase ? (
+            <View style={styles.breathActive}>
+              <Text style={[styles.breathPhaseText, { color: C.text }]}>{breathPhase}</Text>
+              <Text style={[styles.breathCountText, { color: C.textSecondary }]}>{breathCount}</Text>
+              <Text style={[styles.breathCycleText, { color: C.textSecondary }]}>cycle {breathCycle}</Text>
+              <TouchableOpacity style={[styles.breathBtn, { borderColor: C.border }]} onPress={stopBreathing}>
+                <Text style={[styles.breathBtnText, { color: C.textSecondary }]}>stop</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.breathActive}>
+              <Text style={[styles.breathHint, { color: C.textSecondary }]}>
+                {BREATH_PATTERNS[breathPattern].phaseLabels.map((l, i) => `${l} ${BREATH_PATTERNS[breathPattern].durations[i]}s`).join('  ·  ')}
+              </Text>
+              <TouchableOpacity style={[styles.breathBtn, { backgroundColor: C.text }]} onPress={startBreathing}>
+                <Text style={[styles.breathBtnText, { color: C.background }]}>start</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Task picker modal */}
       <Modal visible={showTaskPicker} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowTaskPicker(false)} activeOpacity={1}>
@@ -690,4 +787,26 @@ const styles = StyleSheet.create({
     borderRadius: 999, paddingVertical: 15, alignItems: 'center',
   },
   durationSaveText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
+  breathCard: {
+    borderRadius: 16, borderWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 14, marginTop: 16,
+  },
+  breathHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  breathTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
+  breathChevron: { fontSize: 14 },
+  breathPanel: {
+    borderRadius: 16, borderWidth: 1, borderTopWidth: 0,
+    borderTopLeftRadius: 0, borderTopRightRadius: 0,
+    padding: 16, gap: 14, marginTop: -2,
+  },
+  breathPatterns: { flexDirection: 'row', gap: 8 },
+  breathPatBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
+  breathPatText: { fontSize: 11, letterSpacing: 0.2 },
+  breathActive: { alignItems: 'center', gap: 8, paddingVertical: 8 },
+  breathPhaseText: { fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
+  breathCountText: { fontSize: 48, fontWeight: '800', letterSpacing: -2 },
+  breathCycleText: { fontSize: 12, letterSpacing: 0.3 },
+  breathHint: { fontSize: 12, letterSpacing: 0.2, textAlign: 'center' },
+  breathBtn: { paddingHorizontal: 32, paddingVertical: 12, borderRadius: 999, borderWidth: 1, marginTop: 4 },
+  breathBtnText: { fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
 });

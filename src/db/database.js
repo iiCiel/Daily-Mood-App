@@ -64,14 +64,56 @@ async function _initDatabase() {
       completed_at TEXT NOT NULL,
       UNIQUE(habit_id, date)
     );
+    CREATE TABLE IF NOT EXISTS sleep_entries (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      bedtime TEXT,
+      wake_time TEXT,
+      quality INTEGER,
+      note TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS notes (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      body TEXT,
+      pinned INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      category TEXT DEFAULT 'personal',
+      target_value REAL,
+      current_value REAL DEFAULT 0,
+      unit TEXT,
+      deadline TEXT,
+      completed INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS planner_entries (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      intention TEXT,
+      priorities TEXT DEFAULT '[]',
+      evening_note TEXT,
+      evening_rating INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
     CREATE INDEX IF NOT EXISTS idx_photos_entry ON photos(entry_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON pomodoro_sessions(date);
     CREATE INDEX IF NOT EXISTS idx_sessions_task ON pomodoro_sessions(task_id);
+    CREATE INDEX IF NOT EXISTS idx_sleep_date ON sleep_entries(date);
+    CREATE INDEX IF NOT EXISTS idx_planner_date ON planner_entries(date);
   `);
-  // Migration: add target_pomodoros to existing tasks tables that predate this column
+  // Migrations for existing installs
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN target_pomodoros INTEGER DEFAULT 1'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
+  try { await database.runAsync("ALTER TABLE entries ADD COLUMN gratitude TEXT DEFAULT '[]'"); } catch {}
   return database;
 }
 
@@ -79,7 +121,7 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
 
-export async function saveEntry(date, mood, note, photoUris = [], tags = []) {
+export async function saveEntry(date, mood, note, photoUris = [], tags = [], gratitude = []) {
   const database = await getDatabase();
   const existing = await database.getFirstAsync(
     'SELECT id FROM entries WHERE date = ?',
@@ -89,16 +131,17 @@ export async function saveEntry(date, mood, note, photoUris = [], tags = []) {
   const entryId = existing?.id || generateId();
   const now = new Date().toISOString();
   const tagsJson = JSON.stringify(tags || []);
+  const gratitudeJson = JSON.stringify(gratitude || []);
 
   if (existing) {
     await database.runAsync(
-      'UPDATE entries SET mood = ?, note = ?, tags = ?, updated_at = ?, synced = 0 WHERE id = ?',
-      [mood, note, tagsJson, now, entryId]
+      'UPDATE entries SET mood = ?, note = ?, tags = ?, gratitude = ?, updated_at = ?, synced = 0 WHERE id = ?',
+      [mood, note, tagsJson, gratitudeJson, now, entryId]
     );
   } else {
     await database.runAsync(
-      'INSERT INTO entries (id, date, mood, note, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [entryId, date, mood, note, tagsJson, now, now]
+      'INSERT INTO entries (id, date, mood, note, tags, gratitude, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [entryId, date, mood, note, tagsJson, gratitudeJson, now, now]
     );
   }
 
@@ -148,7 +191,9 @@ export async function getEntry(date) {
   );
   let parsedTags = [];
   try { parsedTags = JSON.parse(entry.tags || '[]'); } catch {}
-  return { ...entry, photos, tags: parsedTags };
+  let parsedGratitude = [];
+  try { parsedGratitude = JSON.parse(entry.gratitude || '[]'); } catch {}
+  return { ...entry, photos, tags: parsedTags, gratitude: parsedGratitude };
 }
 
 export async function getEntries(limit = 50, offset = 0) {
