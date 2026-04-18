@@ -25,6 +25,7 @@ The user has thought this through — do not suggest rebuilding after every chan
 ### The honest constraints
 - The 2hr wait is the EAS free tier queue — no way around it for the standalone APK without paying ($99/mo for EAS priority) or setting up a local Android build environment
 - **Do not suggest a Preview build after small changes.** Batch features up first.
+- EAS free tier is 1 build/month per account. Secondary account `lolaangelo` was created to get an extra build when the main account (`iiciel`) runs out.
 
 ### Recommended workflow
 1. Use Dev Client on home wifi while coding — instant updates
@@ -33,9 +34,10 @@ The user has thought this through — do not suggest rebuilding after every chan
 4. Repeat: dev client for coding, preview build for releases
 
 ### Current state (as of last session)
-- All features from features/all-in-one-additions branch are implemented and pushed
-- Dev Client is configured and ready to build (`eas build --platform android --profile development`)
-- Next Preview build should include: sleep tracker, planner, goals, notes, weekly review, breathing, gratitude, theme toggle, multiple reminders, insights, search, tags, data export
+- Visual redesign (sage green palette) is complete and pushed to `features/all-in-one-additions`
+- Preview build was triggered on EAS account `lolaangelo` (project ID: `9cd610bd-40a4-4248-b3e2-2eb85e097440`)
+- Old warm beige design is preserved in branch `design/classic-warm` (based on commit `3ac1dc5`)
+- Dev Client needs a rebuild if switching EAS accounts (project ID changed)
 
 ## Tech stack
 - Expo SDK 54, Expo Router v6 (file-based routing)
@@ -91,7 +93,7 @@ src/
     CorrelationInsight.js — mood × focus insight card
     PhotoGrid.js      — photo thumbnails with fullscreen viewer
     PhotoViewer.js    — fullscreen modal photo viewer
-    AestheticBackground.js — decorative blobs (5 soft colored circles, ~10% opacity, positioned at screen edges)
+    AestheticBackground.js — decorative blobs component (FILE EXISTS but is NOT used anywhere — do not add it to new screens)
   notifications.js    — addReminder/removeReminder (multiple daily reminders), timer notifications, streak milestones
   lib/
     supabase.js       — optional cloud sync (user configures URL + anon key in settings)
@@ -100,12 +102,18 @@ src/
 ## Theme system
 **Always use `useTheme()` for dynamic colors inside components:**
 ```js
-const C = useTheme(); // use C.background, C.text, C.card, C.border, C.textSecondary, C.danger, C.success
+const C = useTheme(); // use C.background, C.text, C.card, C.border, C.textSecondary, C.danger, C.success, C.accent
 ```
 **For `StyleSheet.create()` (static):** import `{ COLORS } from '../constants/theme'` — these are light-mode values only, fine for layout/sizing styles.
 
-Dark mode background: `#1A1714`, card: `#242018`, text: `#F0EBE1`
-Light mode background: `#F0EBE1`, card: `#FAF6EF`, text: `#2D2820`
+**Current palette (sage green):**
+- Light mode: background `#F0F4F0`, card `#FFFFFF`, primary `#4A7856`, text `#1A1A1A`, textSecondary `#6B7280`, accent `#2D5A3D`
+- Dark mode: background `#101810`, card `#1A2620`, primary `#5E9972`, text `#F0F4F0`, textSecondary `#7A9280`, accent `#5E9972`
+
+**Card styling:** Use `elevation: 2` (no borderWidth/borderColor) for cards. Use `elevation: 1` for small pill buttons and rows.
+**CTA buttons:** Use `C.accent` (dark green) as backgroundColor, NOT `C.text`.
+
+Old warm beige design is preserved in branch `design/classic-warm` if needed.
 
 ## Mood system
 5 moods stored as integers 1–5:
@@ -124,7 +132,7 @@ MOODS = [
 - **Stale closure fix for PanResponder:** use `ref.current` pattern (see changeMonthRef in mood.js)
 - **Background timer:** AppState listener stores timestamp when backgrounded, calculates elapsed on return
 - **Progress ring:** Two half-circle clip technique in focus.js ProgressRing component (no SVG, no reanimated)
-- **AestheticBackground:** Add `<AestheticBackground />` as first child of ScrollView on any new screen
+- **No decorative background:** AestheticBackground was removed from all screens in the redesign — do NOT add it to new screens
 
 ## App lock
 `AsyncStorage` key `'app_lock_enabled'` = `'true'/'false'`. Lock triggers after 5min in background if biometrics enrolled. Toggle in Settings. Lock screen is `app/lock.js`.
@@ -148,9 +156,10 @@ Uses setInterval state machine — no reanimated needed.
 
 ## EAS config
 - Package: `com.iiciel.moodjournal`
-- Project ID: `cf88895e-3ce4-4edb-930b-0f8637e1d522`
+- Primary account: `iiciel` — Project ID: `9cd610bd-40a4-4248-b3e2-2eb85e097440` (account: `lolaangelo`, used when iiciel hits monthly limit)
 - `preview` profile → standalone APK, internal distribution
 - `development` profile → Dev Client APK, internal distribution
+- Free tier = 1 Android build/month per account. When one account's limit is hit, log out (`eas logout`), log in to the other, and build.
 
 ## What's intentionally NOT here
 - No react-native-reanimated (removed, causes build failures)
