@@ -52,8 +52,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "cf88895e-3ce4-4edb-930b-0f8637e1d522"
+        "projectId": "9cd610bd-40a4-4248-b3e2-2eb85e097440"
       }
-    }
+    },
+    "owner": "lolaangelo"
   }
 }

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ScrollView, Linking, Share,
+  StyleSheet, Alert, ScrollView, Linking, Share, Modal,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initSupabase, syncEntries } from '../../src/lib/supabase';
-import { getUnsyncedEntries, markSynced, getEntries } from '../../src/db/database';
+import { getUnsyncedEntries, markSynced, getEntries, importFromText } from '../../src/db/database';
 import { useTheme, useSetTheme, useThemePref } from '../../src/context/ThemeContext';
 import {
   requestPermissions, getReminders, addReminder, removeReminder,
 } from '../../src/notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as Clipboard from 'expo-clipboard';
 import { getGoals } from '../../src/db/goalsDatabase';
 import { getNotes } from '../../src/db/notesDatabase';
 import { getRecentSleep } from '../../src/db/sleepDatabase';
@@ -53,6 +54,9 @@ export default function SettingsScreen() {
   const [reminders, setReminders] = useState([]);
   const [lockEnabled, setLockEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -99,6 +103,31 @@ export default function SettingsScreen() {
       Alert.alert(result.success ? 'synced' : 'sync failed', result.success ? `${result.synced} entries synced.` : result.error);
     } catch { Alert.alert('error', 'sync failed.'); }
     finally { setSyncing(false); }
+  }
+
+  async function handleImport() {
+    if (!importText.trim()) {
+      Alert.alert('nothing to import', 'paste your copied month data first.');
+      return;
+    }
+    setImporting(true);
+    try {
+      const result = await importFromText(importText.trim());
+      if (result.error) {
+        Alert.alert('import failed', result.error);
+      } else {
+        setShowImport(false);
+        setImportText('');
+        Alert.alert(
+          'import complete',
+          `${result.imported} ${result.imported === 1 ? 'entry' : 'entries'} imported.${result.skipped ? `\n${result.skipped} skipped (already exist).` : ''}`
+        );
+      }
+    } catch (e) {
+      Alert.alert('error', 'import failed. please try again.');
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function handleExport() {
@@ -242,6 +271,10 @@ export default function SettingsScreen() {
             <Text style={[ss.aboutLabel, { color: C.text }]}>export my data</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => setShowImport(true)}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>import from copied month</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => Linking.openURL(PLAY_STORE_URL).catch(() => Alert.alert('', 'app not on store yet.'))}>
             <Text style={[ss.aboutLabel, { color: C.text }]}>rate the app ⭐</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
@@ -252,6 +285,47 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <Modal visible={showImport} animationType="slide" transparent onRequestClose={() => setShowImport(false)}>
+        <View style={ss.modalOverlay}>
+          <View style={[ss.modalCard, { backgroundColor: C.card }]}>
+            <Text style={[ss.modalTitle, { color: C.text }]}>import journal entries</Text>
+            <Text style={[ss.modalDesc, { color: C.textSecondary }]}>
+              paste the text you copied with "copy month". existing entries will not be overwritten.
+            </Text>
+            <TouchableOpacity
+              style={[ss.pasteBtn, { borderColor: C.border }]}
+              onPress={async () => {
+                const text = await Clipboard.getStringAsync();
+                if (text) setImportText(text);
+              }}
+            >
+              <Text style={[ss.pasteBtnText, { color: C.textSecondary }]}>paste from clipboard</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={[ss.importInput, { backgroundColor: C.background, borderColor: C.border, color: C.text }]}
+              multiline
+              placeholder="paste your copied month data here..."
+              placeholderTextColor={C.textSecondary}
+              value={importText}
+              onChangeText={setImportText}
+              textAlignVertical="top"
+            />
+            <View style={ss.modalBtns}>
+              <TouchableOpacity style={[ss.modalCancelBtn, { borderColor: C.border }]} onPress={() => { setShowImport(false); setImportText(''); }}>
+                <Text style={[ss.modalCancelText, { color: C.textSecondary }]}>cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[ss.modalImportBtn, { backgroundColor: C.accent }, importing && { opacity: 0.5 }]}
+                onPress={handleImport}
+                disabled={importing}
+              >
+                <Text style={[ss.btnText, { color: '#fff' }]}>{importing ? 'importing...' : 'import'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -283,4 +357,15 @@ const ss = StyleSheet.create({
   btnText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
   aboutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   aboutLabel: { fontSize: 15, letterSpacing: 0.1 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalTitle: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginBottom: 8 },
+  modalDesc: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  pasteBtn: { borderWidth: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginBottom: 12 },
+  pasteBtnText: { fontSize: 14, fontWeight: '500' },
+  importInput: { borderWidth: 1, borderRadius: 14, padding: 14, fontSize: 13, height: 160, marginBottom: 16 },
+  modalBtns: { flexDirection: 'row', gap: 12 },
+  modalCancelBtn: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
+  modalCancelText: { fontSize: 15, fontWeight: '500' },
+  modalImportBtn: { flex: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
 });

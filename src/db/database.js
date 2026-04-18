@@ -257,6 +257,55 @@ export async function exportMonthAsText(year, month) {
   return text;
 }
 
+export async function importFromText(text) {
+  const MOOD_MAP = { 'Great': 5, 'Good': 4, 'Okay': 3, 'Low': 2, 'Bad': 1 };
+
+  const headerMatch = text.match(/Mood Journal — (\w+ \d{4})/);
+  if (!headerMatch) return { imported: 0, skipped: 0, error: 'unrecognized format — make sure you copied a month from the mood journal' };
+
+  const headerDate = new Date(headerMatch[1]);
+  if (isNaN(headerDate.getTime())) return { imported: 0, skipped: 0, error: 'could not parse the month/year from the text' };
+
+  const year = headerDate.getFullYear();
+  const month = headerDate.getMonth(); // 0-indexed
+
+  const afterHeader = text.split(/={10,}/)[1] || '';
+  const blocks = afterHeader.split(/-{20,}/).map(b => b.trim()).filter(Boolean);
+
+  let imported = 0;
+  let skipped = 0;
+
+  for (const block of blocks) {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) continue;
+
+    const moodLineIdx = lines.findIndex(l => /^Mood:\s*\w+$/i.test(l));
+    if (moodLineIdx < 0) { skipped++; continue; }
+
+    const moodMatch = lines[moodLineIdx].match(/^Mood:\s*(\w+)$/i);
+    const moodValue = MOOD_MAP[moodMatch[1]];
+    if (!moodValue) { skipped++; continue; }
+
+    const dateLine = lines[0];
+    const dayMatch = dateLine.match(/(\d+)$/);
+    if (!dayMatch) { skipped++; continue; }
+
+    const dayNum = parseInt(dayMatch[1]);
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+    const note = lines.slice(moodLineIdx + 1).join('\n').trim() || null;
+
+    const database = await getDatabase();
+    const existing = await database.getFirstAsync('SELECT id FROM entries WHERE date = ?', [dateStr]);
+    if (existing) { skipped++; continue; }
+
+    await saveEntry(dateStr, moodValue, note, [], [], []);
+    imported++;
+  }
+
+  return { imported, skipped };
+}
+
 export async function deleteEntry(date) {
   const database = await getDatabase();
   await database.runAsync('DELETE FROM entries WHERE date = ?', [date]);
