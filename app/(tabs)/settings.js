@@ -140,7 +140,7 @@ export default function SettingsScreen() {
 
         {/* Appearance */}
         <SectionTitle label="appearance" />
-        <View style={[ss.card, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[ss.card, { backgroundColor: C.card }]}>
           {(['system', 'light', 'dark']).map((opt, i, arr) => (
             <TouchableOpacity
               key={opt}
@@ -187,7 +187,7 @@ export default function SettingsScreen() {
           <>
             <SectionTitle label="app lock" />
             <TouchableOpacity
-              style={[ss.row, { backgroundColor: C.card, borderColor: C.border }]}
+              style={[ss.row, { backgroundColor: C.card }]}
               onPress={async () => {
                 const next = !lockEnabled;
                 await AsyncStorage.setItem('app_lock_enabled', next ? 'true' : 'false');
@@ -222,7 +222,7 @@ export default function SettingsScreen() {
             autoCapitalize="none" autoCorrect={false} secureTextEntry
           />
         </View>
-        <TouchableOpacity style={[ss.btn, { backgroundColor: C.text }]} onPress={handleSave}>
+        <TouchableOpacity style={[ss.btn, { backgroundColor: C.accent }]} onPress={handleSave}>
           <Text style={[ss.btnText, { color: C.white }]}>save</Text>
         </TouchableOpacity>
         {saved && (
@@ -233,7 +233,7 @@ export default function SettingsScreen() {
 
         {/* About */}
         <SectionTitle label="about" />
-        <View style={[ss.card, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[ss.card, { backgroundColor: C.card }]}>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => router.push('/privacy')}>
             <Text style={[ss.aboutLabel, { color: C.text }]}>privacy policy</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
@@ -264,7 +264,7 @@ const ss = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   sectionTitle: { fontSize: 12, letterSpacing: 0.6, marginTop: 24, marginBottom: 10 },
   sectionDesc: { fontSize: 13, letterSpacing: 0.2, marginBottom: 12, marginTop: -4 },
-  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 8 },
+  card: { borderRadius: 16, elevation: 2, overflow: 'hidden', marginBottom: 8 },
   themeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   themeLabel: { fontSize: 15, letterSpacing: 0.1 },
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
@@ -273,7 +273,7 @@ const ss = StyleSheet.create({
   chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
   chipText: { fontSize: 13, fontWeight: '500', letterSpacing: 0.2 },
   activeReminders: { fontSize: 12, letterSpacing: 0.3, marginBottom: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 16, elevation: 2, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8 },
   rowLabel: { fontSize: 15, letterSpacing: 0.1 },
   toggle: { width: 42, height: 26, borderRadius: 13, justifyContent: 'center', position: 'relative' },
   thumb: { position: 'absolute', width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', top: 3 },

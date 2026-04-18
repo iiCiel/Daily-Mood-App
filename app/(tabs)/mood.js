@@ -16,7 +16,6 @@ import { getEntriesForMonth, getStreak, getMonthStats, exportMonthAsText, search
 import { COLORS, MOODS } from '../../src/constants/theme';
 import { useTheme } from '../../src/context/ThemeContext';
 import MoodFace from '../../src/components/MoodFace';
-import AestheticBackground from '../../src/components/AestheticBackground';
 import MoodTrend from '../../src/components/MoodTrend';
 import CorrelationInsight from '../../src/components/CorrelationInsight';
 
@@ -154,21 +153,20 @@ export default function CalendarScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <AestheticBackground />
       {/* Top bar */}
       <View style={styles.topBar}>
         <Text style={[styles.appName, { color: COLORS.text }]}>mood</Text>
         <View style={styles.topBtns}>
-          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={handleCopyMonth}>
+          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card }]} onPress={handleCopyMonth}>
             <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>copy month</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={() => router.push('/insights')}>
             <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>insights</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={() => router.push('/year')}>
+          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card }]} onPress={() => router.push('/year')}>
             <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>year</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card, borderColor: COLORS.border }]} onPress={() => router.push('/(tabs)/settings')}>
+          <TouchableOpacity style={[styles.settingsBtn, { backgroundColor: COLORS.card }]} onPress={() => router.push('/(tabs)/settings')}>
             <Text style={[styles.settingsBtnText, { color: COLORS.textSecondary }]}>settings</Text>
           </TouchableOpacity>
         </View>
@@ -176,17 +174,17 @@ export default function CalendarScreen() {
 
       {/* Streak + Stats */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+        <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
           <Text style={[styles.statValue, { color: COLORS.text }]}>{streak}</Text>
           <Text style={[styles.statLabel, { color: COLORS.textSecondary }]}>day streak 🔥</Text>
         </View>
         {stats ? (
           <>
-            <View style={[styles.statCard, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+            <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
               <Text style={[styles.statValue, { color: COLORS.text }]}>{stats.total}</Text>
               <Text style={[styles.statLabel, { color: COLORS.textSecondary }]}>entries</Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+            <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
               <MoodFace
                 color={MOODS.find((m) => m.value === stats.topMood)?.color || COLORS.border}
                 moodValue={stats.topMood}
@@ -196,7 +194,7 @@ export default function CalendarScreen() {
             </View>
           </>
         ) : (
-          <View style={[styles.statCard, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+          <View style={[styles.statCard, { backgroundColor: COLORS.card }]}>
             <Text style={[styles.statValue, { color: COLORS.text }]}>—</Text>
             <Text style={[styles.statLabel, { color: COLORS.textSecondary }]}>no entries yet</Text>
           </View>
@@ -207,7 +205,7 @@ export default function CalendarScreen() {
       <CorrelationInsight />
 
       {/* Search */}
-      <View style={[styles.searchBar, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+      <View style={[styles.searchBar, { backgroundColor: COLORS.card }]}>
         <Text style={{ color: COLORS.textSecondary, fontSize: 15, marginRight: 8 }}>🔍</Text>
         <TextInput
           style={[styles.searchInput, { color: COLORS.text }]}
@@ -234,7 +232,7 @@ export default function CalendarScreen() {
             return (
               <TouchableOpacity
                 key={entry.id}
-                style={[styles.searchResult, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
+                style={[styles.searchResult, { backgroundColor: COLORS.card }]}
                 onPress={() => router.push({ pathname: '/entry', params: { date: entry.date } })}
                 activeOpacity={0.7}
               >
@@ -349,8 +347,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 999,
     backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    elevation: 1,
   },
   settingsBtnText: {
     fontSize: 13,
@@ -369,8 +366,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     gap: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    elevation: 2,
   },
   statValue: {
     fontSize: 22,
@@ -481,14 +477,14 @@ const styles = StyleSheet.create({
   },
   searchBar: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1,
+    borderRadius: 14, elevation: 1,
     paddingHorizontal: 14, paddingVertical: 4,
     marginBottom: 20,
   },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 10 },
   searchResult: {
     flexDirection: 'row', alignItems: 'flex-start',
-    borderRadius: 14, borderWidth: 1,
+    borderRadius: 14, elevation: 1,
     padding: 14, marginBottom: 8, gap: 12,
   },
   searchMoodDot: { width: 10, height: 10, borderRadius: 5, marginTop: 3 },

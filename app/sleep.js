@@ -6,7 +6,6 @@ import {
 import { Stack, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import { saveSleep, getSleepEntry, getRecentSleep, deleteSleepEntry, calcDuration } from '../src/db/sleepDatabase';
 import { COLORS } from '../src/constants/theme';
 
@@ -97,10 +96,7 @@ export default function SleepScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView style={[s.flex, { backgroundColor: C.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView style={[s.flex, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <AestheticBackground />
-
-          <View style={s.header}>
+        <ScrollView style={[s.flex, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">`n          <View style={s.header}>
             <TouchableOpacity onPress={() => router.back()}>
               <Text style={[s.back, { color: C.text }]}>←</Text>
             </TouchableOpacity>
@@ -108,7 +104,7 @@ export default function SleepScreen() {
           </View>
 
           {/* Log today */}
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.cardTitle, { color: C.text }]}>last night</Text>
 
             <View style={s.timeRow}>
@@ -175,7 +171,7 @@ export default function SleepScreen() {
             />
 
             <TouchableOpacity
-              style={[s.saveBtn, { backgroundColor: C.text }, saving && { opacity: 0.5 }]}
+              style={[s.saveBtn, { backgroundColor: C.accent }, saving && { opacity: 0.5 }]}
               onPress={handleSave}
               disabled={saving}
               activeOpacity={0.8}
@@ -193,7 +189,7 @@ export default function SleepScreen() {
                 return (
                   <TouchableOpacity
                     key={entry.date}
-                    style={[s.histRow, { backgroundColor: C.card, borderColor: C.border }]}
+                    style={[s.histRow, { backgroundColor: C.card }]}
                     onLongPress={() => Alert.alert('delete', `remove sleep log for ${fmtDate(entry.date)}?`, [
                       { text: 'cancel', style: 'cancel' },
                       { text: 'delete', style: 'destructive', onPress: async () => { await deleteSleepEntry(entry.date); loadRecent(); } },
@@ -224,7 +220,7 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 28 },
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  card: { borderRadius: 20, borderWidth: 1, padding: 20, marginBottom: 24, gap: 4 },
+  card: { borderRadius: 20, elevation: 2, padding: 20, marginBottom: 24, gap: 4 },
   cardTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5, marginBottom: 12 },
   timeRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 16 },
   timeField: { flex: 1, gap: 6 },
@@ -248,7 +244,7 @@ const s = StyleSheet.create({
   sectionLabel: { fontSize: 12, letterSpacing: 0.5, marginBottom: 10 },
   histRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 8,
+    borderRadius: 14, elevation: 1, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 8,
   },
   histDate: { fontSize: 13, letterSpacing: 0.2 },
   histRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },

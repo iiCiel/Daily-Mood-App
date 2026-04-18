@@ -16,7 +16,6 @@ import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../src/context/ThemeContext';
 import { COLORS } from '../../src/constants/theme';
-import AestheticBackground from '../../src/components/AestheticBackground';
 import { showTimerNotification, cancelTimerNotification } from '../../src/notifications';
 import {
   getTasks, createTask, toggleTask, deleteTask,
@@ -380,13 +379,11 @@ export default function FocusScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
-    >
-      <AestheticBackground />
-      {/* Header */}
+    >`n      {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: C.text }]}>focus</Text>
         <TouchableOpacity
-          style={[styles.headerBtn, { backgroundColor: C.card, borderColor: C.border }]}
+          style={[styles.headerBtn, { backgroundColor: C.card }]}
           onPress={() => router.push('/focus-stats')}
         >
           <Text style={[styles.headerBtnText, { color: C.textSecondary }]}>stats</Text>
@@ -394,7 +391,7 @@ export default function FocusScreen() {
       </View>
 
       {/* Mode selector */}
-      <View style={[styles.modeRow, { backgroundColor: C.card, borderColor: C.border }]}>
+      <View style={[styles.modeRow, { backgroundColor: C.card }]}>
         {Object.keys(DEFAULT_DURATIONS).map((m) => (
           <TouchableOpacity
             key={m}
@@ -442,7 +439,7 @@ export default function FocusScreen() {
       {/* Controls */}
       <View style={styles.controls}>
         <TouchableOpacity
-          style={[styles.sideBtn, { borderColor: C.border }]}
+          style={[styles.sideBtn]}
           onPress={resetTimer}
           activeOpacity={0.7}
         >
@@ -460,7 +457,7 @@ export default function FocusScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.sideBtn, { borderColor: C.border }]}
+          style={[styles.sideBtn]}
           onPress={() => setShowTaskPicker(true)}
           activeOpacity={0.7}
         >
@@ -470,15 +467,15 @@ export default function FocusScreen() {
 
       {/* Stats */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.statCard, { backgroundColor: C.card }]}>
           <Text style={[styles.statVal, { color: C.text }]}>{todayCount}</Text>
           <Text style={[styles.statLbl, { color: C.textSecondary }]}>today</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.statCard, { backgroundColor: C.card }]}>
           <Text style={[styles.statVal, { color: C.text }]}>{todayMins}m</Text>
           <Text style={[styles.statLbl, { color: C.textSecondary }]}>focused</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.statCard, { backgroundColor: C.card }]}>
           <Text style={[styles.statVal, { color: C.text }]}>{Math.floor(totalMinutes / 60)}h</Text>
           <Text style={[styles.statLbl, { color: C.textSecondary }]}>all time</Text>
         </View>
@@ -489,7 +486,7 @@ export default function FocusScreen() {
         <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>tasks</Text>
 
         {/* Add task */}
-        <View style={[styles.addRow, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.addRow, { backgroundColor: C.card }]}>
           <TextInput
             style={[styles.taskInput, { color: C.text, flex: 1 }]}
             placeholder="add a task..."
@@ -577,7 +574,7 @@ export default function FocusScreen() {
 
       {/* Breathing */}
       <TouchableOpacity
-        style={[styles.breathCard, { backgroundColor: C.card, borderColor: C.border }]}
+        style={[styles.breathCard, { backgroundColor: C.card }]}
         onPress={() => { if (breathPhase) stopBreathing(); setBreathingOpen(o => !o); }}
         activeOpacity={0.7}
       >
@@ -588,7 +585,7 @@ export default function FocusScreen() {
       </TouchableOpacity>
 
       {breathingOpen && (
-        <View style={[styles.breathPanel, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.breathPanel, { backgroundColor: C.card }]}>
           {/* Pattern selector */}
           <View style={styles.breathPatterns}>
             {Object.entries(BREATH_PATTERNS).map(([key, pat]) => (
@@ -673,7 +670,7 @@ export default function FocusScreen() {
               />
               <Text style={[styles.durationUnit, { color: C.textSecondary }]}>minutes</Text>
             </View>
-            <TouchableOpacity style={[styles.durationSaveBtn, { backgroundColor: C.text }]} onPress={saveDuration}>
+            <TouchableOpacity style={[styles.durationSaveBtn, { backgroundColor: C.accent }]} onPress={saveDuration}>
               <Text style={[styles.durationSaveText, { color: C.white }]}>set</Text>
             </TouchableOpacity>
           </View>
@@ -693,12 +690,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   headerBtn: {
     paddingHorizontal: 16, paddingVertical: 9,
-    borderRadius: 999, borderWidth: 1,
+    borderRadius: 999, elevation: 1,
   },
   headerBtnText: { fontSize: 13, letterSpacing: 0.3 },
   modeRow: {
     flexDirection: 'row', borderRadius: 16,
-    padding: 4, borderWidth: 1, marginBottom: 28, gap: 4,
+    padding: 4, elevation: 2, marginBottom: 28, gap: 4,
   },
   modeBtn: { flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center' },
   modeBtnText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
@@ -714,12 +711,12 @@ const styles = StyleSheet.create({
   },
   mainBtn: { paddingHorizontal: 44, paddingVertical: 16, borderRadius: 999 },
   mainBtnText: { fontSize: 16, fontWeight: '600', letterSpacing: 0.8 },
-  sideBtn: { paddingHorizontal: 20, paddingVertical: 16, borderRadius: 999, borderWidth: 1 },
+  sideBtn: { paddingHorizontal: 20, paddingVertical: 16, borderRadius: 999, elevation: 1, backgroundColor: '#FFFFFF' },
   sideBtnText: { fontSize: 14, letterSpacing: 0.3 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statCard: {
     flex: 1, borderRadius: 16, paddingVertical: 14,
-    alignItems: 'center', gap: 4, borderWidth: 1,
+    alignItems: 'center', gap: 4, elevation: 2,
   },
   statVal: { fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
   statLbl: { fontSize: 11, letterSpacing: 0.3 },
@@ -727,7 +724,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 13, letterSpacing: 0.5, marginBottom: 4 },
   addRow: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1,
+    borderRadius: 14, elevation: 1,
     paddingHorizontal: 14, paddingVertical: 4,
   },
   taskInput: { fontSize: 15, paddingVertical: 10 },
@@ -788,16 +785,16 @@ const styles = StyleSheet.create({
   },
   durationSaveText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
   breathCard: {
-    borderRadius: 16, borderWidth: 1,
+    borderRadius: 16, elevation: 2,
     paddingHorizontal: 16, paddingVertical: 14, marginTop: 16,
   },
   breathHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   breathTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
   breathChevron: { fontSize: 14 },
   breathPanel: {
-    borderRadius: 16, borderWidth: 1, borderTopWidth: 0,
+    borderRadius: 16, elevation: 1,
     borderTopLeftRadius: 0, borderTopRightRadius: 0,
-    padding: 16, gap: 14, marginTop: -2,
+    padding: 16, gap: 14, marginTop: 2,
   },
   breathPatterns: { flexDirection: 'row', gap: 8 },
   breathPatBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1, alignItems: 'center' },

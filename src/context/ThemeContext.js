@@ -5,29 +5,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const THEME_KEY = 'theme_pref';
 
 const light = {
-  background: '#F0EBE1',
-  card: '#FAF6EF',
-  primary: '#8B7355',
-  primaryLight: '#EAE3D8',
-  text: '#2D2820',
-  textSecondary: '#9B8E7E',
-  border: '#E5DDD2',
-  danger: '#E07060',
-  success: '#6CC97C',
+  background: '#F0F4F0',
+  card: '#FFFFFF',
+  primary: '#4A7856',
+  primaryLight: '#E6F2EB',
+  text: '#1A1A1A',
+  textSecondary: '#6B7280',
+  border: '#E8ECE9',
+  danger: '#EF4444',
+  success: '#4A7856',
   white: '#FFFFFF',
+  accent: '#2D5A3D',
 };
 
 const dark = {
-  background: '#1A1714',
-  card: '#242018',
-  primary: '#C4A882',
-  primaryLight: '#2E2820',
-  text: '#F0EBE1',
-  textSecondary: '#7A6E62',
-  border: '#332E28',
-  danger: '#E07060',
-  success: '#6CC97C',
+  background: '#101810',
+  card: '#1A2620',
+  primary: '#5E9972',
+  primaryLight: '#1C3025',
+  text: '#F0F4F0',
+  textSecondary: '#7A9280',
+  border: '#253320',
+  danger: '#EF4444',
+  success: '#5E9972',
   white: '#FFFFFF',
+  accent: '#5E9972',
 };
 
 const ThemeContext = createContext(light);

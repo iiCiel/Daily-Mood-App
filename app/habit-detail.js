@@ -4,7 +4,6 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import {
   getHabits, getHabitHistory, getHabitStreak,
   getCompletionRate, toggleCompletion, getCompletionsForDate,
@@ -72,10 +71,7 @@ export default function HabitDetail() {
         style={[styles.container, { backgroundColor: C.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-      >
-        <AestheticBackground />
-
-        {/* Header */}
+      >`n        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={[styles.backText, { color: C.text }]}>←</Text>
@@ -92,15 +88,15 @@ export default function HabitDetail() {
 
         {/* Stats row */}
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>🔥 {streak}</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>streak</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>{rate7}%</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>this week</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>{rate30}%</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>30 days</Text>
           </View>
@@ -125,7 +121,7 @@ export default function HabitDetail() {
 
         {/* 30-day history grid */}
         <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>last 30 days</Text>
-        <View style={[styles.histCard, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.histCard, { backgroundColor: C.card }]}>
           <View style={styles.dotGrid}>
             {history.map(({ date, done }) => {
               const isToday = date === todayStr();
@@ -165,7 +161,7 @@ const styles = StyleSheet.create({
   habitName: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, flex: 1 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
-    flex: 1, borderRadius: 14, borderWidth: 1,
+    flex: 1, borderRadius: 14, elevation: 2,
     paddingVertical: 14, alignItems: 'center', gap: 4,
   },
   statVal: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
@@ -178,7 +174,7 @@ const styles = StyleSheet.create({
   todayBtnText: { fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
   sectionLabel: { fontSize: 12, letterSpacing: 0.5, marginBottom: 10 },
   histCard: {
-    borderRadius: 16, borderWidth: 1,
+    borderRadius: 16, elevation: 2,
     padding: 16, gap: 12,
   },
   dotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: DOT_GAP },

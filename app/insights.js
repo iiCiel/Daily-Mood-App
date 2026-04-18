@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import { getMoodInsights } from '../src/db/database';
 import { getHabitInsights } from '../src/db/habitDatabase';
 import { getFocusInsights } from '../src/db/focusDatabase';
@@ -61,10 +60,7 @@ export default function InsightsScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <AestheticBackground />
-
-        <View style={s.header}>
+      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>`n        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -73,17 +69,17 @@ export default function InsightsScreen() {
 
         {/* Overview */}
         <View style={s.row}>
-          <View style={[s.bigCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.bigCard, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>avg mood</Text>
             <Text style={[s.bigNum, { color: moodColor(mood.avgAll) || C.text }]}>{mood.avgAll ?? '—'}</Text>
             <Text style={[s.cardSub, { color: C.textSecondary }]}>{mood.total} entries</Text>
           </View>
-          <View style={[s.bigCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.bigCard, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>this week</Text>
             <Text style={[s.bigNum, { color: moodColor(mood.avg7) || C.text }]}>{mood.avg7 ?? '—'}</Text>
             <Text style={[s.cardSub, { color: C.textSecondary }]}>{mood.logged7} logged</Text>
           </View>
-          <View style={[s.bigCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.bigCard, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>best streak</Text>
             <Text style={[s.bigNum, { color: C.text }]}>{mood.bestStreak}</Text>
             <Text style={[s.cardSub, { color: C.textSecondary }]}>days</Text>
@@ -91,7 +87,7 @@ export default function InsightsScreen() {
         </View>
 
         {/* Day of week */}
-        <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[s.card, { backgroundColor: C.card }]}>
           <Text style={[s.secLbl, { color: C.textSecondary }]}>mood by day of week</Text>
           {mood.bestDow !== mood.worstDow && (
             <Text style={[s.patternTxt, { color: C.text }]}>
@@ -117,7 +113,7 @@ export default function InsightsScreen() {
         </View>
 
         {/* Distribution */}
-        <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[s.card, { backgroundColor: C.card }]}>
           <Text style={[s.secLbl, { color: C.textSecondary }]}>mood distribution</Text>
           {[...MOODS].reverse().map(m => {
             const count = mood.distribution[m.value] || 0;
@@ -136,7 +132,7 @@ export default function InsightsScreen() {
 
         {/* Habits */}
         {habits && habits.total > 0 && (
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.secLbl, { color: C.textSecondary }]}>habits</Text>
             <View style={s.row}>
               <View style={s.mini}><Text style={[s.miniNum, { color: C.text }]}>{habits.rate30}%</Text><Text style={[s.miniLbl, { color: C.textSecondary }]}>30-day rate</Text></View>
@@ -151,7 +147,7 @@ export default function InsightsScreen() {
 
         {/* Focus */}
         {focus && focus.totalMins > 0 && (
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.secLbl, { color: C.textSecondary }]}>focus</Text>
             <View style={s.row}>
               <View style={s.mini}>
@@ -172,7 +168,7 @@ export default function InsightsScreen() {
 
         {/* Sleep */}
         {sleep && (
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.secLbl, { color: C.textSecondary }]}>sleep</Text>
             <View style={s.row}>
               <View style={s.mini}>
@@ -206,11 +202,11 @@ const s = StyleSheet.create({
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   row: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  bigCard: { flex: 1, borderRadius: 16, borderWidth: 1, paddingVertical: 16, alignItems: 'center', gap: 4 },
+  bigCard: { flex: 1, borderRadius: 16, elevation: 2, paddingVertical: 16, alignItems: 'center', gap: 4 },
   cardLbl: { fontSize: 10, letterSpacing: 0.5 },
   bigNum: { fontSize: 26, fontWeight: '800', letterSpacing: -1 },
   cardSub: { fontSize: 10, letterSpacing: 0.3 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 16 },
+  card: { borderRadius: 16, elevation: 2, padding: 16, marginBottom: 16 },
   secLbl: { fontSize: 12, letterSpacing: 0.5, marginBottom: 12 },
   patternTxt: { fontSize: 13, letterSpacing: 0.2, marginBottom: 12 },
   dowChart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 72 },

@@ -180,7 +180,7 @@ export default function EntryScreen() {
               </TouchableOpacity>
             </View>
             <TextInput
-              style={[styles.noteInput, { backgroundColor: COLORS.card, borderColor: COLORS.border, color: COLORS.text }]}
+              style={[styles.noteInput, { backgroundColor: COLORS.card, color: COLORS.text }]}
               placeholder="write something..."
               placeholderTextColor={COLORS.textSecondary}
               multiline
@@ -234,7 +234,7 @@ export default function EntryScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: COLORS.text }, saving && styles.saveBtnDisabled]}
+            style={[styles.saveBtn, { backgroundColor: COLORS.accent }, saving && styles.saveBtnDisabled]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.8}
@@ -332,11 +332,10 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     minHeight: 110,
     lineHeight: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    elevation: 1,
   },
   saveBtn: {
-    backgroundColor: COLORS.text,
+    backgroundColor: COLORS.accent,
     borderRadius: 999,
     paddingVertical: 16,
     alignItems: 'center',

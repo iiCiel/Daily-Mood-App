@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Share } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import { getLastNDaysMoods, getStreak } from '../src/db/database';
 import { getHabitInsights } from '../src/db/habitDatabase';
 import { getFocusInsights } from '../src/db/focusDatabase';
@@ -84,10 +83,7 @@ export default function WeeklyReviewScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <AestheticBackground />
-
-        <View style={s.header}>
+      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>`n        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -96,7 +92,7 @@ export default function WeeklyReviewScreen() {
             <Text style={[s.subtitle, { color: C.textSecondary }]}>{weekLabel}</Text>
           </View>
           <TouchableOpacity
-            style={[s.shareBtn, { backgroundColor: C.card, borderColor: C.border }]}
+            style={[s.shareBtn, { backgroundColor: C.card }]}
             onPress={handleShare}
           >
             <Text style={[s.shareBtnText, { color: C.textSecondary }]}>share</Text>
@@ -104,7 +100,7 @@ export default function WeeklyReviewScreen() {
         </View>
 
         {/* Mood week strip */}
-        <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[s.card, { backgroundColor: C.card }]}>
           <Text style={[s.cardLbl, { color: C.textSecondary }]}>mood this week</Text>
           {avgMood != null && (
             <Text style={[s.bigStat, { color: moodColor(avgMood) || C.text }]}>
@@ -136,7 +132,7 @@ export default function WeeklyReviewScreen() {
 
         {/* Habits */}
         {habits && habits.total > 0 && (
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>habits</Text>
             <Text style={[s.bigStat, { color: C.text }]}>
               {habits.rate30}%
@@ -153,7 +149,7 @@ export default function WeeklyReviewScreen() {
 
         {/* Focus */}
         {focus && focus.weekMins > 0 && (
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>focus</Text>
             <Text style={[s.bigStat, { color: C.text }]}>
               {Math.floor(focus.weekMins / 60) > 0
@@ -169,7 +165,7 @@ export default function WeeklyReviewScreen() {
 
         {/* Sleep */}
         {sleep && (
-          <View style={[s.card, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.card, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>sleep</Text>
             <Text style={[s.bigStat, { color: C.text }]}>
               {sleep.avgHours}h {sleep.avgMinsRemainder > 0 ? `${sleep.avgMinsRemainder}m` : ''}
@@ -202,9 +198,9 @@ const s = StyleSheet.create({
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   subtitle: { fontSize: 12, letterSpacing: 0.3, marginTop: 2 },
-  shareBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  shareBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, elevation: 1 },
   shareBtnText: { fontSize: 13 },
-  card: { borderRadius: 20, borderWidth: 1, padding: 18, marginBottom: 16, gap: 10 },
+  card: { borderRadius: 20, elevation: 2, padding: 18, marginBottom: 16, gap: 10 },
   cardLbl: { fontSize: 11, letterSpacing: 0.6 },
   bigStat: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
   bigStatSub: { fontSize: 15, fontWeight: '400', letterSpacing: 0 },

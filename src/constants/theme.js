@@ -1,14 +1,15 @@
 export const COLORS = {
-  background: '#F0EBE1',
-  card: '#FAF6EF',
-  primary: '#8B7355',
-  primaryLight: '#EAE3D8',
-  text: '#2D2820',
-  textSecondary: '#9B8E7E',
-  border: '#E5DDD2',
-  danger: '#E07060',
-  success: '#6CC97C',
+  background: '#F0F4F0',
+  card: '#FFFFFF',
+  primary: '#4A7856',
+  primaryLight: '#E6F2EB',
+  text: '#1A1A1A',
+  textSecondary: '#6B7280',
+  border: '#E8ECE9',
+  danger: '#EF4444',
+  success: '#4A7856',
   white: '#FFFFFF',
+  accent: '#2D5A3D',
 };
 
 export const MOODS = [

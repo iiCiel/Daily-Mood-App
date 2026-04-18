@@ -6,7 +6,6 @@ import {
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
-import AestheticBackground from '../../src/components/AestheticBackground';
 import {
   getHabits, createHabit, updateHabit, archiveHabit,
   toggleCompletion, getCompletionsForDate,
@@ -39,7 +38,7 @@ function HabitCalendar({ calYear, calMonth, habits, monthCompletions, C, onPrev,
   const total = habits.length;
 
   return (
-    <View style={[styles.calCard, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={[styles.calCard, { backgroundColor: C.card }]}>
       <View style={styles.calHeader}>
         <TouchableOpacity onPress={onPrev} style={styles.calNavBtn}>
           <Text style={[styles.calNav, { color: C.text }]}>‹</Text>
@@ -246,8 +245,6 @@ export default function HabitsScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <AestheticBackground />
-
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -255,7 +252,7 @@ export default function HabitsScreen() {
           <Text style={[styles.dateLabel, { color: C.textSecondary }]}>{dayLabel}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: C.card, borderColor: C.border }]}
+          style={[styles.addBtn, { backgroundColor: C.card }]}
           onPress={openAdd}
           activeOpacity={0.7}
         >
@@ -265,7 +262,7 @@ export default function HabitsScreen() {
 
       {/* Progress bar */}
       {total > 0 && (
-        <View style={[styles.progressCard, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.progressCard, { backgroundColor: C.card }]}>
           <View style={styles.progressTop}>
             <Text style={[styles.progressLabel, { color: C.textSecondary }]}>today's progress</Text>
             <Text style={[styles.progressCount, { color: C.text }]}>{doneCount}/{total}</Text>
@@ -306,7 +303,7 @@ export default function HabitsScreen() {
             add a habit to start tracking your daily routines.
           </Text>
           <TouchableOpacity
-            style={[styles.emptyBtn, { backgroundColor: C.card, borderColor: C.border }]}
+            style={[styles.emptyBtn, { backgroundColor: C.card }]}
             onPress={openAdd}
             activeOpacity={0.7}
           >
@@ -325,8 +322,9 @@ export default function HabitsScreen() {
                   styles.habitRow,
                   {
                     backgroundColor: C.card,
-                    borderColor: done ? habit.color : C.border,
-                    borderWidth: done ? 1.5 : 1,
+                    borderColor: done ? habit.color : 'transparent',
+                    borderWidth: done ? 2 : 0,
+                    elevation: 2,
                   }
                 ]}
                 onPress={() => handleToggle(habit.id)}
@@ -393,9 +391,10 @@ export default function HabitsScreen() {
                 <TouchableOpacity
                   key={habit.id}
                   style={[styles.habitRow, {
-                    backgroundColor: C.background,
-                    borderColor: done ? habit.color : C.border,
-                    borderWidth: done ? 1.5 : 1,
+                    backgroundColor: C.card,
+                    borderColor: done ? habit.color : 'transparent',
+                    borderWidth: done ? 2 : 0,
+                    elevation: 1,
                   }]}
                   onPress={() => handleDayHabitToggle(habit.id)}
                   activeOpacity={0.7}
@@ -512,11 +511,11 @@ const styles = StyleSheet.create({
   dateLabel: { fontSize: 13, letterSpacing: 0.2, marginTop: 2 },
   addBtn: {
     paddingHorizontal: 16, paddingVertical: 9,
-    borderRadius: 999, borderWidth: 1,
+    borderRadius: 999, elevation: 1,
   },
   addBtnText: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
   progressCard: {
-    borderRadius: 16, borderWidth: 1,
+    borderRadius: 16, elevation: 2,
     padding: 16, marginBottom: 24, gap: 10,
   },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -530,7 +529,7 @@ const styles = StyleSheet.create({
   emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
   emptyBtn: {
     marginTop: 12, paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 999, borderWidth: 1,
+    borderRadius: 999, elevation: 1,
   },
   emptyBtnText: { fontSize: 14, fontWeight: '600' },
   list: { gap: 10 },
@@ -574,7 +573,7 @@ const styles = StyleSheet.create({
   saveBtn: { borderRadius: 999, paddingVertical: 15, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
   calCard: {
-    borderRadius: 16, borderWidth: 1,
+    borderRadius: 16, elevation: 2,
     padding: 14, marginBottom: 20,
   },
   calHeader: {

@@ -6,7 +6,6 @@ import {
 import { Stack, useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import { getGoals, createGoal, updateGoalProgress, toggleGoalComplete, deleteGoal, updateGoal } from '../src/db/goalsDatabase';
 import { COLORS } from '../src/constants/theme';
 
@@ -102,15 +101,12 @@ export default function GoalsScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <AestheticBackground />
-
-        <View style={s.header}>
+      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>`n        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
           <Text style={[s.title, { color: C.text }]}>goals</Text>
-          <TouchableOpacity style={[s.addBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={openAdd} activeOpacity={0.7}>
+          <TouchableOpacity style={[s.addBtn, { backgroundColor: C.card }]} onPress={openAdd} activeOpacity={0.7}>
             <Text style={[s.addBtnText, { color: C.text }]}>+ add</Text>
           </TouchableOpacity>
         </View>
@@ -119,7 +115,7 @@ export default function GoalsScreen() {
           <View style={s.empty}>
             <Text style={[s.emptyTitle, { color: C.text }]}>no goals yet</Text>
             <Text style={[s.emptyDesc, { color: C.textSecondary }]}>set a goal and track your progress over time.</Text>
-            <TouchableOpacity style={[s.emptyBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={openAdd} activeOpacity={0.7}>
+            <TouchableOpacity style={[s.emptyBtn, { backgroundColor: C.card }]} onPress={openAdd} activeOpacity={0.7}>
               <Text style={[s.emptyBtnText, { color: C.text }]}>+ add first goal</Text>
             </TouchableOpacity>
           </View>
@@ -131,7 +127,7 @@ export default function GoalsScreen() {
           return (
             <TouchableOpacity
               key={goal.id}
-              style={[s.goalCard, { backgroundColor: C.card, borderColor: C.border }]}
+              style={[s.goalCard, { backgroundColor: C.card }]}
               onLongPress={() => Alert.alert(goal.title, null, [
                 { text: 'edit', onPress: () => openEdit(goal) },
                 { text: 'mark complete', onPress: () => handleToggleComplete(goal) },
@@ -178,7 +174,7 @@ export default function GoalsScreen() {
             {done.map(goal => (
               <TouchableOpacity
                 key={goal.id}
-                style={[s.goalCard, s.doneCard, { backgroundColor: C.card, borderColor: C.border }]}
+                style={[s.goalCard, s.doneCard, { backgroundColor: C.card }]}
                 onLongPress={() => Alert.alert(goal.title, null, [
                   { text: 'reopen', onPress: () => handleToggleComplete(goal) },
                   { text: 'delete', style: 'destructive', onPress: () => handleDelete(goal) },
@@ -217,7 +213,7 @@ export default function GoalsScreen() {
                 placeholder="0"
                 placeholderTextColor={C.textSecondary}
               />
-              <TouchableOpacity style={[s.progBtn, { backgroundColor: C.text }]} onPress={() => handleUpdateProgress(progressGoal)}>
+              <TouchableOpacity style={[s.progBtn, { backgroundColor: C.accent }]} onPress={() => handleUpdateProgress(progressGoal)}>
                 <Text style={[s.progBtnText, { color: C.background }]}>update</Text>
               </TouchableOpacity>
             </View>
@@ -291,7 +287,7 @@ export default function GoalsScreen() {
               />
 
               <TouchableOpacity
-                style={[s.saveBtn, { backgroundColor: C.text }, !formTitle.trim() && { opacity: 0.4 }]}
+                style={[s.saveBtn, { backgroundColor: C.accent }, !formTitle.trim() && { opacity: 0.4 }]}
                 onPress={handleSave}
                 disabled={!formTitle.trim()}
                 activeOpacity={0.8}
@@ -312,14 +308,14 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 28 },
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, flex: 1 },
-  addBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  addBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, elevation: 1 },
   addBtnText: { fontSize: 13, fontWeight: '600' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyDesc: { fontSize: 14, textAlign: 'center', paddingHorizontal: 20 },
-  emptyBtn: { marginTop: 12, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999, borderWidth: 1 },
+  emptyBtn: { marginTop: 12, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999, elevation: 1 },
   emptyBtnText: { fontSize: 14, fontWeight: '600' },
-  goalCard: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 12, gap: 8 },
+  goalCard: { borderRadius: 18, elevation: 2, padding: 16, marginBottom: 12, gap: 8 },
   doneCard: { opacity: 0.6 },
   goalTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   catIcon: { fontSize: 20 },

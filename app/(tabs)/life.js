@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
-import AestheticBackground from '../../src/components/AestheticBackground';
 import { getPlannerEntry } from '../../src/db/plannerDatabase';
 import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
 import { getGoals } from '../../src/db/goalsDatabase';
@@ -59,15 +58,13 @@ export default function LifeScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <AestheticBackground />
-
       <View style={styles.topBar}>
         <View>
           <Text style={[styles.greeting, { color: C.textSecondary }]}>{greeting}</Text>
           <Text style={[styles.dateLabel, { color: C.text }]}>{dateLabel}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.reviewBtn, { backgroundColor: C.card, borderColor: C.border }]}
+          style={[styles.reviewBtn, { backgroundColor: C.card }]}
           onPress={() => router.push('/weekly-review')}
           activeOpacity={0.7}
         >
@@ -77,7 +74,7 @@ export default function LifeScreen() {
 
       {/* Daily Planner card */}
       <TouchableOpacity
-        style={[styles.card, styles.plannerCard, { backgroundColor: C.card, borderColor: C.border }]}
+        style={[styles.card, styles.plannerCard, { backgroundColor: C.card }]}
         onPress={() => router.push('/planner')}
         activeOpacity={0.7}
       >
@@ -108,7 +105,7 @@ export default function LifeScreen() {
 
       {/* Sleep card */}
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}
+        style={[styles.card, { backgroundColor: C.card }]}
         onPress={() => router.push('/sleep')}
         activeOpacity={0.7}
       >
@@ -131,7 +128,7 @@ export default function LifeScreen() {
 
       {/* Goals card */}
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}
+        style={[styles.card, { backgroundColor: C.card }]}
         onPress={() => router.push('/goals')}
         activeOpacity={0.7}
       >
@@ -167,7 +164,7 @@ export default function LifeScreen() {
 
       {/* Notes card */}
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}
+        style={[styles.card, { backgroundColor: C.card }]}
         onPress={() => router.push('/notes')}
         activeOpacity={0.7}
       >
@@ -199,9 +196,9 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 13, letterSpacing: 0.3, marginBottom: 2 },
   dateLabel: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  reviewBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  reviewBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, elevation: 1 },
   reviewBtnText: { fontSize: 12, letterSpacing: 0.2 },
-  card: { borderRadius: 20, borderWidth: 1, padding: 18, marginBottom: 14, gap: 10 },
+  card: { borderRadius: 20, elevation: 2, padding: 18, marginBottom: 14, gap: 10 },
   plannerCard: {},
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cardIcon: { fontSize: 22, width: 32, textAlign: 'center' },

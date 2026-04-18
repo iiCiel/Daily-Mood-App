@@ -19,7 +19,7 @@ export default function MoodTrend() {
   if (days.length === 0) return null;
 
   return (
-    <View style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={[styles.card, { backgroundColor: C.card }]}>
       <Text style={[styles.label, { color: C.textSecondary }]}>this week</Text>
       <View style={styles.bars}>
         {days.map(({ date, mood }) => {
@@ -66,7 +66,7 @@ export default function MoodTrend() {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
-    borderWidth: 1,
+    elevation: 2,
     padding: 16,
     marginBottom: 24,
   },

@@ -6,7 +6,6 @@ import {
 import { Stack, useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import { getNotes, saveNote, deleteNote, togglePinNote, searchNotes } from '../src/db/notesDatabase';
 import { COLORS } from '../src/constants/theme';
 
@@ -82,17 +81,14 @@ export default function NotesScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[s.container, { backgroundColor: C.background }]}>
-        <AestheticBackground />
-
-        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={[s.container, { backgroundColor: C.background }]}>`n        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={s.header}>
             <TouchableOpacity onPress={() => router.back()}>
               <Text style={[s.back, { color: C.text }]}>←</Text>
             </TouchableOpacity>
             <Text style={[s.title, { color: C.text }]}>notes</Text>
             <TouchableOpacity
-              style={[s.addBtn, { backgroundColor: C.card, borderColor: C.border }]}
+              style={[s.addBtn, { backgroundColor: C.card }]}
               onPress={openNew}
               activeOpacity={0.7}
             >
@@ -101,7 +97,7 @@ export default function NotesScreen() {
           </View>
 
           {/* Search */}
-          <View style={[s.searchBar, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.searchBar, { backgroundColor: C.card }]}>
             <Text style={{ color: C.textSecondary, fontSize: 14, marginRight: 8 }}>🔍</Text>
             <TextInput
               style={[s.searchInput, { color: C.text }]}
@@ -127,7 +123,7 @@ export default function NotesScreen() {
           {notes.map(note => (
             <TouchableOpacity
               key={note.id}
-              style={[s.noteCard, { backgroundColor: C.card, borderColor: C.border }]}
+              style={[s.noteCard, { backgroundColor: C.card }]}
               onPress={() => openEdit(note)}
               onLongPress={() => Alert.alert(
                 note.title || 'note',
@@ -200,11 +196,11 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, flex: 1 },
-  addBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+  addBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, elevation: 1 },
   addBtnText: { fontSize: 13, fontWeight: '600' },
   searchBar: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1,
+    borderRadius: 14, elevation: 1,
     paddingHorizontal: 14, paddingVertical: 4, marginBottom: 16,
   },
   searchInput: { flex: 1, fontSize: 14, paddingVertical: 9 },
@@ -212,7 +208,7 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyDesc: { fontSize: 14 },
   noteCard: {
-    borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 10, gap: 6,
+    borderRadius: 16, elevation: 2, padding: 14, marginBottom: 10, gap: 6,
   },
   noteTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   noteTitle: { fontSize: 15, fontWeight: '600', letterSpacing: 0.1 },

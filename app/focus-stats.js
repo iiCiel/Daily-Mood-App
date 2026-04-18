@@ -11,7 +11,6 @@ import { useFocusEffect, router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
 import { COLORS } from '../src/constants/theme';
 import { getFocusStats, getSessionsForMonth, getTotalFocusMinutes } from '../src/db/focusDatabase';
-import AestheticBackground from '../src/components/AestheticBackground';
 
 const SCREEN_W = Dimensions.get('window').width;
 const H_PAD = 24;
@@ -84,9 +83,7 @@ export default function FocusStatsScreen() {
         style={[styles.container, { backgroundColor: C.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-      >
-        <AestheticBackground />
-        {/* Header */}
+      >`n        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={[styles.backText, { color: C.text }]}>←</Text>
@@ -96,7 +93,7 @@ export default function FocusStatsScreen() {
         <Text style={[styles.title, { color: C.text }]}>focus stats</Text>
 
         {/* All-time stat */}
-        <View style={[styles.allTimeCard, { backgroundColor: C.card, borderColor: C.border }]}>
+        <View style={[styles.allTimeCard, { backgroundColor: C.card }]}>
           <Text style={[styles.allTimeVal, { color: C.text }]}>{Math.floor(totalMins / 60)}h {totalMins % 60}m</Text>
           <Text style={[styles.allTimeLbl, { color: C.textSecondary }]}>total focused all time</Text>
         </View>
@@ -117,15 +114,15 @@ export default function FocusStatsScreen() {
 
         {/* Month stats row */}
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>{monthSessions2}</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>sessions</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>{Math.floor(monthTotal / 60)}h {monthTotal % 60}m</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>focused</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>{activeDays}</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>active days</Text>
           </View>
@@ -182,7 +179,7 @@ export default function FocusStatsScreen() {
           <View style={styles.sessionsSection}>
             <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>sessions this month</Text>
             {monthSessions.slice(0, 10).map((s) => (
-              <View key={s.id} style={[styles.sessionRow, { backgroundColor: C.card, borderColor: C.border }]}>
+              <View key={s.id} style={[styles.sessionRow, { backgroundColor: C.card }]}>
                 <View style={[styles.sessionDot, { backgroundColor: s.completed ? '#6CC97C' : C.border }]} />
                 <View style={styles.sessionInfo}>
                   <Text style={[styles.sessionTitle, { color: C.text }]}>
@@ -212,7 +209,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginBottom: 20 },
   allTimeCard: {
-    borderRadius: 18, borderWidth: 1,
+    borderRadius: 18, elevation: 2,
     padding: 20, alignItems: 'center',
     marginBottom: 24, gap: 4,
   },
@@ -230,7 +227,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
     flex: 1, borderRadius: 14, paddingVertical: 12,
-    alignItems: 'center', gap: 4, borderWidth: 1,
+    alignItems: 'center', gap: 4, elevation: 2,
   },
   statVal: { fontSize: 16, fontWeight: '700', letterSpacing: -0.5 },
   statLbl: { fontSize: 10, letterSpacing: 0.3 },
@@ -257,7 +254,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, letterSpacing: 0.5, marginBottom: 4 },
   sessionRow: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1,
+    borderRadius: 14, elevation: 1,
     padding: 14, gap: 12,
   },
   sessionDot: { width: 10, height: 10, borderRadius: 5 },

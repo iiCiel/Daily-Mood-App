@@ -7,7 +7,6 @@ import { useFocusEffect, router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
 import { MOODS } from '../src/constants/theme';
 import { getEntriesForYear } from '../src/db/database';
-import AestheticBackground from '../src/components/AestheticBackground';
 
 const SCREEN_W = Dimensions.get('window').width;
 const H_PAD = 24;
@@ -63,10 +62,7 @@ export default function YearInPixels() {
         style={[styles.container, { backgroundColor: C.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-      >
-        <AestheticBackground />
-
-        {/* Header */}
+      >`n        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={[styles.backText, { color: C.text }]}>←</Text>

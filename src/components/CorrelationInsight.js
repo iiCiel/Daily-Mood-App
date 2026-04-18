@@ -29,7 +29,7 @@ export default function CorrelationInsight() {
   const neutral = Math.abs(diff) <= 0.3;
 
   return (
-    <View style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={[styles.card, { backgroundColor: C.card }]}>
       <Text style={[styles.title, { color: C.textSecondary }]}>mood × focus</Text>
       <View style={styles.row}>
         <View style={styles.col}>
@@ -64,7 +64,7 @@ export default function CorrelationInsight() {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
-    borderWidth: 1,
+    elevation: 2,
     padding: 16,
     marginBottom: 24,
     gap: 12,

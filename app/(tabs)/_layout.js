@@ -13,7 +13,7 @@ function TabBar({ state, descriptors, navigation }) {
   ];
 
   return (
-    <View style={[styles.bar, { backgroundColor: C.card, borderTopColor: C.border }]}>
+    <View style={[styles.bar, { backgroundColor: C.card }]}>
       {tabs.map((tab, i) => {
         const isFocused = state.index === i;
         return (
@@ -23,10 +23,10 @@ function TabBar({ state, descriptors, navigation }) {
             onPress={() => navigation.navigate(tab.name)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.icon, { color: isFocused ? C.text : C.border }]}>
+            <Text style={[styles.icon, { color: isFocused ? C.primary : C.textSecondary }]}>
               {tab.icon}
             </Text>
-            <Text style={[styles.label, { color: isFocused ? C.text : C.textSecondary }]}>
+            <Text style={[styles.label, { color: isFocused ? C.primary : C.textSecondary }]}>
               {tab.label}
             </Text>
           </TouchableOpacity>
@@ -51,7 +51,7 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    borderTopWidth: 1,
+    elevation: 8,
     paddingBottom: 24,
     paddingTop: 12,
   },

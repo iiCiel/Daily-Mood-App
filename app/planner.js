@@ -6,7 +6,6 @@ import {
 import { Stack, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
-import AestheticBackground from '../src/components/AestheticBackground';
 import { getPlannerEntry, savePlannerEntry } from '../src/db/plannerDatabase';
 import { COLORS } from '../src/constants/theme';
 
@@ -74,10 +73,7 @@ export default function PlannerScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView style={[s.flex, { backgroundColor: C.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView style={[s.flex, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <AestheticBackground />
-
-          <View style={s.header}>
+        <ScrollView style={[s.flex, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">`n          <View style={s.header}>
             <TouchableOpacity onPress={() => router.back()}>
               <Text style={[s.back, { color: C.text }]}>←</Text>
             </TouchableOpacity>
@@ -88,7 +84,7 @@ export default function PlannerScreen() {
           </View>
 
           {/* Morning section */}
-          <View style={[s.section, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.section, { backgroundColor: C.card }]}>
             <Text style={[s.sectionTitle, { color: C.textSecondary }]}>morning intention</Text>
             <TextInput
               style={[s.intentionInput, { color: C.text, borderColor: C.border }]}
@@ -102,7 +98,7 @@ export default function PlannerScreen() {
           </View>
 
           {/* Priorities */}
-          <View style={[s.section, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={[s.section, { backgroundColor: C.card }]}>
             <Text style={[s.sectionTitle, { color: C.textSecondary }]}>top 3 priorities</Text>
             {priorities.map((p, i) => (
               <View key={i} style={[s.priorityRow, { borderColor: C.border }]}>
@@ -123,7 +119,7 @@ export default function PlannerScreen() {
 
           {/* Evening review */}
           {isEvening && (
-            <View style={[s.section, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[s.section, { backgroundColor: C.card }]}>
               <Text style={[s.sectionTitle, { color: C.textSecondary }]}>evening review</Text>
               <Text style={[s.prompt, { color: C.textSecondary }]}>how did today go?</Text>
               <View style={s.ratingRow}>
@@ -159,7 +155,7 @@ export default function PlannerScreen() {
           )}
 
           <TouchableOpacity
-            style={[s.saveBtn, { backgroundColor: C.text }, saving && { opacity: 0.5 }]}
+            style={[s.saveBtn, { backgroundColor: C.accent }, saving && { opacity: 0.5 }]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.8}
@@ -179,7 +175,7 @@ const s = StyleSheet.create({
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   dateLabel: { fontSize: 13, letterSpacing: 0.2, marginTop: 2 },
-  section: { borderRadius: 20, borderWidth: 1, padding: 18, marginBottom: 16, gap: 12 },
+  section: { borderRadius: 20, elevation: 2, padding: 18, marginBottom: 16, gap: 12 },
   sectionTitle: { fontSize: 11, letterSpacing: 0.6, fontWeight: '600' },
   intentionInput: {
     fontSize: 15, lineHeight: 22, minHeight: 80,
