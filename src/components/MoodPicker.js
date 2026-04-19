@@ -6,11 +6,11 @@ import { useTheme } from '../context/ThemeContext';
 import MoodFace from './MoodFace';
 
 export default function MoodPicker({ selected, onSelect }) {
-  const COLORS = useTheme();
+  const C = useTheme();
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: COLORS.textSecondary }]}>how are you feeling?</Text>
+      <Text style={[styles.label, { color: C.textSecondary }]}>how are you feeling?</Text>
       <View style={styles.row}>
         {MOODS.map((mood) => (
           <TouchableOpacity
@@ -22,10 +22,10 @@ export default function MoodPicker({ selected, onSelect }) {
             }}
             activeOpacity={0.75}
           >
-            <View style={[styles.ring, selected === mood.value && { borderColor: COLORS.text }]}>
+            <View style={[styles.ring, selected === mood.value && { borderColor: C.text }]}>
               <MoodFace color={mood.color} moodValue={mood.value} size={50} />
             </View>
-            <Text style={[styles.moodLabel, { color: selected === mood.value ? COLORS.text : COLORS.textSecondary }, selected === mood.value && styles.moodLabelActive]}>
+            <Text style={[styles.moodLabel, { color: selected === mood.value ? C.text : C.textSecondary }, selected === mood.value && styles.moodLabelActive]}>
               {mood.label}
             </Text>
           </TouchableOpacity>

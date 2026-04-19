@@ -1,6 +1,6 @@
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useColorScheme, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -15,10 +15,10 @@ const LOCK_KEY = 'app_lock_enabled';
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 
 function AppLayout() {
-  const COLORS = useTheme();
+  const C = useTheme();
   const scheme = useColorScheme();
   const [locked, setLocked] = useState(false);
-  const bgTimestampRef = { current: null };
+  const bgTimestampRef = useRef(null);
 
   useEffect(() => {
     checkOnboarding();
@@ -82,10 +82,10 @@ function AppLayout() {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: COLORS.background },
-          headerTintColor: COLORS.text,
+          headerStyle: { backgroundColor: C.background },
+          headerTintColor: C.text,
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: COLORS.background },
+          contentStyle: { backgroundColor: C.background },
           headerTitleStyle: { fontWeight: '700' },
           headerShown: false,
           animation: 'fade_from_bottom',

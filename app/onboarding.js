@@ -35,7 +35,7 @@ const SLIDES = [
 ];
 
 export default function OnboardingScreen() {
-  const COLORS = useTheme();
+  const C = useTheme();
   const [page, setPage] = useState(0);
   const slide = SLIDES[page];
   const isLast = page === SLIDES.length - 1;
@@ -53,7 +53,7 @@ export default function OnboardingScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.container, { backgroundColor: COLORS.background }]}>
+      <View style={[styles.container, { backgroundColor: C.background }]}>
         {/* Visual */}
         <View style={styles.visual}>
           {slide.visual === 'faces' && (
@@ -90,8 +90,8 @@ export default function OnboardingScreen() {
           )}
           {slide.visual === 'streak' && (
             <View style={styles.streakVisual}>
-              <Text style={styles.streakNum}>7</Text>
-              <Text style={styles.streakLabel}>day streak 🔥</Text>
+              <Text style={[styles.streakNum, { color: C.text }]}>7</Text>
+              <Text style={[styles.streakLabel, { color: C.textSecondary }]}>day streak 🔥</Text>
               <View style={styles.streakDots}>
                 {[5,4,3,5,4,5,5].map((v, i) => (
                   <MoodFace
@@ -108,20 +108,20 @@ export default function OnboardingScreen() {
 
         {/* Text */}
         <View style={styles.textBlock}>
-          <Text style={styles.title}>{slide.title}</Text>
-          <Text style={styles.body}>{slide.body}</Text>
+          <Text style={[styles.title, { color: C.text }]}>{slide.title}</Text>
+          <Text style={[styles.body, { color: C.textSecondary }]}>{slide.body}</Text>
         </View>
 
         {/* Dots */}
         <View style={styles.dots}>
           {SLIDES.map((_, i) => (
-            <View key={i} style={[styles.dot, i === page && styles.dotActive]} />
+            <View key={i} style={[styles.dot, { backgroundColor: C.border }, i === page && [styles.dotActive, { backgroundColor: C.primary }]]} />
           ))}
         </View>
 
         {/* Button */}
-        <TouchableOpacity style={styles.btn} onPress={handleNext} activeOpacity={0.8}>
-          <Text style={styles.btnText}>{isLast ? 'get started' : 'next'}</Text>
+        <TouchableOpacity style={[styles.btn, { backgroundColor: C.accent }]} onPress={handleNext} activeOpacity={0.8}>
+          <Text style={[styles.btnText, { color: C.white }]}>{isLast ? 'get started' : 'next'}</Text>
         </TouchableOpacity>
 
         {/* Skip */}
@@ -133,7 +133,7 @@ export default function OnboardingScreen() {
               router.replace('/');
             }}
           >
-            <Text style={styles.skipText}>skip</Text>
+            <Text style={[styles.skipText, { color: C.textSecondary }]}>skip</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -178,13 +178,11 @@ const styles = StyleSheet.create({
   streakNum: {
     fontSize: 80,
     fontWeight: '800',
-    color: COLORS.text,
     letterSpacing: -4,
     lineHeight: 88,
   },
   streakLabel: {
     fontSize: 18,
-    color: COLORS.textSecondary,
     letterSpacing: 0.3,
   },
   streakDots: {
@@ -200,14 +198,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: COLORS.text,
     textAlign: 'center',
     letterSpacing: -0.5,
     lineHeight: 36,
   },
   body: {
     fontSize: 15,
-    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     letterSpacing: 0.2,
@@ -221,14 +217,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.border,
   },
   dotActive: {
-    backgroundColor: COLORS.text,
     width: 18,
   },
   btn: {
-    backgroundColor: COLORS.text,
     borderRadius: 999,
     paddingVertical: 16,
     paddingHorizontal: 48,
@@ -236,7 +229,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   btnText: {
-    color: COLORS.white,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.8,
@@ -247,7 +239,6 @@ const styles = StyleSheet.create({
   },
   skipText: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     letterSpacing: 0.3,
   },
 });

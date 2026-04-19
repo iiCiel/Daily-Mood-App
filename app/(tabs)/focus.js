@@ -10,12 +10,16 @@ import {
   AppState,
   Dimensions,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../src/context/ThemeContext';
 import { COLORS } from '../../src/constants/theme';
+import MindfulHeader from '../../src/components/MindfulHeader';
+import AestheticBackground from '../../src/components/AestheticBackground';
 import { showTimerNotification, cancelTimerNotification } from '../../src/notifications';
 import {
   getTasks, createTask, toggleTask, deleteTask,
@@ -220,12 +224,11 @@ export default function FocusScreen() {
   async function loadTasks() {
     const t = await getTasks();
     setTasks(t);
-    // Load completed pomodoro counts for each task
-    const counts = {};
-    for (const task of t) {
-      counts[task.id] = await getTaskPomodoroCount(task.id);
-    }
-    setTaskCounts(counts);
+    // Load completed pomodoro counts for each task in parallel
+    const countEntries = await Promise.all(
+      t.map(async (task) => [task.id, await getTaskPomodoroCount(task.id)])
+    );
+    setTaskCounts(Object.fromEntries(countEntries));
   }
 
   async function loadStats() {
@@ -374,20 +377,27 @@ export default function FocusScreen() {
   const STROKE = 10;
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: C.background }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >`n      {/* Header */}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
+      <AestheticBackground />
+      <ScrollView
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+      <MindfulHeader C={C} title="Focus" onRightPress={() => router.push('/focus-stats')} rightLabel="📊" />
+
       <View style={styles.header}>
-        <Text style={[styles.title, { color: C.text }]}>focus</Text>
-        <TouchableOpacity
-          style={[styles.headerBtn, { backgroundColor: C.card }]}
-          onPress={() => router.push('/focus-stats')}
-        >
-          <Text style={[styles.headerBtnText, { color: C.textSecondary }]}>stats</Text>
-        </TouchableOpacity>
+        <Text style={[styles.title, { color: C.text }]}>Pomodoro Timer</Text>
+      </View>
+
+      <View style={[styles.focusHero, { backgroundColor: C.primary }]}>
+        <View>
+          <Text style={styles.focusHeroKicker}>TODAY'S FOCUS</Text>
+          <Text style={styles.focusHeroTitle}>{todayMins} min</Text>
+          <Text style={styles.focusHeroSub}>{todayCount} completed session{todayCount === 1 ? '' : 's'}</Text>
+        </View>
       </View>
 
       {/* Mode selector */}
@@ -395,7 +405,7 @@ export default function FocusScreen() {
         {Object.keys(DEFAULT_DURATIONS).map((m) => (
           <TouchableOpacity
             key={m}
-            style={[styles.modeBtn, mode === m && { backgroundColor: C.text }]}
+            style={[styles.modeBtn, mode === m && { backgroundColor: C.primary }]}
             onPress={() => switchMode(m)}
             activeOpacity={0.7}
           >
@@ -408,12 +418,12 @@ export default function FocusScreen() {
 
       {/* Timer */}
       <View style={styles.timerWrap}>
-        <View style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={[{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center', backgroundColor: C.primaryLight, borderRadius: RING / 2 }]}>
           <ProgressRing
             progress={progress}
             size={RING}
             strokeWidth={STROKE}
-            color={C.text}
+            color={C.primary}
             bgColor={C.border}
           />
           {/* Center */}
@@ -439,7 +449,7 @@ export default function FocusScreen() {
       {/* Controls */}
       <View style={styles.controls}>
         <TouchableOpacity
-          style={[styles.sideBtn]}
+          style={[styles.sideBtn, { backgroundColor: C.card }]}
           onPress={resetTimer}
           activeOpacity={0.7}
         >
@@ -447,7 +457,7 @@ export default function FocusScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.mainBtn, { backgroundColor: C.text }]}
+          style={[styles.mainBtn, { backgroundColor: C.primary }]}
           onPress={running ? pauseTimer : startTimer}
           activeOpacity={0.8}
         >
@@ -457,7 +467,7 @@ export default function FocusScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.sideBtn]}
+          style={[styles.sideBtn, { backgroundColor: C.card }]}
           onPress={() => setShowTaskPicker(true)}
           activeOpacity={0.7}
         >
@@ -677,54 +687,103 @@ export default function FocusScreen() {
         </TouchableOpacity>
       </Modal>
     </ScrollView>
+    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 24, paddingTop: 60, paddingBottom: 50 },
+  content: { padding: 24, paddingTop: 54, paddingBottom: 28 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 24,
+    alignItems: 'center', marginBottom: 20,
   },
-  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  title: { fontSize: 25, fontWeight: '900', letterSpacing: 0 },
   headerBtn: {
     paddingHorizontal: 16, paddingVertical: 9,
     borderRadius: 999, elevation: 1,
   },
-  headerBtnText: { fontSize: 13, letterSpacing: 0.3 },
-  modeRow: {
-    flexDirection: 'row', borderRadius: 16,
-    padding: 4, elevation: 2, marginBottom: 28, gap: 4,
+  headerBtnText: { fontSize: 12, letterSpacing: 0, fontWeight: '800' },
+  focusHero: {
+    borderRadius: 26,
+    padding: 20,
+    minHeight: 136,
+    marginBottom: 18,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  modeBtn: { flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center' },
-  modeBtnText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  timerWrap: { alignItems: 'center', marginBottom: 28 },
+  focusHeroKicker: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  focusHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 39,
+    fontWeight: '900',
+    letterSpacing: 0,
+    marginTop: 8,
+  },
+  focusHeroSub: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  focusHeroStack: {
+    gap: 10,
+    alignItems: 'flex-end',
+  },
+  focusHeroPill: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  focusHeroPillText: { fontSize: 12, fontWeight: '900' },
+  modeRow: {
+    flexDirection: 'row', borderRadius: 22,
+    padding: 5, elevation: 2, marginBottom: 22, gap: 5,
+  },
+  modeBtn: { flex: 1, paddingVertical: 10, borderRadius: 17, alignItems: 'center' },
+  modeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0 },
+  timerWrap: {
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+  },
   ringCenter: { alignItems: 'center', gap: 6 },
-  timerText: { fontSize: 52, fontWeight: '700', letterSpacing: -2, lineHeight: 60 },
-  timerMode: { fontSize: 12, letterSpacing: 0.5 },
-  timerTask: { fontSize: 13, letterSpacing: 0.2, maxWidth: 160, textAlign: 'center' },
+  timerText: { fontSize: 47, fontWeight: '900', letterSpacing: 0, lineHeight: 56 },
+  timerMode: { fontSize: 11, letterSpacing: 0.5, fontWeight: '900', textTransform: 'uppercase' },
+  timerTask: { fontSize: 12, letterSpacing: 0, maxWidth: 160, textAlign: 'center', fontWeight: '700' },
   sessionDots: { fontSize: 13, letterSpacing: 6 },
   controls: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', gap: 12, marginBottom: 28,
   },
   mainBtn: { paddingHorizontal: 44, paddingVertical: 16, borderRadius: 999 },
-  mainBtnText: { fontSize: 16, fontWeight: '600', letterSpacing: 0.8 },
-  sideBtn: { paddingHorizontal: 20, paddingVertical: 16, borderRadius: 999, elevation: 1, backgroundColor: '#FFFFFF' },
-  sideBtnText: { fontSize: 14, letterSpacing: 0.3 },
+  mainBtnText: { fontSize: 15, fontWeight: '900', letterSpacing: 0 },
+  sideBtn: { paddingHorizontal: 19, paddingVertical: 16, borderRadius: 999, elevation: 1 },
+  sideBtnText: { fontSize: 13, letterSpacing: 0, fontWeight: '800' },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statCard: {
-    flex: 1, borderRadius: 16, paddingVertical: 14,
+    flex: 1, borderRadius: 20, paddingVertical: 14,
     alignItems: 'center', gap: 4, elevation: 2,
   },
-  statVal: { fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
+  statVal: { fontSize: 20, fontWeight: '700', letterSpacing: 0 },
   statLbl: { fontSize: 11, letterSpacing: 0.3 },
   taskSection: { gap: 8 },
-  sectionLabel: { fontSize: 13, letterSpacing: 0.5, marginBottom: 4 },
+  sectionLabel: { fontSize: 13, letterSpacing: 0, marginBottom: 4, fontWeight: '900' },
   addRow: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, elevation: 1,
+    borderRadius: 18, elevation: 1,
     paddingHorizontal: 14, paddingVertical: 4,
   },
   taskInput: { fontSize: 15, paddingVertical: 10 },
@@ -738,7 +797,7 @@ const styles = StyleSheet.create({
   addBtnText: { fontSize: 22, fontWeight: '300' },
   taskRow: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1.5,
+    borderRadius: 18, borderWidth: 1.5,
     paddingHorizontal: 14, paddingVertical: 12, gap: 12,
   },
   checkbox: { padding: 2 },
@@ -778,14 +837,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: 14,
     paddingHorizontal: 18, paddingVertical: 4,
   },
-  durationInput: { fontSize: 36, fontWeight: '700', flex: 1, letterSpacing: -1 },
+  durationInput: { fontSize: 36, fontWeight: '700', flex: 1, letterSpacing: 0 },
   durationUnit: { fontSize: 16, letterSpacing: 0.3 },
   durationSaveBtn: {
     borderRadius: 999, paddingVertical: 15, alignItems: 'center',
   },
   durationSaveText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
   breathCard: {
-    borderRadius: 16, elevation: 2,
+    borderRadius: 20, elevation: 2,
     paddingHorizontal: 16, paddingVertical: 14, marginTop: 16,
   },
   breathHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -800,8 +859,8 @@ const styles = StyleSheet.create({
   breathPatBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   breathPatText: { fontSize: 11, letterSpacing: 0.2 },
   breathActive: { alignItems: 'center', gap: 8, paddingVertical: 8 },
-  breathPhaseText: { fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
-  breathCountText: { fontSize: 48, fontWeight: '800', letterSpacing: -2 },
+  breathPhaseText: { fontSize: 26, fontWeight: '700', letterSpacing: 0 },
+  breathCountText: { fontSize: 48, fontWeight: '800', letterSpacing: 0 },
   breathCycleText: { fontSize: 12, letterSpacing: 0.3 },
   breathHint: { fontSize: 12, letterSpacing: 0.2, textAlign: 'center' },
   breathBtn: { paddingHorizontal: 32, paddingVertical: 12, borderRadius: 999, borderWidth: 1, marginTop: 4 },

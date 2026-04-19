@@ -168,7 +168,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Appearance */}
-        <SectionTitle label="appearance" />
+        <SectionTitle label="Appearance" />
         <View style={[ss.card, { backgroundColor: C.card }]}>
           {(['system', 'light', 'dark']).map((opt, i, arr) => (
             <TouchableOpacity
@@ -186,7 +186,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Reminders */}
-        <SectionTitle label="daily reminders" />
+        <SectionTitle label="Daily Reminders" />
         <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>tap to add or remove. multiple times allowed.</Text>
         <View style={ss.chipRow}>
           {REMINDER_PRESETS.map(p => {
@@ -214,7 +214,7 @@ export default function SettingsScreen() {
         {/* App Lock */}
         {biometricsAvailable && (
           <>
-            <SectionTitle label="app lock" />
+            <SectionTitle label="App Lock" />
             <TouchableOpacity
               style={[ss.row, { backgroundColor: C.card }]}
               onPress={async () => {
@@ -235,7 +235,7 @@ export default function SettingsScreen() {
         )}
 
         {/* Cloud sync */}
-        <SectionTitle label="cloud sync" />
+        <SectionTitle label="Cloud Sync" />
         <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>optional. connect supabase to back up your entries.</Text>
         <View style={ss.inputGroup}>
           <TextInput style={[ss.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
@@ -261,7 +261,7 @@ export default function SettingsScreen() {
         )}
 
         {/* About */}
-        <SectionTitle label="about" />
+        <SectionTitle label="About" />
         <View style={[ss.card, { backgroundColor: C.card }]}>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => router.push('/privacy')}>
             <Text style={[ss.aboutLabel, { color: C.text }]}>privacy policy</Text>
@@ -336,7 +336,7 @@ const ss = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 28 },
   back: { fontSize: 24 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  sectionTitle: { fontSize: 12, letterSpacing: 0.6, marginTop: 24, marginBottom: 10 },
+  sectionTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.6, marginTop: 28, marginBottom: 12 },
   sectionDesc: { fontSize: 13, letterSpacing: 0.2, marginBottom: 12, marginTop: -4 },
   card: { borderRadius: 16, elevation: 2, overflow: 'hidden', marginBottom: 8 },
   themeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },

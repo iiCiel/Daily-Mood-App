@@ -7,6 +7,7 @@ import { useFocusEffect, router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
 import { MOODS } from '../src/constants/theme';
 import { getEntriesForYear } from '../src/db/database';
+import MoodFace from '../src/components/MoodFace';
 
 const SCREEN_W = Dimensions.get('window').width;
 const H_PAD = 24;
@@ -88,39 +89,33 @@ export default function YearInPixels() {
           {filledCount} of {totalDays} days logged · {pct}%
         </Text>
 
-        {/* Legend */}
-        <View style={styles.legend}>
-          {MOODS.slice().reverse().map((m) => (
-            <View key={m.value} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: m.color }]} />
-              <Text style={[styles.legendText, { color: C.textSecondary }]}>{m.label}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Grid */}
         {months.map(({ month, cells }) => (
           <View key={month} style={styles.monthBlock}>
             <Text style={[styles.monthLabel, { color: C.textSecondary }]}>{MONTH_NAMES[month]}</Text>
             <View style={styles.dotGrid}>
               {cells.map((dateStr, i) => {
-                if (!dateStr) return <View key={`e-${i}`} style={[styles.dot, { backgroundColor: 'transparent' }]} />;
-                const color = getMoodColor(dateStr);
+                if (!dateStr) return <View key={`e-${i}`} style={{ width: DOT_SIZE, height: DOT_SIZE }} />;
+                const moodEntry = moodMap[dateStr];
+                const mood = moodEntry ? MOODS.find((m) => m.value === moodEntry) : null;
                 const isToday = dateStr === todayStr;
                 const isFuture = dateStr > todayStr;
+                const day = parseInt(dateStr.split('-')[2], 10);
                 return (
                   <TouchableOpacity
                     key={dateStr}
                     onPress={() => !isFuture && router.push({ pathname: '/entry', params: { date: dateStr } })}
                     disabled={isFuture}
                     activeOpacity={0.7}
+                    style={isToday && styles.todayRing}
                   >
-                    <View style={[
-                      styles.dot,
-                      { backgroundColor: color || (isFuture ? 'transparent' : C.border) },
-                      isToday && { borderWidth: 1.5, borderColor: C.text },
-                      isFuture && { opacity: 0 },
-                    ]} />
+                    {mood ? (
+                      <MoodFace color={mood.color} moodValue={mood.value} size={DOT_SIZE} />
+                    ) : (
+                      <View style={[styles.emptyCell, { borderColor: isFuture ? 'transparent' : C.border }]}>
+                        {!isFuture && <Text style={[styles.dayNum, { color: C.border }]}>{day}</Text>}
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -147,12 +142,10 @@ const styles = StyleSheet.create({
   yearText: { fontSize: 18, fontWeight: '700', letterSpacing: -0.5 },
   title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, marginBottom: 4 },
   subtitle: { fontSize: 13, letterSpacing: 0.3, marginBottom: 16 },
-  legend: { flexDirection: 'row', gap: 12, marginBottom: 24, flexWrap: 'wrap' },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontSize: 11, letterSpacing: 0.2 },
-  monthBlock: { marginBottom: 16 },
+  monthBlock: { marginBottom: 18 },
   monthLabel: { fontSize: 11, letterSpacing: 0.5, marginBottom: 6, fontWeight: '600' },
   dotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: DOT_GAP },
-  dot: { width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2 },
+  emptyCell: { width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  dayNum: { fontSize: 8, fontWeight: '600' },
+  todayRing: { borderRadius: DOT_SIZE / 2, borderWidth: 2, borderColor: 'rgba(0,0,0,0.25)' },
 });

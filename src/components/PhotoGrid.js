@@ -8,7 +8,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const PHOTO_SIZE = (SCREEN_WIDTH - 64 - 16) / 3;
 
 export default function PhotoGrid({ photos = [], onPhotosChange, editable = true }) {
-  const COLORS = useTheme();
+  const C = useTheme();
   const [viewingUri, setViewingUri] = useState(null);
 
   const pickImage = async () => {
@@ -45,7 +45,7 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
   return (
     <View style={styles.container}>
       <PhotoViewer uri={viewingUri} onClose={() => setViewingUri(null)} />
-      <Text style={[styles.label, { color: COLORS.textSecondary }]}>photos</Text>
+      <Text style={[styles.label, { color: C.textSecondary }]}>photos</Text>
       <View style={styles.grid}>
         {photos.map((uri, index) => (
           <View key={uri + index} style={styles.photoWrapper}>
@@ -54,7 +54,7 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
             </TouchableOpacity>
             {editable && (
               <TouchableOpacity
-                style={[styles.removeBtn, { backgroundColor: COLORS.danger }]}
+                style={[styles.removeBtn, { backgroundColor: C.danger }]}
                 onPress={() => removePhoto(index)}
               >
                 <Text style={styles.removeText}>✕</Text>
@@ -65,18 +65,18 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
         {editable && (
           <>
             <TouchableOpacity
-              style={[styles.addBtn, { borderColor: COLORS.border }]}
+              style={[styles.addBtn, { borderColor: C.border }]}
               onPress={pickImage}
             >
               <Text style={styles.addIcon}>🖼</Text>
-              <Text style={[styles.addText, { color: COLORS.textSecondary }]}>gallery</Text>
+              <Text style={[styles.addText, { color: C.textSecondary }]}>gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.addBtn, { borderColor: COLORS.border }]}
+              style={[styles.addBtn, { borderColor: C.border }]}
               onPress={takePhoto}
             >
               <Text style={styles.addIcon}>📷</Text>
-              <Text style={[styles.addText, { color: COLORS.textSecondary }]}>camera</Text>
+              <Text style={[styles.addText, { color: C.textSecondary }]}>camera</Text>
             </TouchableOpacity>
           </>
         )}

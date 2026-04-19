@@ -40,7 +40,7 @@ import MoodPicker from '../src/components/MoodPicker';
 import PhotoGrid from '../src/components/PhotoGrid';
 
 export default function EntryScreen() {
-  const COLORS = useTheme();
+  const C = useTheme();
   const { date } = useLocalSearchParams();
   const [mood, setMood] = useState(null);
   const [note, setNote] = useState('');
@@ -130,11 +130,11 @@ export default function EntryScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
-        style={[styles.flex, { backgroundColor: COLORS.background }]}
+        style={[styles.flex, { backgroundColor: C.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          style={[styles.flex, { backgroundColor: COLORS.background }]}
+          style={[styles.flex, { backgroundColor: C.background }]}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -142,24 +142,24 @@ export default function EntryScreen() {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <Text style={[styles.backText, { color: COLORS.text }]}>←</Text>
+              <Text style={[styles.backText, { color: C.text }]}>←</Text>
             </TouchableOpacity>
             {hasExisting && (
               <TouchableOpacity onPress={handleDelete}>
-                <Text style={[styles.deleteText, { color: COLORS.danger }]}>delete</Text>
+                <Text style={[styles.deleteText, { color: C.danger }]}>delete</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Date */}
-          <View style={styles.dateBlock}>
+          <View style={[styles.dateBlock, selectedMood && { backgroundColor: selectedMood.color + '15', borderRadius: 20, padding: 16, marginHorizontal: -8 }]}>
             {selectedMood && (
               <MoodFace color={selectedMood.color} moodValue={selectedMood.value} size={56} />
             )}
             <View>
-              <Text style={[styles.weekday, { color: COLORS.textSecondary }]}>{isToday ? 'today' : weekday.toLowerCase()}</Text>
-              <Text style={[styles.monthDay, { color: COLORS.text }]}>{monthDay}</Text>
-              {!isToday && <Text style={[styles.year, { color: COLORS.textSecondary }]}>{yearStr}</Text>}
+              <Text style={[styles.weekday, { color: C.textSecondary }]}>{isToday ? 'today' : weekday.toLowerCase()}</Text>
+              <Text style={[styles.monthDay, { color: C.text }]}>{monthDay}</Text>
+              {!isToday && <Text style={[styles.year, { color: C.textSecondary }]}>{yearStr}</Text>}
             </View>
           </View>
 
@@ -168,7 +168,7 @@ export default function EntryScreen() {
           {/* Note */}
           <View style={styles.noteSection}>
             <View style={styles.promptRow}>
-              <Text style={[styles.prompt, { color: COLORS.textSecondary }]}>{PROMPTS[promptIndex]}</Text>
+              <Text style={[styles.prompt, { color: C.textSecondary }]}>{PROMPTS[promptIndex]}</Text>
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -176,25 +176,28 @@ export default function EntryScreen() {
                 }}
                 style={styles.shuffleBtn}
               >
-                <Text style={[styles.shuffleText, { color: COLORS.border }]}>↻</Text>
+                <Text style={[styles.shuffleText, { color: C.border }]}>↻</Text>
               </TouchableOpacity>
             </View>
             <TextInput
-              style={[styles.noteInput, { backgroundColor: COLORS.card, color: COLORS.text }]}
+              style={[styles.noteInput, { backgroundColor: C.card, color: C.text }]}
               placeholder="write something..."
-              placeholderTextColor={COLORS.textSecondary}
+              placeholderTextColor={C.textSecondary}
               multiline
               value={note}
               onChangeText={setNote}
               textAlignVertical="top"
             />
+            {note.length > 0 && (
+              <Text style={[styles.charCount, { color: C.textSecondary }]}>{note.length} characters</Text>
+            )}
           </View>
 
           <PhotoGrid photos={photos} onPhotosChange={setPhotos} />
 
           {/* Tags */}
           <View style={styles.tagSection}>
-            <Text style={[styles.tagLabel, { color: COLORS.textSecondary }]}>tags</Text>
+            <Text style={[styles.tagLabel, { color: C.textSecondary }]}>tags</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll}>
               {ENTRY_TAGS.map(tag => {
                 const sel = tags.includes(tag);
@@ -202,15 +205,15 @@ export default function EntryScreen() {
                   <TouchableOpacity
                     key={tag}
                     style={[styles.tagChip, {
-                      backgroundColor: sel ? COLORS.text : COLORS.card,
-                      borderColor: sel ? COLORS.text : COLORS.border,
+                      backgroundColor: sel ? C.text : C.card,
+                      borderColor: sel ? C.text : C.border,
                     }]}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
                     }}
                   >
-                    <Text style={[styles.tagChipText, { color: sel ? COLORS.white : COLORS.textSecondary }]}>{tag}</Text>
+                    <Text style={[styles.tagChipText, { color: sel ? C.white : C.textSecondary }]}>{tag}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -219,22 +222,24 @@ export default function EntryScreen() {
 
           {/* Gratitude */}
           <View style={styles.tagSection}>
-            <Text style={[styles.tagLabel, { color: COLORS.textSecondary }]}>grateful for</Text>
+            <Text style={[styles.tagLabel, { color: C.textSecondary }]}>grateful for</Text>
             {[0, 1, 2].map(i => (
-              <TextInput
-                key={i}
-                style={[styles.gratitudeInput, { backgroundColor: COLORS.card, borderColor: COLORS.border, color: COLORS.text }]}
-                placeholder={i === 0 ? 'something you appreciated today...' : i === 1 ? 'a person, moment, or thing...' : 'anything at all...'}
-                placeholderTextColor={COLORS.textSecondary}
-                value={gratitude[i]}
-                onChangeText={val => { const g = [...gratitude]; g[i] = val; setGratitude(g); }}
-                returnKeyType={i < 2 ? 'next' : 'done'}
-              />
+              <View key={i} style={styles.gratitudeRow}>
+                <Text style={[styles.gratitudeNum, { color: C.textSecondary }]}>{i + 1}.</Text>
+                <TextInput
+                  style={[styles.gratitudeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text, flex: 1 }]}
+                  placeholder={i === 0 ? 'something you appreciated today...' : i === 1 ? 'a person, moment, or thing...' : 'anything at all...'}
+                  placeholderTextColor={C.textSecondary}
+                  value={gratitude[i]}
+                  onChangeText={val => { const g = [...gratitude]; g[i] = val; setGratitude(g); }}
+                  returnKeyType={i < 2 ? 'next' : 'done'}
+                />
+              </View>
             ))}
           </View>
 
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: COLORS.accent }, saving && styles.saveBtnDisabled]}
+            style={[styles.saveBtn, { backgroundColor: C.accent }, saving && styles.saveBtnDisabled]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.8}
@@ -250,7 +255,7 @@ export default function EntryScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: COLORS.background },
+  flex: { flex: 1 },
   content: {
     padding: 24,
     paddingTop: 60,
@@ -267,11 +272,9 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 24,
-    color: COLORS.text,
   },
   deleteText: {
     fontSize: 13,
-    color: COLORS.danger,
     letterSpacing: 0.3,
   },
   dateBlock: {
@@ -282,18 +285,15 @@ const styles = StyleSheet.create({
   },
   weekday: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     letterSpacing: 0.3,
   },
   monthDay: {
     fontSize: 24,
     fontWeight: '700',
-    color: COLORS.text,
     letterSpacing: -0.5,
   },
   year: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     marginTop: 1,
   },
   noteSection: {
@@ -301,7 +301,6 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     marginBottom: 10,
     letterSpacing: 0.3,
   },
@@ -325,17 +324,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   noteInput: {
-    backgroundColor: COLORS.card,
     borderRadius: 16,
     padding: 16,
     fontSize: 15,
-    color: COLORS.text,
     minHeight: 110,
     lineHeight: 22,
     elevation: 1,
   },
   saveBtn: {
-    backgroundColor: COLORS.accent,
     borderRadius: 999,
     paddingVertical: 16,
     alignItems: 'center',
@@ -345,16 +341,33 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   saveBtnText: {
-    color: COLORS.white,
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.8,
   },
   tagSection: { marginBottom: 16 },
   tagLabel: { fontSize: 12, letterSpacing: 0.5, marginBottom: 10 },
+  charCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'right',
+    marginTop: 6,
+  },
+  gratitudeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  gratitudeNum: {
+    fontSize: 14,
+    fontWeight: '800',
+    width: 20,
+  },
   gratitudeInput: {
     borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11,
-    fontSize: 14, marginBottom: 8,
+    fontSize: 14,
   },
   tagScroll: { flexDirection: 'row' },
   tagChip: {

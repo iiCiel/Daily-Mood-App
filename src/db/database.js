@@ -260,14 +260,16 @@ export async function exportMonthAsText(year, month) {
 export async function importFromText(text) {
   const MOOD_MAP = { 'Great': 5, 'Good': 4, 'Okay': 3, 'Low': 2, 'Bad': 1 };
 
-  const headerMatch = text.match(/Mood Journal — (\w+ \d{4})/);
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const headerMatch = text.match(/Mood Journal[^—]*—[^\w]*(\w+)[,\s]+(\d{4})/);
   if (!headerMatch) return { imported: 0, skipped: 0, error: 'unrecognized format — make sure you copied a month from the mood journal' };
 
-  const headerDate = new Date(headerMatch[1]);
-  if (isNaN(headerDate.getTime())) return { imported: 0, skipped: 0, error: 'could not parse the month/year from the text' };
+  const monthIdx = MONTH_NAMES.findIndex(m => m.toLowerCase() === headerMatch[1].toLowerCase());
+  const year = parseInt(headerMatch[2]);
+  if (monthIdx === -1 || isNaN(year)) return { imported: 0, skipped: 0, error: 'could not parse the month/year from the text' };
 
-  const year = headerDate.getFullYear();
-  const month = headerDate.getMonth(); // 0-indexed
+  const month = monthIdx; // 0-indexed
 
   const afterHeader = text.split(/={10,}/)[1] || '';
   const blocks = afterHeader.split(/-{20,}/).map(b => b.trim()).filter(Boolean);
@@ -314,7 +316,7 @@ export async function deleteEntry(date) {
 export async function getStreak() {
   const database = await getDatabase();
   const entries = await database.getAllAsync(
-    'SELECT date FROM entries ORDER BY date DESC'
+    'SELECT date FROM entries ORDER BY date DESC LIMIT 400'
   );
   if (!entries.length) return 0;
 
