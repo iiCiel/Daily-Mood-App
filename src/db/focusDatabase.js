@@ -1,4 +1,11 @@
 import { getDatabase } from './database';
+import {
+  createPlanningTask,
+  deletePlanningTask,
+  getPlanningTasks,
+  togglePlanningTask,
+  updatePlanningTask,
+} from './plannerDatabase';
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -7,18 +14,11 @@ function genId() {
 // ── Tasks ──────────────────────────────────────────────
 
 export async function getTasks() {
-  const database = await getDatabase();
-  return database.getAllAsync('SELECT * FROM tasks ORDER BY created_at DESC');
+  return getPlanningTasks({ includeCompleted: true });
 }
 
 export async function createTask(title, targetPomodoros = 1) {
-  const database = await getDatabase();
-  const id = genId();
-  await database.runAsync(
-    'INSERT INTO tasks (id, title, target_pomodoros) VALUES (?, ?, ?)',
-    [id, title, targetPomodoros]
-  );
-  return id;
+  return createPlanningTask({ title, targetPomodoros });
 }
 
 export async function setTaskPomodoros(id, target) {
@@ -36,21 +36,15 @@ export async function getTaskPomodoroCount(taskId) {
 }
 
 export async function updateTask(id, title) {
-  const database = await getDatabase();
-  await database.runAsync('UPDATE tasks SET title = ? WHERE id = ?', [title, id]);
+  await updatePlanningTask(id, { title });
 }
 
 export async function toggleTask(id) {
-  const database = await getDatabase();
-  await database.runAsync(
-    'UPDATE tasks SET completed = CASE WHEN completed = 1 THEN 0 ELSE 1 END WHERE id = ?',
-    [id]
-  );
+  await togglePlanningTask(id);
 }
 
 export async function deleteTask(id) {
-  const database = await getDatabase();
-  await database.runAsync('DELETE FROM tasks WHERE id = ?', [id]);
+  await deletePlanningTask(id);
 }
 
 // ── Sessions ───────────────────────────────────────────

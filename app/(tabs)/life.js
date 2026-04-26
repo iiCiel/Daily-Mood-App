@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import MindfulHeader from '../../src/components/MindfulHeader';
 import MoodFace from '../../src/components/MoodFace';
-import { getPlannerEntry } from '../../src/db/plannerDatabase';
+import { getPlannerEntry, getPlanningSummary } from '../../src/db/plannerDatabase';
 import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
 import { getGoals } from '../../src/db/goalsDatabase';
 import { getNotes } from '../../src/db/notesDatabase';
@@ -41,6 +41,7 @@ export default function DashboardScreen() {
   const hour = new Date().getHours();
 
   const [planner, setPlanner] = useState(null);
+  const [planningSummary, setPlanningSummary] = useState(null);
   const [sleep, setSleep] = useState(null);
   const [goals, setGoals] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -57,8 +58,9 @@ export default function DashboardScreen() {
   }, []));
 
   async function load() {
-    const [p, sl, g, n, h, done, focusSessions, moodEntry, cals, cGoal, wt] = await Promise.all([
+    const [p, planSummary, sl, g, n, h, done, focusSessions, moodEntry, cals, cGoal, wt] = await Promise.all([
       getPlannerEntry(today),
+      getPlanningSummary(today),
       getSleepEntry(today),
       getGoals(),
       getNotes(),
@@ -71,6 +73,7 @@ export default function DashboardScreen() {
       getLatestWeight(),
     ]);
     setPlanner(p);
+    setPlanningSummary(planSummary);
     setSleep(sl);
     setGoals(g);
     setNotes(n);
@@ -283,7 +286,13 @@ export default function DashboardScreen() {
 
       {/* Tool cards */}
       <View style={styles.toolsGrid}>
-        <ToolCard C={C} title="Planner" sub={planner?.intention || 'Set intention'} icon="📋" onPress={() => router.push('/planner')} />
+        <ToolCard
+          C={C}
+          title="Planner"
+          sub={planningSummary ? `${planningSummary.dueTasks} due · ${planningSummary.todayEvents} events` : (planner?.intention || 'Plan projects')}
+          icon="📋"
+          onPress={() => router.push('/planner')}
+        />
         <ToolCard C={C} title="Sleep" sub={sleepDur || 'Log sleep'} icon="🌙" onPress={() => router.push('/sleep')} />
         <ToolCard C={C} title="Calories" sub={calorieSummary ? `${calorieSummary.calories} / ${calorieGoal} kcal` : 'Log food'} icon="kcal" onPress={() => router.push('/calories')} />
         <ToolCard C={C} title="Weight" sub={latestWeight ? `${latestWeight.weight} ${latestWeight.unit}` : 'Log weight'} icon="⚖️" onPress={() => router.push('/weight')} />

@@ -1,198 +1,601 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
-import { getPlannerEntry, savePlannerEntry } from '../src/db/plannerDatabase';
-import { COLORS } from '../src/constants/theme';
+import {
+  archiveProject,
+  archiveTaskList,
+  createCalendarEvent,
+  createPlanningTask,
+  createProject,
+  createTaskList,
+  deleteCalendarEvent,
+  deletePlanningTask,
+  getCalendarItemsForMonth,
+  getPlannerEntry,
+  getPlanningTasks,
+  getProjects,
+  getTaskLists,
+  getTodayPlan,
+  moveTask,
+  savePlannerEntry,
+  togglePlanningTask,
+} from '../src/db/plannerDatabase';
 
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const TABS = ['today', 'lists', 'projects', 'calendar'];
+const PROJECT_COLORS = ['#4A7856', '#6CC97C', '#89B4D4', '#C5A8E8', '#F4A56A', '#F9C74F'];
+
+function dateStr(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-const EVENING_LABELS = { 1: 'rough', 2: 'so-so', 3: 'okay', 4: 'good', 5: 'great' };
-const EVENING_COLORS = { 1: '#89B4D4', 2: '#F4A56A', 3: '#C5A8E8', 4: '#F9C74F', 5: '#6CC97C' };
+function monthLabel(year, month) {
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toLowerCase();
+}
+
+function buildMonthDays(year, month) {
+  const first = new Date(year, month - 1, 1);
+  const startDay = first.getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const days = [];
+  for (let i = 0; i < startDay; i++) days.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  }
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
+}
+
+function shortDate(value) {
+  if (!value) return '';
+  const d = new Date(`${value}T00:00:00`);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase();
+}
 
 export default function PlannerScreen() {
   const C = useTheme();
-  const today = todayStr();
-  const hour = new Date().getHours();
-  const isEvening = hour >= 17;
+  const today = dateStr();
+  const now = new Date();
+
+  const [activeTab, setActiveTab] = useState('today');
+  const [projects, setProjects] = useState([]);
+  const [lists, setLists] = useState([]);
+  const [selectedListId, setSelectedListId] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [todayPlan, setTodayPlan] = useState({ tasks: [], events: [] });
+  const [dailyEntry, setDailyEntry] = useState(null);
+
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDue, setTaskDue] = useState('');
+  const [taskNotes, setTaskNotes] = useState('');
+  const [taskTarget, setTaskTarget] = useState('1');
+
+  const [projectName, setProjectName] = useState('');
+  const [projectNotes, setProjectNotes] = useState('');
+  const [projectColor, setProjectColor] = useState(PROJECT_COLORS[0]);
+
+  const [listTitle, setListTitle] = useState('');
+  const [listProjectId, setListProjectId] = useState('default-project');
 
   const [intention, setIntention] = useState('');
-  const [priorities, setPriorities] = useState(['', '', '']);
-  const [eveningNote, setEveningNote] = useState('');
-  const [eveningRating, setEveningRating] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [priorityText, setPriorityText] = useState('');
 
-  const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const [calCursor, setCalCursor] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  const [calendarItems, setCalendarItems] = useState({ tasks: [], events: [] });
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDate, setEventDate] = useState(today);
+  const [eventStart, setEventStart] = useState('');
+  const [eventEnd, setEventEnd] = useState('');
+  const [eventProjectId, setEventProjectId] = useState('default-project');
 
-  useEffect(() => { loadEntry(); }, []);
+  useFocusEffect(useCallback(() => { loadBase(); }, []));
 
-  async function loadEntry() {
-    const entry = await getPlannerEntry(today);
-    if (entry) {
-      setIntention(entry.intention || '');
-      const p = [...(entry.priorities || []), '', '', ''].slice(0, 3);
-      setPriorities(p);
-      setEveningNote(entry.evening_note || '');
-      setEveningRating(entry.evening_rating || null);
+  useEffect(() => {
+    if (selectedListId) loadTasks(selectedListId);
+  }, [selectedListId]);
+
+  useEffect(() => {
+    loadCalendar();
+  }, [calCursor.year, calCursor.month]);
+
+  async function loadBase() {
+    const [nextProjects, nextLists, nextToday, entry] = await Promise.all([
+      getProjects(),
+      getTaskLists(),
+      getTodayPlan(today),
+      getPlannerEntry(today),
+    ]);
+    setProjects(nextProjects);
+    setLists(nextLists);
+    setTodayPlan(nextToday);
+    setDailyEntry(entry);
+    setIntention(entry?.intention || '');
+    setPriorityText((entry?.priorities || []).join('\n'));
+    if (!selectedListId && nextLists[0]) setSelectedListId(nextLists[0].id);
+    if (!listProjectId && nextProjects[0]) setListProjectId(nextProjects[0].id);
+    if (!eventProjectId && nextProjects[0]) setEventProjectId(nextProjects[0].id);
+    await loadCalendar();
+  }
+
+  async function loadTasks(listId = selectedListId) {
+    if (!listId) return;
+    setTasks(await getPlanningTasks({ listId, includeCompleted: true }));
+  }
+
+  async function loadCalendar() {
+    setCalendarItems(await getCalendarItemsForMonth(calCursor.year, calCursor.month));
+  }
+
+  async function refreshPlanning() {
+    const [nextProjects, nextLists, nextToday] = await Promise.all([
+      getProjects(),
+      getTaskLists(),
+      getTodayPlan(today),
+    ]);
+    setProjects(nextProjects);
+    setLists(nextLists);
+    setTodayPlan(nextToday);
+    if (selectedListId) await loadTasks(selectedListId);
+    await loadCalendar();
+  }
+
+  async function addTask() {
+    if (!taskTitle.trim() || !selectedListId) return;
+    await createPlanningTask({
+      title: taskTitle,
+      listId: selectedListId,
+      notes: taskNotes,
+      dueDate: taskDue.trim() || null,
+      targetPomodoros: taskTarget,
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTaskTitle('');
+    setTaskDue('');
+    setTaskNotes('');
+    setTaskTarget('1');
+    await refreshPlanning();
+  }
+
+  async function addProject() {
+    if (!projectName.trim()) return;
+    const id = await createProject({ name: projectName, color: projectColor, notes: projectNotes });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setProjectName('');
+    setProjectNotes('');
+    setProjectColor(PROJECT_COLORS[0]);
+    setListProjectId(id);
+    setEventProjectId(id);
+    await refreshPlanning();
+  }
+
+  async function addList() {
+    if (!listTitle.trim()) return;
+    const id = await createTaskList({ title: listTitle, projectId: listProjectId, color: projectColor });
+    setListTitle('');
+    setSelectedListId(id);
+    await refreshPlanning();
+  }
+
+  async function addEvent() {
+    if (!eventTitle.trim() || !eventDate.trim()) return;
+    await createCalendarEvent({
+      title: eventTitle,
+      projectId: eventProjectId,
+      eventDate,
+      startAt: eventStart.trim() || null,
+      endAt: eventEnd.trim() || null,
+      allDay: !eventStart.trim(),
+    });
+    setEventTitle('');
+    setEventStart('');
+    setEventEnd('');
+    await refreshPlanning();
+  }
+
+  async function saveDailyNote() {
+    await savePlannerEntry(today, {
+      intention,
+      priorities: priorityText.split('\n').map((p) => p.trim()).filter(Boolean),
+      eveningNote: dailyEntry?.evening_note || '',
+      eveningRating: dailyEntry?.evening_rating || null,
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setDailyEntry(await getPlannerEntry(today));
+  }
+
+  async function toggleTask(id) {
+    await togglePlanningTask(id);
+    await refreshPlanning();
+  }
+
+  async function removeTask(id) {
+    await deletePlanningTask(id);
+    await refreshPlanning();
+  }
+
+  async function shiftTask(id, direction) {
+    await moveTask(id, direction);
+    await loadTasks();
+  }
+
+  const selectedList = lists.find((list) => list.id === selectedListId);
+  const days = useMemo(() => buildMonthDays(calCursor.year, calCursor.month), [calCursor]);
+  const itemsByDate = useMemo(() => {
+    const map = {};
+    for (const task of calendarItems.tasks) {
+      if (!map[task.due_date]) map[task.due_date] = { tasks: [], events: [] };
+      map[task.due_date].tasks.push(task);
     }
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const filteredPriorities = priorities.filter(p => p.trim());
-      await savePlannerEntry(today, {
-        intention,
-        priorities: filteredPriorities,
-        eveningNote,
-        eveningRating,
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('saved', 'plan updated.');
-    } catch (e) {
-      Alert.alert('error', 'could not save.');
-    } finally {
-      setSaving(false);
+    for (const event of calendarItems.events) {
+      if (!map[event.event_date]) map[event.event_date] = { tasks: [], events: [] };
+      map[event.event_date].events.push(event);
     }
-  }
-
-  function updatePriority(i, val) {
-    const updated = [...priorities];
-    updated[i] = val;
-    setPriorities(updated);
-  }
+    return map;
+  }, [calendarItems]);
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView style={[s.flex, { backgroundColor: C.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView style={[s.flex, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">`n          <View style={s.header}>
-            <TouchableOpacity onPress={() => router.back()}>
-              <Text style={[s.back, { color: C.text }]}>←</Text>
+        <ScrollView style={s.flex} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={s.header}>
+            <TouchableOpacity onPress={() => router.back()} style={[s.iconBtn, { backgroundColor: C.card }]}>
+              <Text style={[s.iconBtnText, { color: C.text }]}>‹</Text>
             </TouchableOpacity>
-            <View>
-              <Text style={[s.title, { color: C.text }]}>daily plan</Text>
-              <Text style={[s.dateLabel, { color: C.textSecondary }]}>{dateLabel.toLowerCase()}</Text>
+            <View style={s.headerCopy}>
+              <Text style={[s.title, { color: C.text }]}>planning hub</Text>
+              <Text style={[s.dateLabel, { color: C.textSecondary }]}>
+                {todayPlan.tasks.length} due · {todayPlan.events.length} events today
+              </Text>
             </View>
           </View>
 
-          {/* Morning section */}
-          <View style={[s.section, { backgroundColor: C.card }]}>
-            <Text style={[s.sectionTitle, { color: C.textSecondary }]}>morning intention</Text>
-            <TextInput
-              style={[s.intentionInput, { color: C.text, borderColor: C.border }]}
-              placeholder="what do you want to focus on today?"
-              placeholderTextColor={C.textSecondary}
-              value={intention}
-              onChangeText={setIntention}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
-
-          {/* Priorities */}
-          <View style={[s.section, { backgroundColor: C.card }]}>
-            <Text style={[s.sectionTitle, { color: C.textSecondary }]}>top 3 priorities</Text>
-            {priorities.map((p, i) => (
-              <View key={i} style={[s.priorityRow, { borderColor: C.border }]}>
-                <View style={[s.priorityNum, { backgroundColor: p.trim() ? C.text : C.border }]}>
-                  <Text style={[s.priorityNumText, { color: p.trim() ? C.background : C.card }]}>{i + 1}</Text>
-                </View>
-                <TextInput
-                  style={[s.priorityInput, { color: C.text }]}
-                  placeholder={`priority ${i + 1}...`}
-                  placeholderTextColor={C.textSecondary}
-                  value={p}
-                  onChangeText={val => updatePriority(i, val)}
-                  returnKeyType={i < 2 ? 'next' : 'done'}
-                />
-              </View>
+          <View style={[s.tabs, { backgroundColor: C.card }]}>
+            {TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[s.tab, activeTab === tab && { backgroundColor: C.primary }]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[s.tabText, { color: activeTab === tab ? '#fff' : C.textSecondary }]}>{tab}</Text>
+              </TouchableOpacity>
             ))}
           </View>
 
-          {/* Evening review */}
-          {isEvening && (
-            <View style={[s.section, { backgroundColor: C.card }]}>
-              <Text style={[s.sectionTitle, { color: C.textSecondary }]}>evening review</Text>
-              <Text style={[s.prompt, { color: C.textSecondary }]}>how did today go?</Text>
-              <View style={s.ratingRow}>
-                {[1, 2, 3, 4, 5].map(r => (
-                  <TouchableOpacity
-                    key={r}
-                    style={[s.ratingBtn, {
-                      backgroundColor: eveningRating === r ? EVENING_COLORS[r] : C.background,
-                      borderColor: eveningRating === r ? EVENING_COLORS[r] : C.border,
-                    }]}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setEveningRating(r); }}
-                  >
-                    <Text style={[s.ratingText, { color: eveningRating === r ? '#fff' : C.textSecondary }]}>
-                      {EVENING_LABELS[r]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+          {activeTab === 'today' && (
+            <View style={s.stack}>
+              <View style={[s.hero, { backgroundColor: C.primary }]}>
+                <Text style={s.heroKicker}>TODAY</Text>
+                <Text style={s.heroTitle}>{todayPlan.tasks.length + todayPlan.events.length}</Text>
+                <Text style={s.heroSub}>open items in your day plan</Text>
               </View>
-              <TextInput
-                style={[s.eveningInput, { color: C.text, borderColor: C.border }]}
-                placeholder="reflect on the day..."
-                placeholderTextColor={C.textSecondary}
-                value={eveningNote}
-                onChangeText={setEveningNote}
-                multiline
-                textAlignVertical="top"
-              />
+
+              <Panel C={C} title="daily note">
+                <TextInput
+                  style={[s.textArea, { color: C.text, borderColor: C.border }]}
+                  placeholder="main intention..."
+                  placeholderTextColor={C.textSecondary}
+                  value={intention}
+                  onChangeText={setIntention}
+                  multiline
+                />
+                <TextInput
+                  style={[s.textArea, { color: C.text, borderColor: C.border, minHeight: 74 }]}
+                  placeholder="priorities, one per line..."
+                  placeholderTextColor={C.textSecondary}
+                  value={priorityText}
+                  onChangeText={setPriorityText}
+                  multiline
+                />
+                <ActionButton C={C} label="save note" onPress={saveDailyNote} />
+              </Panel>
+
+              <Panel C={C} title="due now">
+                {todayPlan.tasks.length === 0 ? <Empty C={C} text="no due tasks" /> : todayPlan.tasks.map((task) => (
+                  <TaskRow key={task.id} C={C} task={task} onToggle={toggleTask} onDelete={removeTask} />
+                ))}
+              </Panel>
+
+              <Panel C={C} title="events">
+                {todayPlan.events.length === 0 ? <Empty C={C} text="no events today" /> : todayPlan.events.map((event) => (
+                  <EventRow key={event.id} C={C} event={event} onDelete={async () => { await deleteCalendarEvent(event.id); await refreshPlanning(); }} />
+                ))}
+              </Panel>
             </View>
           )}
 
-          {!isEvening && (
-            <Text style={[s.eveningHint, { color: C.textSecondary }]}>evening review unlocks after 5pm</Text>
+          {activeTab === 'lists' && (
+            <View style={s.stack}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.listChips}>
+                {lists.map((list) => (
+                  <TouchableOpacity
+                    key={list.id}
+                    style={[s.chip, { backgroundColor: selectedListId === list.id ? C.primary : C.card }]}
+                    onPress={() => setSelectedListId(list.id)}
+                  >
+                    <Text style={[s.chipText, { color: selectedListId === list.id ? '#fff' : C.text }]}>{list.title}</Text>
+                    <Text style={[s.chipMeta, { color: selectedListId === list.id ? 'rgba(255,255,255,0.75)' : C.textSecondary }]}>
+                      {(list.task_count || 0) - (list.completed_count || 0)} open
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Panel C={C} title={`add to ${selectedList?.title || 'list'}`}>
+                <TextInput style={[s.input, { color: C.text, borderColor: C.border }]} placeholder="task title..." placeholderTextColor={C.textSecondary} value={taskTitle} onChangeText={setTaskTitle} />
+                <View style={s.row}>
+                  <TextInput style={[s.input, s.rowInput, { color: C.text, borderColor: C.border }]} placeholder="due YYYY-MM-DD" placeholderTextColor={C.textSecondary} value={taskDue} onChangeText={setTaskDue} />
+                  <TextInput style={[s.input, s.targetInput, { color: C.text, borderColor: C.border }]} placeholder="◉" placeholderTextColor={C.textSecondary} value={taskTarget} onChangeText={setTaskTarget} keyboardType="number-pad" />
+                </View>
+                <TextInput style={[s.textArea, { color: C.text, borderColor: C.border }]} placeholder="notes..." placeholderTextColor={C.textSecondary} value={taskNotes} onChangeText={setTaskNotes} multiline />
+                <ActionButton C={C} label="add task" onPress={addTask} />
+              </Panel>
+
+              <Panel C={C} title="tasks">
+                {tasks.length === 0 ? <Empty C={C} text="no tasks in this list" /> : tasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    C={C}
+                    task={task}
+                    onToggle={toggleTask}
+                    onDelete={removeTask}
+                    onUp={() => shiftTask(task.id, 'up')}
+                    onDown={() => shiftTask(task.id, 'down')}
+                  />
+                ))}
+              </Panel>
+
+              <Panel C={C} title="new list">
+                <TextInput style={[s.input, { color: C.text, borderColor: C.border }]} placeholder="list name..." placeholderTextColor={C.textSecondary} value={listTitle} onChangeText={setListTitle} />
+                <ProjectPicker C={C} projects={projects} value={listProjectId} onChange={setListProjectId} />
+                <View style={s.row}>
+                  <ActionButton C={C} label="create list" onPress={addList} />
+                  {selectedListId !== 'focus-list' && (
+                    <TouchableOpacity style={[s.secondaryBtn, { borderColor: C.border }]} onPress={() => Alert.alert('archive list', 'move tasks to Focus and hide this list?', [
+                      { text: 'cancel', style: 'cancel' },
+                      { text: 'archive', style: 'destructive', onPress: async () => { await archiveTaskList(selectedListId); setSelectedListId('focus-list'); await refreshPlanning(); } },
+                    ])}>
+                      <Text style={[s.secondaryBtnText, { color: C.danger }]}>archive current</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </Panel>
+            </View>
           )}
 
-          <TouchableOpacity
-            style={[s.saveBtn, { backgroundColor: C.accent }, saving && { opacity: 0.5 }]}
-            onPress={handleSave}
-            disabled={saving}
-            activeOpacity={0.8}
-          >
-            <Text style={[s.saveBtnText, { color: C.background }]}>{saving ? 'saving...' : 'save plan'}</Text>
-          </TouchableOpacity>
+          {activeTab === 'projects' && (
+            <View style={s.stack}>
+              <Panel C={C} title="new project">
+                <TextInput style={[s.input, { color: C.text, borderColor: C.border }]} placeholder="project name..." placeholderTextColor={C.textSecondary} value={projectName} onChangeText={setProjectName} />
+                <TextInput style={[s.textArea, { color: C.text, borderColor: C.border }]} placeholder="project notes..." placeholderTextColor={C.textSecondary} value={projectNotes} onChangeText={setProjectNotes} multiline />
+                <View style={s.swatches}>
+                  {PROJECT_COLORS.map((color) => (
+                    <TouchableOpacity key={color} style={[s.swatch, { backgroundColor: color }, projectColor === color && { borderColor: C.text, borderWidth: 2 }]} onPress={() => setProjectColor(color)} />
+                  ))}
+                </View>
+                <ActionButton C={C} label="create project" onPress={addProject} />
+              </Panel>
+
+              {projects.map((project) => (
+                <View key={project.id} style={[s.projectCard, { backgroundColor: C.card }]}>
+                  <View style={s.projectTop}>
+                    <View style={[s.projectDot, { backgroundColor: project.color || C.primary }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.projectName, { color: C.text }]}>{project.name}</Text>
+                      <Text style={[s.projectMeta, { color: C.textSecondary }]}>
+                        {(project.task_count || 0) - (project.completed_count || 0)} open · {project.completed_count || 0} done
+                      </Text>
+                    </View>
+                    {project.id !== 'default-project' && (
+                      <TouchableOpacity onPress={() => Alert.alert('archive project', `"${project.name}"?`, [
+                        { text: 'cancel', style: 'cancel' },
+                        { text: 'archive', style: 'destructive', onPress: async () => { await archiveProject(project.id); await refreshPlanning(); } },
+                      ])}>
+                        <Text style={[s.deleteText, { color: C.danger }]}>archive</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {!!project.notes && <Text style={[s.projectNotes, { color: C.textSecondary }]}>{project.notes}</Text>}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {activeTab === 'calendar' && (
+            <View style={s.stack}>
+              <View style={s.calendarHeader}>
+                <TouchableOpacity style={[s.iconBtn, { backgroundColor: C.card }]} onPress={() => setCalCursor((c) => c.month === 1 ? { year: c.year - 1, month: 12 } : { ...c, month: c.month - 1 })}>
+                  <Text style={[s.iconBtnText, { color: C.text }]}>‹</Text>
+                </TouchableOpacity>
+                <Text style={[s.calendarTitle, { color: C.text }]}>{monthLabel(calCursor.year, calCursor.month)}</Text>
+                <TouchableOpacity style={[s.iconBtn, { backgroundColor: C.card }]} onPress={() => setCalCursor((c) => c.month === 12 ? { year: c.year + 1, month: 1 } : { ...c, month: c.month + 1 })}>
+                  <Text style={[s.iconBtnText, { color: C.text }]}>›</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[s.monthGrid, { backgroundColor: C.card }]}>
+                {['s', 'm', 't', 'w', 't', 'f', 's'].map((d, i) => <Text key={`${d}-${i}`} style={[s.weekday, { color: C.textSecondary }]}>{d}</Text>)}
+                {days.map((day, i) => {
+                  const item = day ? itemsByDate[day] : null;
+                  const count = (item?.tasks.length || 0) + (item?.events.length || 0);
+                  return (
+                    <View key={day || `blank-${i}`} style={[s.dayCell, day === today && { borderColor: C.primary, borderWidth: 1.5 }]}>
+                      <Text style={[s.dayNum, { color: day ? C.text : 'transparent' }]}>{day ? Number(day.slice(-2)) : '-'}</Text>
+                      {count > 0 && <View style={[s.dayBadge, { backgroundColor: C.primary }]}><Text style={s.dayBadgeText}>{count}</Text></View>}
+                    </View>
+                  );
+                })}
+              </View>
+
+              <Panel C={C} title="new event">
+                <TextInput style={[s.input, { color: C.text, borderColor: C.border }]} placeholder="event title..." placeholderTextColor={C.textSecondary} value={eventTitle} onChangeText={setEventTitle} />
+                <View style={s.row}>
+                  <TextInput style={[s.input, s.rowInput, { color: C.text, borderColor: C.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={C.textSecondary} value={eventDate} onChangeText={setEventDate} />
+                  <TextInput style={[s.input, s.timeInput, { color: C.text, borderColor: C.border }]} placeholder="start" placeholderTextColor={C.textSecondary} value={eventStart} onChangeText={setEventStart} />
+                  <TextInput style={[s.input, s.timeInput, { color: C.text, borderColor: C.border }]} placeholder="end" placeholderTextColor={C.textSecondary} value={eventEnd} onChangeText={setEventEnd} />
+                </View>
+                <ProjectPicker C={C} projects={projects} value={eventProjectId} onChange={setEventProjectId} />
+                <ActionButton C={C} label="add event" onPress={addEvent} />
+              </Panel>
+
+              <Panel C={C} title="agenda">
+                {Object.keys(itemsByDate).length === 0 ? <Empty C={C} text="nothing scheduled this month" /> : Object.entries(itemsByDate).map(([day, item]) => (
+                  <View key={day} style={[s.agendaDay, { borderColor: C.border }]}>
+                    <Text style={[s.agendaDate, { color: C.text }]}>{shortDate(day)}</Text>
+                    {item.events.map((event) => <EventRow key={event.id} C={C} event={event} onDelete={async () => { await deleteCalendarEvent(event.id); await refreshPlanning(); }} />)}
+                    {item.tasks.map((task) => <TaskRow key={task.id} C={C} task={task} onToggle={toggleTask} onDelete={removeTask} compact />)}
+                  </View>
+                ))}
+              </Panel>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </>
   );
 }
 
+function Panel({ C, title, children }) {
+  return (
+    <View style={[s.panel, { backgroundColor: C.card }]}>
+      <Text style={[s.panelTitle, { color: C.textSecondary }]}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function ActionButton({ C, label, onPress }) {
+  return (
+    <TouchableOpacity style={[s.actionBtn, { backgroundColor: C.accent }]} onPress={onPress} activeOpacity={0.8}>
+      <Text style={s.actionBtnText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function Empty({ C, text }) {
+  return <Text style={[s.empty, { color: C.textSecondary }]}>{text}</Text>;
+}
+
+function ProjectPicker({ C, projects, value, onChange }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.projectPicker}>
+      {projects.map((project) => (
+        <TouchableOpacity
+          key={project.id}
+          style={[s.projectPill, { backgroundColor: value === project.id ? project.color || C.primary : C.background, borderColor: C.border }]}
+          onPress={() => onChange(project.id)}
+        >
+          <Text style={[s.projectPillText, { color: value === project.id ? '#fff' : C.text }]}>{project.name}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+function TaskRow({ C, task, onToggle, onDelete, onUp, onDown, compact = false }) {
+  return (
+    <View style={[s.taskRow, compact && s.compactTask, { backgroundColor: C.background }]}>
+      <TouchableOpacity style={[s.check, { borderColor: task.completed ? C.success : C.border, backgroundColor: task.completed ? C.success : 'transparent' }]} onPress={() => onToggle(task.id)}>
+        {task.completed ? <Text style={s.checkText}>✓</Text> : null}
+      </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.taskTitle, { color: task.completed ? C.textSecondary : C.text }, task.completed && s.doneText]} numberOfLines={2}>{task.title}</Text>
+        <Text style={[s.taskMeta, { color: C.textSecondary }]} numberOfLines={1}>
+          {[task.project_name, task.list_title, task.due_date ? `due ${shortDate(task.due_date)}` : null, `${task.target_pomodoros || 1} ◉`].filter(Boolean).join(' · ')}
+        </Text>
+        {!!task.notes && <Text style={[s.taskNotes, { color: C.textSecondary }]} numberOfLines={2}>{task.notes}</Text>}
+      </View>
+      {onUp && <TouchableOpacity onPress={onUp} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.textSecondary }]}>↑</Text></TouchableOpacity>}
+      {onDown && <TouchableOpacity onPress={onDown} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.textSecondary }]}>↓</Text></TouchableOpacity>}
+      <TouchableOpacity onPress={() => onDelete(task.id)} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.danger }]}>×</Text></TouchableOpacity>
+    </View>
+  );
+}
+
+function EventRow({ C, event, onDelete }) {
+  const time = event.all_day ? 'all day' : [event.start_at, event.end_at].filter(Boolean).join(' - ');
+  return (
+    <View style={[s.eventRow, { backgroundColor: C.background }]}>
+      <View style={[s.eventStripe, { backgroundColor: event.project_color || C.primary }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[s.taskTitle, { color: C.text }]}>{event.title}</Text>
+        <Text style={[s.taskMeta, { color: C.textSecondary }]}>{[event.project_name, shortDate(event.event_date), time].filter(Boolean).join(' · ')}</Text>
+      </View>
+      <TouchableOpacity onPress={onDelete} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.danger }]}>×</Text></TouchableOpacity>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: 24, paddingTop: 60, paddingBottom: 50 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 28 },
-  back: { fontSize: 24 },
-  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  dateLabel: { fontSize: 13, letterSpacing: 0.2, marginTop: 2 },
-  section: { borderRadius: 20, elevation: 2, padding: 18, marginBottom: 16, gap: 12 },
-  sectionTitle: { fontSize: 11, letterSpacing: 0.6, fontWeight: '600' },
-  intentionInput: {
-    fontSize: 15, lineHeight: 22, minHeight: 80,
-    borderWidth: 1, borderRadius: 12, padding: 12, textAlignVertical: 'top',
-  },
-  priorityRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, paddingBottom: 10 },
-  priorityNum: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  priorityNumText: { fontSize: 12, fontWeight: '700' },
-  priorityInput: { flex: 1, fontSize: 15, paddingVertical: 4 },
-  prompt: { fontSize: 13, letterSpacing: 0.2, marginBottom: 4 },
-  ratingRow: { flexDirection: 'row', gap: 6 },
-  ratingBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
-  ratingText: { fontSize: 11, letterSpacing: 0.1 },
-  eveningInput: {
-    fontSize: 14, lineHeight: 20, minHeight: 70, borderWidth: 1, borderRadius: 12, padding: 12,
-  },
-  eveningHint: { fontSize: 12, letterSpacing: 0.3, textAlign: 'center', marginBottom: 16 },
-  saveBtn: { borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  saveBtnText: { fontSize: 15, fontWeight: '600', letterSpacing: 0.8 },
+  content: { padding: 24, paddingTop: 58, paddingBottom: 42 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 },
+  headerCopy: { flex: 1 },
+  iconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', elevation: 1 },
+  iconBtnText: { fontSize: 30, fontWeight: '300', lineHeight: 34 },
+  title: { fontSize: 28, fontWeight: '900', letterSpacing: 0 },
+  dateLabel: { fontSize: 12, fontWeight: '700', marginTop: 3 },
+  tabs: { flexDirection: 'row', borderRadius: 18, padding: 5, gap: 5, marginBottom: 18, elevation: 2 },
+  tab: { flex: 1, borderRadius: 14, paddingVertical: 10, alignItems: 'center' },
+  tabText: { fontSize: 11, fontWeight: '900' },
+  stack: { gap: 14 },
+  hero: { borderRadius: 24, padding: 20, minHeight: 126, justifyContent: 'center' },
+  heroKicker: { color: 'rgba(255,255,255,0.68)', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  heroTitle: { color: '#fff', fontSize: 46, fontWeight: '900', letterSpacing: 0, marginTop: 6 },
+  heroSub: { color: 'rgba(255,255,255,0.84)', fontSize: 13, fontWeight: '800' },
+  panel: { borderRadius: 20, padding: 16, gap: 10, elevation: 2 },
+  panelTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
+  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 },
+  textArea: { borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 58, fontSize: 14, textAlignVertical: 'top' },
+  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  rowInput: { flex: 1 },
+  targetInput: { width: 64, textAlign: 'center' },
+  timeInput: { width: 72 },
+  actionBtn: { borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
+  actionBtnText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  secondaryBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
+  secondaryBtnText: { fontSize: 12, fontWeight: '900' },
+  empty: { textAlign: 'center', fontSize: 13, paddingVertical: 12 },
+  listChips: { gap: 10, paddingBottom: 2 },
+  chip: { minWidth: 122, borderRadius: 18, paddingHorizontal: 15, paddingVertical: 12, elevation: 1 },
+  chipText: { fontSize: 14, fontWeight: '900' },
+  chipMeta: { fontSize: 11, fontWeight: '700', marginTop: 3 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, padding: 12 },
+  compactTask: { paddingVertical: 10 },
+  check: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  checkText: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  taskTitle: { fontSize: 14, fontWeight: '900', lineHeight: 19 },
+  doneText: { textDecorationLine: 'line-through', opacity: 0.65 },
+  taskMeta: { fontSize: 11, fontWeight: '700', marginTop: 3 },
+  taskNotes: { fontSize: 12, lineHeight: 17, marginTop: 5 },
+  rowIcon: { minWidth: 26, minHeight: 30, alignItems: 'center', justifyContent: 'center' },
+  rowIconText: { fontSize: 19, fontWeight: '800' },
+  swatches: { flexDirection: 'row', gap: 10 },
+  swatch: { width: 30, height: 30, borderRadius: 15 },
+  projectCard: { borderRadius: 18, padding: 15, gap: 10, elevation: 2 },
+  projectTop: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  projectDot: { width: 14, height: 14, borderRadius: 7 },
+  projectName: { fontSize: 16, fontWeight: '900' },
+  projectMeta: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  projectNotes: { fontSize: 13, lineHeight: 18 },
+  deleteText: { fontSize: 12, fontWeight: '900' },
+  projectPicker: { gap: 8, paddingVertical: 2 },
+  projectPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
+  projectPillText: { fontSize: 12, fontWeight: '900' },
+  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  calendarTitle: { fontSize: 20, fontWeight: '900' },
+  monthGrid: { borderRadius: 20, padding: 12, flexDirection: 'row', flexWrap: 'wrap', elevation: 2 },
+  weekday: { width: '14.285%', textAlign: 'center', fontSize: 11, fontWeight: '900', marginBottom: 8 },
+  dayCell: { width: '14.285%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  dayNum: { fontSize: 13, fontWeight: '800' },
+  dayBadge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  dayBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  agendaDay: { borderTopWidth: 1, paddingTop: 10, gap: 8 },
+  agendaDate: { fontSize: 13, fontWeight: '900' },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, padding: 12 },
+  eventStripe: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
 });

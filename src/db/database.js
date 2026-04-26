@@ -34,10 +34,62 @@ async function _initDatabase() {
     );
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
+      project_id TEXT,
+      list_id TEXT,
       title TEXT NOT NULL,
+      notes TEXT,
+      due_date TEXT,
       completed INTEGER NOT NULL DEFAULT 0,
       target_pomodoros INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      position INTEGER NOT NULL DEFAULT 0,
+      google_task_id TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'local',
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      color TEXT DEFAULT '#4A7856',
+      status TEXT NOT NULL DEFAULT 'active',
+      notes TEXT,
+      archived INTEGER NOT NULL DEFAULT 0,
+      google_calendar_id TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'local',
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS task_lists (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      title TEXT NOT NULL,
+      color TEXT DEFAULT '#4A7856',
+      position INTEGER NOT NULL DEFAULT 0,
+      archived INTEGER NOT NULL DEFAULT 0,
+      google_task_list_id TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'local',
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      title TEXT NOT NULL,
+      notes TEXT,
+      event_date TEXT NOT NULL,
+      start_at TEXT,
+      end_at TEXT,
+      all_day INTEGER NOT NULL DEFAULT 1,
+      google_event_id TEXT,
+      sync_status TEXT NOT NULL DEFAULT 'local',
+      last_synced_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS pomodoro_sessions (
       id TEXT PRIMARY KEY,
@@ -120,6 +172,11 @@ async function _initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_photos_entry ON photos(entry_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON pomodoro_sessions(date);
     CREATE INDEX IF NOT EXISTS idx_sessions_task ON pomodoro_sessions(task_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_list ON tasks(list_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);
+    CREATE INDEX IF NOT EXISTS idx_task_lists_project ON task_lists(project_id);
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);
     CREATE INDEX IF NOT EXISTS idx_sleep_date ON sleep_entries(date);
     CREATE INDEX IF NOT EXISTS idx_planner_date ON planner_entries(date);
     CREATE INDEX IF NOT EXISTS idx_calories_date ON calorie_entries(date);
@@ -136,8 +193,29 @@ async function _initDatabase() {
   `);
   // Migrations for existing installs
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN target_pomodoros INTEGER DEFAULT 1'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN project_id TEXT'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN list_id TEXT'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN notes TEXT'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN due_date TEXT'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN position INTEGER DEFAULT 0'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN google_task_id TEXT'); } catch {}
+  try { await database.runAsync("ALTER TABLE tasks ADD COLUMN sync_status TEXT DEFAULT 'local'"); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN last_synced_at TEXT'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN updated_at TEXT'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN gratitude TEXT DEFAULT '[]'"); } catch {}
+  await database.runAsync(
+    `INSERT OR IGNORE INTO projects (id, name, color, status, notes, archived, created_at, updated_at)
+     VALUES ('default-project', 'Personal', '#4A7856', 'active', NULL, 0, datetime('now'), datetime('now'))`
+  );
+  await database.runAsync(
+    `INSERT OR IGNORE INTO task_lists (id, project_id, title, color, position, archived, created_at, updated_at)
+     VALUES ('focus-list', 'default-project', 'Focus', '#4A7856', 0, 0, datetime('now'), datetime('now'))`
+  );
+  await database.runAsync("UPDATE tasks SET project_id = 'default-project' WHERE project_id IS NULL");
+  await database.runAsync("UPDATE tasks SET list_id = 'focus-list' WHERE list_id IS NULL");
+  await database.runAsync("UPDATE tasks SET position = rowid WHERE (position IS NULL OR position = 0) AND updated_at IS NULL");
+  await database.runAsync("UPDATE tasks SET updated_at = COALESCE(updated_at, created_at, datetime('now'))");
   return database;
 }
 
