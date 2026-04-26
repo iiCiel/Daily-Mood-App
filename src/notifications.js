@@ -162,6 +162,48 @@ export async function removeReminder(hour, minute) {
   await AsyncStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders));
 }
 
+const HABIT_REMINDER_KEY = 'habit_reminder';
+
+export async function getHabitReminder() {
+  try {
+    const raw = await AsyncStorage.getItem(HABIT_REMINDER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export async function addHabitReminder(hour, minute) {
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    const { status: s } = await Notifications.requestPermissionsAsync();
+    if (s !== 'granted') return false;
+  }
+  const existing = await getHabitReminder();
+  if (existing?.id) {
+    try { await Notifications.cancelScheduledNotificationAsync(existing.id); } catch {}
+  }
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'habit check-in',
+      body: "how are your habits going today?",
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour,
+      minute,
+    },
+  });
+  await AsyncStorage.setItem(HABIT_REMINDER_KEY, JSON.stringify({ hour, minute, id }));
+  return true;
+}
+
+export async function removeHabitReminder() {
+  const existing = await getHabitReminder();
+  if (existing?.id) {
+    try { await Notifications.cancelScheduledNotificationAsync(existing.id); } catch {}
+  }
+  await AsyncStorage.removeItem(HABIT_REMINDER_KEY);
+}
+
 export async function cancelReminder() {
   await Notifications.cancelAllScheduledNotificationsAsync();
   await AsyncStorage.removeItem(REMINDER_KEY);

@@ -6,16 +6,21 @@ import {
 import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initSupabase, syncEntries } from '../../src/lib/supabase';
-import { getUnsyncedEntries, markSynced, getEntries, importFromText } from '../../src/db/database';
+import { getUnsyncedEntries, markSynced, getEntries, importFromText, saveEntry } from '../../src/db/database';
 import { useTheme, useSetTheme, useThemePref } from '../../src/context/ThemeContext';
 import {
   requestPermissions, getReminders, addReminder, removeReminder,
+  getHabitReminder, addHabitReminder, removeHabitReminder,
 } from '../../src/notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Clipboard from 'expo-clipboard';
 import { getGoals } from '../../src/db/goalsDatabase';
 import { getNotes } from '../../src/db/notesDatabase';
-import { getRecentSleep } from '../../src/db/sleepDatabase';
+import { getRecentSleep, saveSleep } from '../../src/db/sleepDatabase';
+import { getAllCalorieEntries, importCalorieEntry } from '../../src/db/calorieDatabase';
+import { getAllHabitCompletions, importHabitCompletion } from '../../src/db/habitDatabase';
+import { getWeightEntries, saveWeightEntry } from '../../src/db/weightDatabase';
+import * as FileSystem from 'expo-file-system';
 
 const STORAGE_KEYS = { SUPABASE_URL: 'supabase_url', SUPABASE_KEY: 'supabase_anon_key' };
 const APP_VERSION = '1.0.0';
@@ -52,6 +57,7 @@ export default function SettingsScreen() {
   const [syncing, setSyncing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reminders, setReminders] = useState([]);
+  const [habitReminder, setHabitReminder] = useState(null);
   const [lockEnabled, setLockEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -61,6 +67,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadSettings();
     getReminders().then(setReminders);
+    getHabitReminder().then(setHabitReminder);
     AsyncStorage.getItem('app_lock_enabled').then(v => setLockEnabled(v === 'true'));
     Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync()])
       .then(([hw, enrolled]) => setBiometricsAvailable(hw && enrolled));
@@ -72,6 +79,17 @@ export default function SettingsScreen() {
     if (url) setSupabaseUrl(url);
     if (key) setSupabaseKey(key);
     if (url && key) { initSupabase(url, key); setSaved(true); }
+  }
+
+  async function toggleHabitReminder(hour, minute) {
+    if (habitReminder?.hour === hour && habitReminder?.minute === minute) {
+      await removeHabitReminder();
+      setHabitReminder(null);
+    } else {
+      const ok = await addHabitReminder(hour, minute);
+      if (!ok) { Alert.alert('permission needed', 'enable notifications in your phone settings.'); return; }
+      setHabitReminder({ hour, minute });
+    }
   }
 
   async function toggleReminder(hour, minute) {
@@ -127,6 +145,211 @@ export default function SettingsScreen() {
       Alert.alert('error', 'import failed. please try again.');
     } finally {
       setImporting(false);
+    }
+  }
+
+  function parseCSV(text) {
+    const rows = [];
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const row = [];
+      let inQuotes = false;
+      let field = '';
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+          if (ch === '"' && line[i + 1] === '"') { field += '"'; i++; }
+          else if (ch === '"') inQuotes = false;
+          else field += ch;
+        } else {
+          if (ch === '"') inQuotes = true;
+          else if (ch === ',') { row.push(field); field = ''; }
+          else field += ch;
+        }
+      }
+      row.push(field);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  async function handleImportCSV() {
+    Alert.alert(
+      'import from csv',
+      'select the folder containing your exported csv files. existing entries for the same date will be overwritten.',
+      [
+        { text: 'cancel', style: 'cancel' },
+        {
+          text: 'continue',
+          onPress: async () => {
+            try {
+              const perms = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+              if (!perms.granted) return;
+
+              const fileUris = await FileSystem.StorageAccessFramework.readDirectoryAsync(perms.directoryUri);
+              const find = (name) => fileUris.find((u) => {
+                const decoded = decodeURIComponent(u).toLowerCase();
+                return decoded.endsWith('/' + name) || decoded.endsWith('%2f' + name);
+              });
+
+              const uris = {
+                mood: find('mood.csv'),
+                sleep: find('sleep.csv'),
+                calories: find('calories.csv'),
+                habits: find('habits.csv'),
+                weight: find('weight.csv'),
+              };
+
+              if (!Object.values(uris).some(Boolean)) {
+                Alert.alert('no files found', 'no csv files were found. select the same folder you exported to.');
+                return;
+              }
+
+              const counts = { mood: 0, sleep: 0, calories: 0, habits: 0, weight: 0 };
+
+              if (uris.mood) {
+                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.mood)).slice(1);
+                for (const [date, mood, , note, tags] of rows) {
+                  if (!date || !mood) continue;
+                  const tagsArr = tags ? tags.split(';').map((t) => t.trim()).filter(Boolean) : [];
+                  await saveEntry(date, Number(mood), note || '', [], tagsArr, []);
+                  counts.mood++;
+                }
+              }
+
+              if (uris.sleep) {
+                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.sleep)).slice(1);
+                for (const [date, bedtime, wakeTime, quality, note] of rows) {
+                  if (!date) continue;
+                  await saveSleep(date, bedtime || null, wakeTime || null, quality ? Number(quality) : null, note || '');
+                  counts.sleep++;
+                }
+              }
+
+              if (uris.calories) {
+                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.calories)).slice(1);
+                for (const [date, meal, name, calories, protein, carbs, fat, note] of rows) {
+                  if (!date || !name || !calories) continue;
+                  await importCalorieEntry({ date, meal, name, calories, protein, carbs, fat, note });
+                  counts.calories++;
+                }
+              }
+
+              if (uris.habits) {
+                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.habits)).slice(1);
+                for (const [date, title, emoji] of rows) {
+                  if (!date || !title) continue;
+                  await importHabitCompletion(title, emoji, date);
+                  counts.habits++;
+                }
+              }
+
+              if (uris.weight) {
+                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.weight)).slice(1);
+                for (const [date, weight, unit, note] of rows) {
+                  if (!date || !weight) continue;
+                  await saveWeightEntry({ date, weight: parseFloat(weight), unit: unit || 'kg', note: note || '' });
+                  counts.weight++;
+                }
+              }
+
+              const summary = [
+                counts.mood && `${counts.mood} mood entries`,
+                counts.sleep && `${counts.sleep} sleep entries`,
+                counts.calories && `${counts.calories} calorie entries`,
+                counts.habits && `${counts.habits} habit completions`,
+                counts.weight && `${counts.weight} weight entries`,
+              ].filter(Boolean).join(', ');
+
+              Alert.alert('import complete', summary || 'nothing was imported.');
+            } catch (e) {
+              console.error(e);
+              Alert.alert('error', 'import failed. make sure the csv files are valid.');
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function toCSV(headers, rows) {
+    const escape = (v) => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? '"' + s.replace(/"/g, '""') + '"'
+        : s;
+    };
+    return [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
+  }
+
+  async function handleExportCSV() {
+    try {
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) return;
+      const dir = permissions.directoryUri;
+
+      const [moodEntries, sleepEntries, calorieEntries, habitCompletions, weightEntries] = await Promise.all([
+        getEntries(5000),
+        getRecentSleep(3650),
+        getAllCalorieEntries(),
+        getAllHabitCompletions(),
+        getWeightEntries(3650),
+      ]);
+
+      const MOODS_MAP = { 1: 'bad', 2: 'low', 3: 'okay', 4: 'good', 5: 'great' };
+
+      const files = [
+        {
+          name: 'mood.csv',
+          content: toCSV(
+            ['date', 'mood', 'mood_label', 'note', 'tags'],
+            moodEntries.map((e) => {
+              let tags = '';
+              try { tags = JSON.parse(e.tags || '[]').join('; '); } catch {}
+              return [e.date, e.mood, MOODS_MAP[e.mood] || '', e.note || '', tags];
+            })
+          ),
+        },
+        {
+          name: 'sleep.csv',
+          content: toCSV(
+            ['date', 'bedtime', 'wake_time', 'quality', 'note'],
+            sleepEntries.map((e) => [e.date, e.bedtime || '', e.wake_time || '', e.quality || '', e.note || ''])
+          ),
+        },
+        {
+          name: 'calories.csv',
+          content: toCSV(
+            ['date', 'meal', 'food_name', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'note'],
+            calorieEntries.map((e) => [e.date, e.meal, e.name, e.calories, e.protein || '', e.carbs || '', e.fat || '', e.note || ''])
+          ),
+        },
+        {
+          name: 'habits.csv',
+          content: toCSV(
+            ['date', 'habit', 'emoji'],
+            habitCompletions.map((e) => [e.date, e.title, e.emoji || ''])
+          ),
+        },
+        {
+          name: 'weight.csv',
+          content: toCSV(
+            ['date', 'weight', 'unit', 'note'],
+            weightEntries.map((e) => [e.date, e.weight, e.unit, e.note || ''])
+          ),
+        },
+      ];
+
+      for (const file of files) {
+        const uri = await FileSystem.StorageAccessFramework.createFileAsync(dir, file.name, 'text/csv');
+        await FileSystem.writeAsStringAsync(uri, file.content, { encoding: FileSystem.EncodingType.UTF8 });
+      }
+
+      Alert.alert('export complete', `${files.length} csv files saved to the selected folder.`);
+    } catch (e) {
+      Alert.alert('error', 'could not export csv files.');
     }
   }
 
@@ -211,6 +434,29 @@ export default function SettingsScreen() {
           </Text>
         )}
 
+        {/* Habit Reminder */}
+        <SectionTitle label="Habit Reminder" />
+        <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>a daily nudge to check your habits.</Text>
+        <View style={ss.chipRow}>
+          {REMINDER_PRESETS.map(p => {
+            const active = habitReminder?.hour === p.hour && habitReminder?.minute === p.minute;
+            return (
+              <TouchableOpacity
+                key={p.label}
+                style={[ss.chip, { borderColor: C.border, backgroundColor: active ? C.text : C.card }]}
+                onPress={() => toggleHabitReminder(p.hour, p.minute)}
+              >
+                <Text style={[ss.chipText, { color: active ? C.white : C.textSecondary }]}>{p.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {habitReminder && (
+          <Text style={[ss.activeReminders, { color: C.textSecondary }]}>
+            active: {REMINDER_PRESETS.find(x => x.hour === habitReminder.hour && x.minute === habitReminder.minute)?.label || `${habitReminder.hour}:${String(habitReminder.minute).padStart(2,'0')}`}
+          </Text>
+        )}
+
         {/* App Lock */}
         {biometricsAvailable && (
           <>
@@ -268,7 +514,15 @@ export default function SettingsScreen() {
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExport}>
-            <Text style={[ss.aboutLabel, { color: C.text }]}>export my data</Text>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>export my data (json)</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExportCSV}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>export as csv</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleImportCSV}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>import from csv</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => setShowImport(true)}>

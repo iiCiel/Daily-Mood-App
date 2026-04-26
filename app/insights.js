@@ -6,9 +6,17 @@ import { getMoodInsights } from '../src/db/database';
 import { getHabitInsights } from '../src/db/habitDatabase';
 import { getFocusInsights } from '../src/db/focusDatabase';
 import { getSleepInsights } from '../src/db/sleepDatabase';
+import { getCalorieInsights } from '../src/db/calorieDatabase';
+import { getWeightInsights } from '../src/db/weightDatabase';
 import { MOODS } from '../src/constants/theme';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MEALS = [
+  { key: 'breakfast', label: 'Breakfast', color: '#F9C74F' },
+  { key: 'lunch', label: 'Lunch', color: '#6CC97C' },
+  { key: 'dinner', label: 'Dinner', color: '#89B4D4' },
+  { key: 'snack', label: 'Snack', color: '#C5A8E8' },
+];
 
 function moodColor(avg) {
   if (avg == null) return null;
@@ -21,11 +29,20 @@ export default function InsightsScreen() {
   const [habits, setHabits] = useState(null);
   const [focus, setFocus] = useState(null);
   const [sleep, setSleep] = useState(null);
+  const [calories, setCalories] = useState(null);
+  const [weight, setWeight] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getMoodInsights(), getHabitInsights(), getFocusInsights(), getSleepInsights()])
-      .then(([m, h, f, sl]) => { setMood(m); setHabits(h); setFocus(f); setSleep(sl); })
+    Promise.all([getMoodInsights(), getHabitInsights(), getFocusInsights(), getSleepInsights(), getCalorieInsights(), getWeightInsights()])
+      .then(([m, h, f, sl, cals, wt]) => {
+        setMood(m);
+        setHabits(h);
+        setFocus(f);
+        setSleep(sl);
+        setCalories(cals);
+        setWeight(wt);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -39,7 +56,9 @@ export default function InsightsScreen() {
     </>
   );
 
-  if (!mood) return (
+  const hasInsights = !!mood || (habits && habits.total > 0) || (focus && focus.totalMins > 0) || !!sleep || !!calories || !!weight;
+
+  if (!hasInsights) return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[s.center, { backgroundColor: C.background }]}>
@@ -47,7 +66,7 @@ export default function InsightsScreen() {
           <Text style={[s.back, { color: C.text }]}>←</Text>
         </TouchableOpacity>
         <Text style={[s.emptyTitle, { color: C.text }]}>no data yet</Text>
-        <Text style={[s.emptyDesc, { color: C.textSecondary }]}>log your mood for a few days to see insights.</Text>
+        <Text style={[s.emptyDesc, { color: C.textSecondary }]}>log a few days to see trends here.</Text>
       </View>
     </>
   );
@@ -56,11 +75,16 @@ export default function InsightsScreen() {
   const totalM = focus ? focus.totalMins % 60 : 0;
   const weekH = focus ? Math.floor(focus.weekMins / 60) : 0;
   const weekM = focus ? focus.weekMins % 60 : 0;
+  const calorieBarMax = calories ? Math.max(calories.goal, ...calories.recent.map((day) => day.calories), 1) : 1;
+  const maxMealCalories = calories
+    ? Math.max(1, ...MEALS.map((meal) => calories.mealTotals[meal.key]?.calories || 0))
+    : 1;
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>`n        <View style={s.header}>
+      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -68,6 +92,7 @@ export default function InsightsScreen() {
         </View>
 
         {/* Overview */}
+        {mood && (
         <View style={s.row}>
           <View style={[s.bigCard, { backgroundColor: C.card }]}>
             <Text style={[s.cardLbl, { color: C.textSecondary }]}>avg mood</Text>
@@ -85,8 +110,10 @@ export default function InsightsScreen() {
             <Text style={[s.cardSub, { color: C.textSecondary }]}>days</Text>
           </View>
         </View>
+        )}
 
         {/* Day of week */}
+        {mood && (
         <View style={[s.card, { backgroundColor: C.card }]}>
           <Text style={[s.secLbl, { color: C.textSecondary }]}>mood by day of week</Text>
           {mood.bestDow !== mood.worstDow && (
@@ -111,8 +138,10 @@ export default function InsightsScreen() {
             })}
           </View>
         </View>
+        )}
 
         {/* Distribution */}
+        {mood && (
         <View style={[s.card, { backgroundColor: C.card }]}>
           <Text style={[s.secLbl, { color: C.textSecondary }]}>mood distribution</Text>
           {[...MOODS].reverse().map(m => {
@@ -129,6 +158,74 @@ export default function InsightsScreen() {
             );
           })}
         </View>
+        )}
+
+        {/* Nutrition */}
+        {calories && (
+          <View style={[s.card, { backgroundColor: C.card }]}>
+            <Text style={[s.secLbl, { color: C.textSecondary }]}>nutrition</Text>
+            <View style={s.row}>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{calories.avgCalories}</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>avg kcal</Text>
+              </View>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{calories.avgCalories7 || '-'}</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>7-day avg</Text>
+              </View>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{calories.goalDays}/{calories.loggedDays}</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>within goal</Text>
+              </View>
+            </View>
+
+            <View style={s.calorieBars}>
+              <View style={[s.calorieGoalLine, {
+                bottom: 18 + Math.round((calories.goal / calorieBarMax) * 58),
+                backgroundColor: C.accent,
+              }]} />
+              {calories.recent.map((day) => {
+                const h = day.calories ? Math.max(6, Math.round((day.calories / calorieBarMax) * 58)) : 4;
+                const over = day.calories > calories.goal;
+                const dow = new Date(day.date + 'T00:00:00').getDay();
+                return (
+                  <View key={day.date} style={s.calorieCol}>
+                    <View style={[s.calorieBar, { height: h, backgroundColor: over ? C.danger : C.primary, opacity: day.calories ? 0.9 : 0.3 }]} />
+                    <Text style={[s.dowLbl, { color: C.textSecondary }]}>{DOW[dow][0]}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={s.macroInsightRow}>
+              <View style={[s.macroPill, { backgroundColor: C.background }]}>
+                <Text style={[s.macroPillValue, { color: C.text }]}>{calories.avgProtein}g</Text>
+                <Text style={[s.macroPillLabel, { color: C.textSecondary }]}>protein</Text>
+              </View>
+              <View style={[s.macroPill, { backgroundColor: C.background }]}>
+                <Text style={[s.macroPillValue, { color: C.text }]}>{calories.avgCarbs}g</Text>
+                <Text style={[s.macroPillLabel, { color: C.textSecondary }]}>carbs</Text>
+              </View>
+              <View style={[s.macroPill, { backgroundColor: C.background }]}>
+                <Text style={[s.macroPillValue, { color: C.text }]}>{calories.avgFat}g</Text>
+                <Text style={[s.macroPillLabel, { color: C.textSecondary }]}>fat</Text>
+              </View>
+            </View>
+
+            {MEALS.map((meal) => {
+              const total = calories.mealTotals[meal.key]?.calories || 0;
+              return (
+                <View key={meal.key} style={s.mealInsightRow}>
+                  <Text style={[s.mealInsightLabel, { color: C.textSecondary }]}>{meal.label}</Text>
+                  <View style={[s.mealInsightTrack, { backgroundColor: C.border }]}>
+                    <View style={[s.mealInsightFill, { width: `${(total / maxMealCalories) * 100}%`, backgroundColor: meal.color }]} />
+                  </View>
+                  <Text style={[s.mealInsightValue, { color: C.textSecondary }]}>{total}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Habits */}
         {habits && habits.total > 0 && (
@@ -188,6 +285,48 @@ export default function InsightsScreen() {
             </View>
           </View>
         )}
+
+        {/* Weight */}
+        {weight && (
+          <View style={[s.card, { backgroundColor: C.card }]}>
+            <Text style={[s.secLbl, { color: C.textSecondary }]}>weight</Text>
+            <View style={s.row}>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{weight.latest} {weight.unit}</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>current</Text>
+              </View>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: weight.change > 0 ? C.danger : weight.change < 0 ? C.success : C.text }]}>
+                  {weight.change > 0 ? '+' : ''}{weight.change} {weight.unit}
+                </Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>change</Text>
+              </View>
+              <View style={s.mini}>
+                <Text style={[s.miniNum, { color: C.text }]}>{weight.count}</Text>
+                <Text style={[s.miniLbl, { color: C.textSecondary }]}>entries</Text>
+              </View>
+            </View>
+            {weight.entries.length > 1 && (() => {
+              const wMin = weight.min;
+              const wRange = Math.max(weight.max - weight.min, 0.1);
+              return (
+                <View style={s.calorieBars}>
+                  {weight.entries.slice(-14).map((entry) => {
+                    const h = Math.round(((entry.weight - wMin) / wRange) * 52) + 10;
+                    return (
+                      <View key={entry.date} style={s.calorieCol}>
+                        <View style={[s.calorieBar, { height: h, backgroundColor: C.primary, opacity: 0.85 }]} />
+                        <Text style={[s.dowLbl, { color: C.textSecondary }]}>
+                          {new Date(entry.date + 'T00:00:00').getDate()}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              );
+            })()}
+          </View>
+        )}
       </ScrollView>
     </>
   );
@@ -223,6 +362,19 @@ const s = StyleSheet.create({
   miniLbl: { fontSize: 11, letterSpacing: 0.3, textAlign: 'center' },
   bigTrack: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 4 },
   bigFill: { height: 8, borderRadius: 4 },
+  calorieBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 82, marginBottom: 14 },
+  calorieCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
+  calorieBar: { width: '100%', borderRadius: 5, minHeight: 4 },
+  calorieGoalLine: { position: 'absolute', left: 0, right: 0, height: 1, opacity: 0.55, zIndex: 1 },
+  macroInsightRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  macroPill: { flex: 1, borderRadius: 12, paddingVertical: 9, alignItems: 'center' },
+  macroPillValue: { fontSize: 14, fontWeight: '800' },
+  macroPillLabel: { fontSize: 10, letterSpacing: 0.3, marginTop: 2 },
+  mealInsightRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  mealInsightLabel: { fontSize: 11, width: 58 },
+  mealInsightTrack: { flex: 1, height: 7, borderRadius: 4, overflow: 'hidden' },
+  mealInsightFill: { height: 7, borderRadius: 4 },
+  mealInsightValue: { fontSize: 11, width: 42, textAlign: 'right' },
   emptyTitle: { fontSize: 20, fontWeight: '700' },
   emptyDesc: { fontSize: 14, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
 });

@@ -162,3 +162,36 @@ export async function getHabitInsights() {
 
   return { total: habits.length, rate30, bestStreak, todayDone: todayDone?.count || 0 };
 }
+
+export async function importHabitCompletion(title, emoji, date) {
+  const database = await getDatabase();
+  let habit = await database.getFirstAsync(
+    'SELECT id FROM habits WHERE LOWER(title) = LOWER(?)',
+    [title]
+  );
+  if (!habit) {
+    const now = new Date().toISOString();
+    await database.runAsync(
+      'INSERT INTO habits (title, emoji, color, created_at, archived) VALUES (?, ?, ?, ?, 0)',
+      [title, emoji || '✦', '#C5A8E8', now]
+    );
+    habit = await database.getFirstAsync('SELECT id FROM habits WHERE LOWER(title) = LOWER(?)', [title]);
+  }
+  if (!habit) return;
+  try {
+    await database.runAsync(
+      'INSERT OR IGNORE INTO habit_completions (habit_id, date, completed_at) VALUES (?, ?, ?)',
+      [habit.id, date, new Date().toISOString()]
+    );
+  } catch {}
+}
+
+export async function getAllHabitCompletions() {
+  const database = await getDatabase();
+  return database.getAllAsync(
+    `SELECT hc.date, h.title, h.emoji
+     FROM habit_completions hc
+     JOIN habits h ON h.id = hc.habit_id
+     ORDER BY hc.date DESC, h.title ASC`
+  );
+}

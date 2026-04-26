@@ -103,12 +103,36 @@ async function _initDatabase() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS calorie_entries (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      meal TEXT DEFAULT 'snack',
+      name TEXT NOT NULL,
+      calories INTEGER NOT NULL,
+      protein REAL,
+      carbs REAL,
+      fat REAL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
     CREATE INDEX IF NOT EXISTS idx_photos_entry ON photos(entry_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON pomodoro_sessions(date);
     CREATE INDEX IF NOT EXISTS idx_sessions_task ON pomodoro_sessions(task_id);
     CREATE INDEX IF NOT EXISTS idx_sleep_date ON sleep_entries(date);
     CREATE INDEX IF NOT EXISTS idx_planner_date ON planner_entries(date);
+    CREATE INDEX IF NOT EXISTS idx_calories_date ON calorie_entries(date);
+    CREATE TABLE IF NOT EXISTS weight_entries (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL UNIQUE,
+      weight REAL NOT NULL,
+      unit TEXT NOT NULL DEFAULT 'kg',
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_weight_date ON weight_entries(date);
   `);
   // Migrations for existing installs
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN target_pomodoros INTEGER DEFAULT 1'); } catch {}

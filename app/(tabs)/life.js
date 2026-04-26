@@ -4,7 +4,6 @@ import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import MindfulHeader from '../../src/components/MindfulHeader';
-import AestheticBackground from '../../src/components/AestheticBackground';
 import MoodFace from '../../src/components/MoodFace';
 import { getPlannerEntry } from '../../src/db/plannerDatabase';
 import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
@@ -13,6 +12,8 @@ import { getNotes } from '../../src/db/notesDatabase';
 import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db/habitDatabase';
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
+import { getCalorieDaySummary, getCalorieGoal } from '../../src/db/calorieDatabase';
+import { getLatestWeight } from '../../src/db/weightDatabase';
 import { MOODS } from '../../src/constants/theme';
 
 function todayStr() {
@@ -47,13 +48,16 @@ export default function DashboardScreen() {
   const [completed, setCompleted] = useState(new Set());
   const [sessions, setSessions] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
+  const [calorieSummary, setCalorieSummary] = useState(null);
+  const [calorieGoal, setCalorieGoal] = useState(2000);
+  const [latestWeight, setLatestWeight] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
   }, []));
 
   async function load() {
-    const [p, sl, g, n, h, done, focusSessions, moodEntry] = await Promise.all([
+    const [p, sl, g, n, h, done, focusSessions, moodEntry, cals, cGoal, wt] = await Promise.all([
       getPlannerEntry(today),
       getSleepEntry(today),
       getGoals(),
@@ -62,6 +66,9 @@ export default function DashboardScreen() {
       getCompletionsForDate(today),
       getSessionsForDay(today),
       getEntry(today),
+      getCalorieDaySummary(today),
+      getCalorieGoal(),
+      getLatestWeight(),
     ]);
     setPlanner(p);
     setSleep(sl);
@@ -71,6 +78,9 @@ export default function DashboardScreen() {
     setCompleted(done);
     setSessions(focusSessions);
     setTodayMood(moodEntry);
+    setCalorieSummary(cals);
+    setCalorieGoal(cGoal);
+    setLatestWeight(wt);
   }
 
   async function toggleHabit(id) {
@@ -104,7 +114,6 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <AestheticBackground />
       <ScrollView
         style={{ flex: 1, backgroundColor: 'transparent' }}
         contentContainerStyle={styles.content}
@@ -276,6 +285,8 @@ export default function DashboardScreen() {
       <View style={styles.toolsGrid}>
         <ToolCard C={C} title="Planner" sub={planner?.intention || 'Set intention'} icon="📋" onPress={() => router.push('/planner')} />
         <ToolCard C={C} title="Sleep" sub={sleepDur || 'Log sleep'} icon="🌙" onPress={() => router.push('/sleep')} />
+        <ToolCard C={C} title="Calories" sub={calorieSummary ? `${calorieSummary.calories} / ${calorieGoal} kcal` : 'Log food'} icon="kcal" onPress={() => router.push('/calories')} />
+        <ToolCard C={C} title="Weight" sub={latestWeight ? `${latestWeight.weight} ${latestWeight.unit}` : 'Log weight'} icon="⚖️" onPress={() => router.push('/weight')} />
         <ToolCard C={C} title="Goals" sub={`${activeGoals.length} active`} icon="🎯" onPress={() => router.push('/goals')} />
         <ToolCard C={C} title="Notes" sub={notes[0]?.title || `${notes.length} notes`} icon="📝" onPress={() => router.push('/notes')} />
       </View>

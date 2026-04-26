@@ -82,6 +82,13 @@ export default function GoalsScreen() {
     load();
   }
 
+  async function quickProgress(goal, delta) {
+    const next = Math.max(0, (goal.current_value || 0) + delta);
+    await updateGoalProgress(goal.id, next);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    load();
+  }
+
   async function handleToggleComplete(goal) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await toggleGoalComplete(goal.id, goal.completed);
@@ -101,7 +108,8 @@ export default function GoalsScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>`n        <View style={s.header}>
+      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -147,7 +155,23 @@ export default function GoalsScreen() {
                   <Text style={[s.goalCat, { color: C.textSecondary }]}>{goal.category}</Text>
                 </View>
                 {hasProg && (
-                  <Text style={[s.goalPct, { color: pct >= 100 ? '#6CC97C' : C.text }]}>{pct}%</Text>
+                  <View style={s.quickBtns}>
+                    <TouchableOpacity
+                      style={[s.quickBtn, { backgroundColor: C.background }]}
+                      onPress={(e) => { e.stopPropagation?.(); quickProgress(goal, -1); }}
+                      hitSlop={6}
+                    >
+                      <Text style={[s.quickBtnText, { color: C.textSecondary }]}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={[s.goalPct, { color: pct >= 100 ? '#6CC97C' : C.text }]}>{pct}%</Text>
+                    <TouchableOpacity
+                      style={[s.quickBtn, { backgroundColor: C.background }]}
+                      onPress={(e) => { e.stopPropagation?.(); quickProgress(goal, 1); }}
+                      hitSlop={6}
+                    >
+                      <Text style={[s.quickBtnText, { color: C.accent }]}>+</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
               {hasProg && (
@@ -321,7 +345,10 @@ const s = StyleSheet.create({
   catIcon: { fontSize: 20 },
   goalTitle: { fontSize: 15, fontWeight: '600', letterSpacing: 0.1 },
   goalCat: { fontSize: 11, letterSpacing: 0.3, marginTop: 2 },
-  goalPct: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
+  goalPct: { fontSize: 15, fontWeight: '700', letterSpacing: -0.3, minWidth: 38, textAlign: 'center' },
+  quickBtns: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  quickBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  quickBtnText: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3 },
   goalProgress: { fontSize: 12, letterSpacing: 0.2 },

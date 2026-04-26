@@ -6,6 +6,8 @@ import { getLastNDaysMoods, getStreak } from '../src/db/database';
 import { getHabitInsights } from '../src/db/habitDatabase';
 import { getFocusInsights } from '../src/db/focusDatabase';
 import { getSleepInsights } from '../src/db/sleepDatabase';
+import { getRecentCalorieSummaries, getCalorieGoal } from '../src/db/calorieDatabase';
+import { getWeightEntries } from '../src/db/weightDatabase';
 import { MOODS, COLORS } from '../src/constants/theme';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -29,23 +31,32 @@ export default function WeeklyReviewScreen() {
   const [focus, setFocus] = useState(null);
   const [sleep, setSleep] = useState(null);
   const [streak, setStreak] = useState(0);
+  const [calories, setCalories] = useState([]);
+  const [calorieGoal, setCalorieGoal] = useState(0);
+  const [weightEntries, setWeightEntries] = useState([]);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      const [m, h, f, sl, s] = await Promise.all([
+      const [m, h, f, sl, s, cals, cGoal, wt] = await Promise.all([
         getLastNDaysMoods(7),
         getHabitInsights(),
         getFocusInsights(),
         getSleepInsights(),
         getStreak(),
+        getRecentCalorieSummaries(7),
+        getCalorieGoal(),
+        getWeightEntries(7),
       ]);
       setMoods(m);
       setHabits(h);
       setFocus(f);
       setSleep(sl);
       setStreak(s);
+      setCalories(cals);
+      setCalorieGoal(cGoal);
+      setWeightEntries(wt);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
@@ -68,6 +79,12 @@ export default function WeeklyReviewScreen() {
     if (habits) text += `habits: ${habits.rate30}% completion rate\n`;
     if (focus && focus.weekMins > 0) text += `focus: ${focusH > 0 ? focusH + 'h ' : ''}${focusM}m · ${focus.weekSessions} sessions\n`;
     if (sleep) text += `sleep: avg ${sleep.avgHours}h ${sleep.avgMinsRemainder}m · quality ${sleep.avgQuality}/5\n`;
+    const loggedCals = calories.filter(d => d.count > 0);
+    if (loggedCals.length) {
+      const avg = Math.round(loggedCals.reduce((s, d) => s + d.calories, 0) / loggedCals.length);
+      text += `nutrition: ${avg} kcal avg · ${loggedCals.length}/7 days logged\n`;
+    }
+    if (weightEntries.length) text += `weight: ${weightEntries[0].weight} ${weightEntries[0].unit}\n`;
     Share.share({ message: text });
   }
 
@@ -83,7 +100,8 @@ export default function WeeklyReviewScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>`n        <View style={s.header}>
+      <ScrollView style={[s.container, { backgroundColor: C.background }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -177,7 +195,51 @@ export default function WeeklyReviewScreen() {
           </View>
         )}
 
-        {!avgMood && !habits?.total && !focus?.weekMins && !sleep && (
+        {/* Calories */}
+        {(() => {
+          const logged = calories.filter((d) => d.count > 0);
+          if (!logged.length) return null;
+          const avgCal = Math.round(logged.reduce((s, d) => s + d.calories, 0) / logged.length);
+          const withinGoal = calorieGoal > 0 ? logged.filter((d) => d.calories <= calorieGoal).length : null;
+          return (
+            <View style={[s.card, { backgroundColor: C.card }]}>
+              <Text style={[s.cardLbl, { color: C.textSecondary }]}>nutrition</Text>
+              <Text style={[s.bigStat, { color: C.text }]}>
+                {avgCal}
+                <Text style={[s.bigStatSub, { color: C.textSecondary }]}> kcal avg/day</Text>
+              </Text>
+              <Text style={[s.cardNote, { color: C.textSecondary }]}>
+                {logged.length}/7 days logged
+                {withinGoal != null ? ` · ${withinGoal}/${logged.length} within goal` : ''}
+              </Text>
+            </View>
+          );
+        })()}
+
+        {/* Weight */}
+        {weightEntries.length > 0 && (() => {
+          const latest = weightEntries[0];
+          const oldest = weightEntries[weightEntries.length - 1];
+          const change = weightEntries.length > 1
+            ? Math.round((latest.weight - oldest.weight) * 10) / 10
+            : null;
+          return (
+            <View style={[s.card, { backgroundColor: C.card }]}>
+              <Text style={[s.cardLbl, { color: C.textSecondary }]}>weight</Text>
+              <Text style={[s.bigStat, { color: C.text }]}>
+                {latest.weight}
+                <Text style={[s.bigStatSub, { color: C.textSecondary }]}> {latest.unit}</Text>
+              </Text>
+              {change != null && (
+                <Text style={[s.cardNote, { color: change > 0 ? C.danger : change < 0 ? C.success : C.textSecondary }]}>
+                  {change > 0 ? '+' : ''}{change} {latest.unit} this week
+                </Text>
+              )}
+            </View>
+          );
+        })()}
+
+        {!avgMood && !habits?.total && !focus?.weekMins && !sleep && !calories.some(d => d.count > 0) && !weightEntries.length && (
           <View style={s.empty}>
             <Text style={[s.emptyTitle, { color: C.text }]}>nothing logged yet</Text>
             <Text style={[s.emptyDesc, { color: C.textSecondary }]}>
