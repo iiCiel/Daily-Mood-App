@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, Alert,
@@ -21,8 +21,8 @@ import {
   getProjects,
   getTaskLists,
   getTodayPlan,
-  moveTask,
   savePlannerEntry,
+  setTaskOrder,
   togglePlanningTask,
 } from '../src/db/plannerDatabase';
 
@@ -56,6 +56,14 @@ function shortDate(value) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase();
 }
 
+function reorderItems(items, fromIndex, toIndex) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return items;
+  const next = [...items];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+}
+
 export default function PlannerScreen() {
   const C = useTheme();
   const today = dateStr();
@@ -66,6 +74,7 @@ export default function PlannerScreen() {
   const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [dragState, setDragState] = useState(null);
   const [todayPlan, setTodayPlan] = useState({ tasks: [], events: [] });
   const [dailyEntry, setDailyEntry] = useState(null);
 
@@ -91,6 +100,7 @@ export default function PlannerScreen() {
   const [eventStart, setEventStart] = useState('');
   const [eventEnd, setEventEnd] = useState('');
   const [eventProjectId, setEventProjectId] = useState('default-project');
+  const dragStartYRef = useRef(0);
 
   useFocusEffect(useCallback(() => { loadBase(); }, []));
 
@@ -217,12 +227,33 @@ export default function PlannerScreen() {
     await refreshPlanning();
   }
 
-  async function shiftTask(id, direction) {
-    await moveTask(id, direction);
-    await loadTasks();
+  function beginDrag(taskId, index, pageY) {
+    dragStartYRef.current = pageY || 0;
+    setDragState({ taskId, fromIndex: index, toIndex: index });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  function updateDrag(pageY) {
+    setDragState((state) => {
+      if (!state) return state;
+      const delta = Math.round(((pageY || dragStartYRef.current) - dragStartYRef.current) / 74);
+      const toIndex = Math.max(0, Math.min(tasks.length - 1, state.fromIndex + delta));
+      return toIndex === state.toIndex ? state : { ...state, toIndex };
+    });
+  }
+
+  async function finishDrag() {
+    const state = dragState;
+    setDragState(null);
+    if (!state || state.fromIndex === state.toIndex || !selectedListId) return;
+    const next = reorderItems(tasks, state.fromIndex, state.toIndex);
+    setTasks(next);
+    await setTaskOrder(selectedListId, next.map((task) => task.id));
+    await refreshPlanning();
   }
 
   const selectedList = lists.find((list) => list.id === selectedListId);
+  const displayTasks = dragState ? reorderItems(tasks, dragState.fromIndex, dragState.toIndex) : tasks;
   const days = useMemo(() => buildMonthDays(calCursor.year, calCursor.month), [calCursor]);
   const itemsByDate = useMemo(() => {
     const map = {};
@@ -336,15 +367,18 @@ export default function PlannerScreen() {
               </Panel>
 
               <Panel C={C} title="tasks">
-                {tasks.length === 0 ? <Empty C={C} text="no tasks in this list" /> : tasks.map((task) => (
+                {displayTasks.length === 0 ? <Empty C={C} text="no tasks in this list" /> : displayTasks.map((task, index) => (
                   <TaskRow
                     key={task.id}
                     C={C}
                     task={task}
                     onToggle={toggleTask}
                     onDelete={removeTask}
-                    onUp={() => shiftTask(task.id, 'up')}
-                    onDown={() => shiftTask(task.id, 'down')}
+                    draggable
+                    isDragging={dragState?.taskId === task.id}
+                    onDragStart={(pageY) => beginDrag(task.id, index, pageY)}
+                    onDragMove={updateDrag}
+                    onDragEnd={finishDrag}
                   />
                 ))}
               </Panel>
@@ -496,9 +530,33 @@ function ProjectPicker({ C, projects, value, onChange }) {
   );
 }
 
-function TaskRow({ C, task, onToggle, onDelete, onUp, onDown, compact = false }) {
+function TaskRow({
+  C,
+  task,
+  onToggle,
+  onDelete,
+  compact = false,
+  draggable = false,
+  isDragging = false,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}) {
   return (
-    <View style={[s.taskRow, compact && s.compactTask, { backgroundColor: C.background }]}>
+    <View style={[s.taskRow, compact && s.compactTask, isDragging && s.draggingTask, { backgroundColor: C.background }]}>
+      {draggable && (
+        <View
+          style={[s.dragHandle, { borderColor: C.border }]}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={(event) => onDragStart?.(event.nativeEvent.pageY)}
+          onResponderMove={(event) => onDragMove?.(event.nativeEvent.pageY)}
+          onResponderRelease={onDragEnd}
+          onResponderTerminate={onDragEnd}
+        >
+          <Text style={[s.dragHandleText, { color: C.textSecondary }]}>≡</Text>
+        </View>
+      )}
       <TouchableOpacity style={[s.check, { borderColor: task.completed ? C.success : C.border, backgroundColor: task.completed ? C.success : 'transparent' }]} onPress={() => onToggle(task.id)}>
         {task.completed ? <Text style={s.checkText}>✓</Text> : null}
       </TouchableOpacity>
@@ -509,8 +567,6 @@ function TaskRow({ C, task, onToggle, onDelete, onUp, onDown, compact = false })
         </Text>
         {!!task.notes && <Text style={[s.taskNotes, { color: C.textSecondary }]} numberOfLines={2}>{task.notes}</Text>}
       </View>
-      {onUp && <TouchableOpacity onPress={onUp} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.textSecondary }]}>↑</Text></TouchableOpacity>}
-      {onDown && <TouchableOpacity onPress={onDown} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.textSecondary }]}>↓</Text></TouchableOpacity>}
       <TouchableOpacity onPress={() => onDelete(task.id)} style={s.rowIcon}><Text style={[s.rowIconText, { color: C.danger }]}>×</Text></TouchableOpacity>
     </View>
   );
@@ -565,7 +621,10 @@ const s = StyleSheet.create({
   chipText: { fontSize: 14, fontWeight: '900' },
   chipMeta: { fontSize: 11, fontWeight: '700', marginTop: 3 },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, padding: 12 },
+  draggingTask: { opacity: 0.72, transform: [{ scale: 0.985 }] },
   compactTask: { paddingVertical: 10 },
+  dragHandle: { width: 26, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  dragHandleText: { fontSize: 20, fontWeight: '900', lineHeight: 22 },
   check: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   checkText: { color: '#fff', fontSize: 13, fontWeight: '900' },
   taskTitle: { fontSize: 14, fontWeight: '900', lineHeight: 19 },

@@ -305,6 +305,20 @@ export async function moveTask(id, direction) {
   ]);
 }
 
+export async function setTaskOrder(listId, orderedIds = []) {
+  if (!listId || !orderedIds.length) return;
+  const db = await getDatabase();
+  const now = nowIso();
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db.runAsync(
+      `UPDATE tasks
+       SET position = ?, sync_status = 'pending', updated_at = ?
+       WHERE id = ? AND list_id = ?`,
+      [i, now, orderedIds[i], listId]
+    );
+  }
+}
+
 export async function getTodayPlan(date) {
   const db = await getDatabase();
   const tasks = await db.getAllAsync(`
