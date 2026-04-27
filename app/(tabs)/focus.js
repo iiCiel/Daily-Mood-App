@@ -362,7 +362,8 @@ export default function FocusScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
+      <AestheticBackground />
 
       {/* ── TIMER HERO: dark background, animated blobs visible ── */}
       <View style={styles.timerHero}>
@@ -433,7 +434,7 @@ export default function FocusScreen() {
 
       {/* ── SCROLLABLE: stats / tasks / breathing ── */}
       <ScrollView
-        style={{ flex: 1, backgroundColor: C.background }}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
         contentContainerStyle={styles.bottomContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -574,11 +575,12 @@ export default function FocusScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   timerHero: {
+    position: 'relative',
     minHeight: 520,
     paddingHorizontal: 24,
     paddingTop: 54,
     paddingBottom: 26,
-    backgroundColor: '#15110F',
+    backgroundColor: 'rgba(21,17,15,0.94)',
     overflow: 'hidden',
   },
   bottomContent: {

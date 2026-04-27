@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
+import AestheticBackground from '../../src/components/AestheticBackground';
 import MoodFace from '../../src/components/MoodFace';
 import { getPlannerEntry, getPlanningSummary } from '../../src/db/plannerDatabase';
 // import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
@@ -116,8 +117,9 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
+      <AestheticBackground />
       <ScrollView
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -135,6 +137,27 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Hero */}
+      <View style={[styles.heroCard, { backgroundColor: C.card }]}>
+        <View style={[styles.heroAccent, { backgroundColor: C.primary }]} />
+        <View style={[styles.heroAccent2, { backgroundColor: '#C5A8E8' }]} />
+        <View style={styles.heroInner}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.heroGreeting, { color: C.textSecondary }]}>{greeting}</Text>
+            <Text style={[styles.heroTitle, { color: C.text }]}>Ready to find{'\n'}your flow?</Text>
+            <Text style={[styles.heroSub, { color: C.textSecondary }]}>
+              {habits.length - completedHabits > 0
+                ? `${habits.length - completedHabits} habits remaining today`
+                : habits.length > 0 ? 'all habits done' : 'start building your routine'}
+            </Text>
+          </View>
+          <View style={[styles.flowBadge, { backgroundColor: C.primaryLight, borderColor: C.primary }]}>
+            <Text style={[styles.flowBadgeNum, { color: C.primary }]}>{completedHabits}</Text>
+            <Text style={[styles.flowBadgeSlash, { color: C.textSecondary }]}>/{habits.length}</Text>
+          </View>
+        </View>
+      </View>
+
       {/* Stats row */}
       <View style={styles.statsRow}>
         <StatPill bg={C.mint}    label="mood"   value={moodObj ? moodObj.label : '—'}                                      color={moodObj?.color || C.primary} />
@@ -142,6 +165,37 @@ export default function DashboardScreen() {
         <StatPill bg={C.sand}    label="focus"  value={focusMinutes > 0 ? `${focusMinutes}m` : '—'}                        color={C.primary} />
         <StatPill bg={C.peach}   label="tasks"  value={planningSummary?.dueTasks > 0 ? `${planningSummary.dueTasks} due` : '✓'} color={C.accent} />
       </View>
+
+      {/* Deep Work */}
+      <TouchableOpacity
+        style={[styles.sessionCard, { backgroundColor: C.primary }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.navigate('/(tabs)/focus');
+        }}
+        activeOpacity={0.82}
+      >
+        <View style={styles.sessionGlow} />
+        <View style={styles.sessionTop}>
+          <View>
+            <Text style={styles.sessionKicker}>DEEP WORK</Text>
+            <Text style={styles.sessionTitle}>Start a Session</Text>
+          </View>
+          <View style={styles.sessionChip}>
+            <Text style={styles.sessionChipText}>{completedSessions} today</Text>
+          </View>
+        </View>
+        <Text style={styles.sessionSub}>Block distractions and dive into focused work.</Text>
+        <View style={styles.sessionBottom}>
+          <View>
+            <Text style={styles.sessionTime}>25:00</Text>
+            <Text style={styles.sessionTiny}>focus time</Text>
+          </View>
+          <View style={styles.playBtn}>
+            <Text style={[styles.playText, { color: C.primary }]}>▶</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
 
       {/* Quick Mood */}
       <View style={[styles.card, { backgroundColor: C.card }]}>
@@ -256,7 +310,7 @@ function StatPill({ C, bg, label, value, color }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, position: 'relative' },
   content: { padding: 20, paddingTop: 58, paddingBottom: 32 },
 
   // Today header
@@ -265,11 +319,100 @@ const styles = StyleSheet.create({
   dateLabel: { fontSize: 20, fontWeight: '900' },
   settingsBtn: { fontSize: 20, marginTop: 4 },
 
+  // Hero
+  heroCard: {
+    borderRadius: 26,
+    padding: 20,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#1A0A00',
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  heroAccent: {
+    position: 'absolute',
+    top: -42,
+    right: -42,
+    width: 164,
+    height: 164,
+    borderRadius: 82,
+    opacity: 0.12,
+  },
+  heroAccent2: {
+    position: 'absolute',
+    bottom: -34,
+    left: -34,
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+    opacity: 0.18,
+  },
+  heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  heroGreeting: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
+  heroTitle: { fontSize: 26, lineHeight: 31, fontWeight: '900', letterSpacing: 0 },
+  heroSub: { marginTop: 8, fontSize: 12, lineHeight: 17, fontWeight: '700' },
+  flowBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  flowBadgeNum: { fontSize: 26, fontWeight: '900', letterSpacing: 0 },
+  flowBadgeSlash: { fontSize: 14, fontWeight: '800', marginTop: 4 },
+
   // Stats row
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   statPill: { flex: 1, borderRadius: 18, paddingVertical: 14, alignItems: 'center', gap: 4 },
   statValue: { fontSize: 14, fontWeight: '900' },
   statLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
+
+  // Deep Work
+  sessionCard: {
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    minHeight: 158,
+    overflow: 'hidden',
+    elevation: 4,
+  },
+  sessionGlow: {
+    position: 'absolute',
+    top: -22,
+    right: -22,
+    width: 142,
+    height: 142,
+    borderRadius: 71,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  sessionTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  sessionChip: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  sessionChipText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  sessionKicker: { color: 'rgba(255,255,255,0.66)', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  sessionTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', marginTop: 6 },
+  sessionSub: { color: 'rgba(255,255,255,0.86)', fontSize: 12, lineHeight: 17, marginTop: 8, maxWidth: 260 },
+  sessionBottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18 },
+  sessionTime: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: 0 },
+  sessionTiny: { color: 'rgba(255,255,255,0.66)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', marginTop: -2 },
+  playBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+  },
+  playText: { fontSize: 14, fontWeight: '900', marginLeft: 2 },
 
   // Cards
   card: { borderRadius: 20, padding: 16, marginBottom: 14, elevation: 2 },
