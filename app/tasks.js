@@ -6,6 +6,7 @@ import {
 import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
+import AestheticBackground from '../src/components/AestheticBackground';
 import {
   getTaskLists, createTaskList, archiveTaskList,
   getPlanningTasks, createPlanningTask, togglePlanningTask,
@@ -204,14 +205,19 @@ export default function TasksScreen({ isTab = false }) {
   ];
 
   const reorderGroup = selectedListId !== 'all' ? grouped.noDue.concat(grouped.later) : [];
+  const openTasks = tasks.filter(t => !t.completed);
+  const dueToday = openTasks.filter(t => t.due_date && t.due_date <= today).length;
+  const selectedList = selectedListId === 'all' ? null : lists.find(list => list.id === selectedListId);
+  const heroColor = selectedList?.color || C.primary;
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[s.container, { backgroundColor: C.background }]}>
+        <AestheticBackground />
 
         {/* Header */}
-        <View style={[s.header, { borderBottomColor: C.border }]}>
+        <View style={s.header}>
           {!isTab && (
             <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
               <Text style={[s.back, { color: C.text }]}>←</Text>
@@ -245,15 +251,34 @@ export default function TasksScreen({ isTab = false }) {
           </View>
         </View>
 
+        <View style={[s.heroCard, { backgroundColor: heroColor }]}>
+          <View style={s.heroGlow} />
+          <View>
+            <Text style={s.heroKicker}>{selectedList?.title || 'all lists'}</Text>
+            <Text style={s.heroTitle}>{openTasks.length}</Text>
+            <Text style={s.heroSub}>{openTasks.length === 1 ? 'open task' : 'open tasks'}</Text>
+          </View>
+          <View style={s.heroStats}>
+            <View style={s.heroPill}>
+              <Text style={s.heroPillValue}>{dueToday}</Text>
+              <Text style={s.heroPillLabel}>due</Text>
+            </View>
+            <View style={s.heroPill}>
+              <Text style={s.heroPillValue}>{grouped.done.length}</Text>
+              <Text style={s.heroPillLabel}>done</Text>
+            </View>
+          </View>
+        </View>
+
         {/* List chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.chipsRow}
-          style={[s.chipsWrap, { borderBottomColor: C.border }]}
+          style={s.chipsWrap}
         >
           <TouchableOpacity
-            style={[s.chip, selectedListId === 'all' && { backgroundColor: C.accent }]}
+            style={[s.chip, { backgroundColor: C.card }, selectedListId === 'all' && { backgroundColor: C.accent }]}
             onPress={() => selectList('all')}
           >
             <Text style={[s.chipText, { color: selectedListId === 'all' ? C.background : C.textSecondary }]}>All</Text>
@@ -261,7 +286,7 @@ export default function TasksScreen({ isTab = false }) {
           {lists.map(list => (
             <TouchableOpacity
               key={list.id}
-              style={[s.chip, selectedListId === list.id && { backgroundColor: list.color || C.accent }]}
+              style={[s.chip, { backgroundColor: C.card }, selectedListId === list.id && { backgroundColor: list.color || C.accent }]}
               onPress={() => selectList(list.id)}
             >
               <Text style={[s.chipText, { color: selectedListId === list.id ? '#FFFFFF' : C.textSecondary }]}>
@@ -274,7 +299,7 @@ export default function TasksScreen({ isTab = false }) {
               )}
             </TouchableOpacity>
           ))}
-          <TouchableOpacity style={[s.chip, { borderStyle: 'dashed' }]} onPress={() => setShowManage(true)}>
+          <TouchableOpacity style={[s.chip, { backgroundColor: C.card, borderStyle: 'dashed', borderColor: C.border }]} onPress={() => setShowManage(true)}>
             <Text style={[s.chipText, { color: C.textSecondary }]}>+ list</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.projectsLink} onPress={() => router.push('/projects')}>
@@ -294,7 +319,7 @@ export default function TasksScreen({ isTab = false }) {
                 /* ALL VIEW: group by list — lets you see School → Math/Physics/CS all together */
                 listSections && listSections.length > 0 ? listSections.map(group => (
                   <View key={group.listId || 'none'} style={s.section}>
-                    <View style={s.sectionHeader}>
+                    <View style={[s.sectionHeader, { backgroundColor: C.card }]}>
                       <View style={[s.sectionDot, { backgroundColor: group.listColor || C.primary }]} />
                       <Text style={[s.sectionLabel, { color: C.text }]}>{group.listTitle}</Text>
                       <Text style={[s.sectionCount, { color: C.textSecondary }]}>{group.tasks.length}</Text>
@@ -328,7 +353,7 @@ export default function TasksScreen({ isTab = false }) {
                     if (!sec.tasks.length) return null;
                     return (
                       <View key={sec.key} style={s.section}>
-                        <View style={s.sectionHeader}>
+                        <View style={[s.sectionHeader, { backgroundColor: C.card }]}>
                           <Text style={[s.sectionLabel, { color: sec.accent }]}>{sec.label}</Text>
                           <Text style={[s.sectionCount, { color: sec.accent }]}>{sec.tasks.length}</Text>
                         </View>
@@ -650,31 +675,88 @@ function TaskRow({ task, C, reorderMode, selectedListId, onToggle, onLongPress, 
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 58, paddingBottom: 14, borderBottomWidth: 1 },
+  container: { flex: 1, position: 'relative' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 58, paddingBottom: 12 },
   back: { fontSize: 24, fontWeight: '800' },
   title: { flex: 1, fontSize: 24, fontWeight: '900' },
   headerRight: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  iconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', elevation: 1 },
-  addBtn: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', elevation: 2 },
+  addBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, elevation: 2 },
   addBtnText: { fontSize: 13, fontWeight: '900' },
-  chipsWrap: { borderBottomWidth: StyleSheet.hairlineWidth },
-  chipsRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5, borderColor: 'transparent', backgroundColor: 'rgba(0,0,0,0.05)', flexDirection: 'row', alignItems: 'center', elevation: 0 },
+  heroCard: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    borderRadius: 26,
+    padding: 20,
+    minHeight: 132,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 4,
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: -42,
+    right: -42,
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  heroKicker: { color: 'rgba(255,255,255,0.70)', fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  heroTitle: { color: '#FFFFFF', fontSize: 44, fontWeight: '900', letterSpacing: 0, marginTop: 4 },
+  heroSub: { color: 'rgba(255,255,255,0.86)', fontSize: 12, fontWeight: '800' },
+  heroStats: { flexDirection: 'row', gap: 8 },
+  heroPill: {
+    minWidth: 58,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  heroPillValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
+  heroPillLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  chipsWrap: { maxHeight: 58, flexGrow: 0 },
+  chipsRow: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  chip: { borderRadius: 999, paddingHorizontal: 15, paddingVertical: 9, borderWidth: 1, borderColor: 'transparent', flexDirection: 'row', alignItems: 'center', elevation: 2 },
   chipText: { fontSize: 13, fontWeight: '800' },
   chipCount: { fontSize: 11, fontWeight: '700' },
-  projectsLink: { paddingHorizontal: 10 },
+  projectsLink: { paddingHorizontal: 10, justifyContent: 'center' },
   projectsLinkText: { fontSize: 13, fontWeight: '900' },
-  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 50 },
-  section: { marginBottom: 4 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, marginBottom: 10 },
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 50 },
+  section: { marginBottom: 10 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    elevation: 1,
+  },
   sectionDot: { width: 8, height: 8, borderRadius: 4 },
   sectionLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2, flex: 1 },
-  sectionCount: { fontSize: 11, fontWeight: '700', opacity: 0.45, backgroundColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-  taskCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, marginBottom: 8, elevation: 2, overflow: 'hidden', minHeight: 62 },
-  taskAccent: { width: 4, alignSelf: 'stretch' },
-  circleWrap: { paddingHorizontal: 14 },
-  circle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  sectionCount: { fontSize: 11, fontWeight: '800', opacity: 0.55, backgroundColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9 },
+  taskCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    marginBottom: 10,
+    elevation: 4,
+    overflow: 'hidden',
+    minHeight: 66,
+    shadowColor: '#1A0A00',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  taskAccent: { width: 5, alignSelf: 'stretch' },
+  circleWrap: { paddingHorizontal: 15 },
+  circle: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   circleTick: { color: '#fff', fontSize: 12, fontWeight: '900' },
   taskBody: { flex: 1, paddingVertical: 14, paddingRight: 14 },
   taskTitle: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
