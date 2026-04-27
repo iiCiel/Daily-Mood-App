@@ -86,6 +86,12 @@ export default function TasksScreen({ isTab = false }) {
   const [addNotes, setAddNotes] = useState('');
   const [addPoms, setAddPoms] = useState('1');
   const [saving, setSaving] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editListId, setEditListId] = useState('');
+  const [editDue, setEditDue] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editPoms, setEditPoms] = useState('1');
 
   const [showManage, setShowManage] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -141,6 +147,34 @@ export default function TasksScreen({ isTab = false }) {
       setShowAdd(false);
       await load();
     } finally { setSaving(false); }
+  }
+
+  function openEditTask(task) {
+    setEditingTask(task);
+    setEditTitle(task.title || '');
+    setEditListId(task.list_id || addListId || lists[0]?.id || 'focus-list');
+    setEditDue(task.due_date || '');
+    setEditNotes(task.notes || '');
+    setEditPoms(String(task.target_pomodoros || 1));
+  }
+
+  async function handleSaveEdit() {
+    if (!editingTask || !editTitle.trim()) return;
+    setSaving(true);
+    try {
+      await updatePlanningTask(editingTask.id, {
+        title: editTitle.trim(),
+        listId: editListId,
+        dueDate: editDue || null,
+        notes: editNotes || '',
+        targetPomodoros: parseInt(editPoms) || 1,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEditingTask(null);
+      await load();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function moveUp(task, group) {
@@ -331,6 +365,7 @@ export default function TasksScreen({ isTab = false }) {
                         C={C}
                         reorderMode={false}
                         selectedListId={selectedListId}
+                        onPress={() => openEditTask(task)}
                         onToggle={() => handleToggle(task)}
                         onLongPress={() => Alert.alert(task.title, null, [
                           { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
@@ -365,6 +400,7 @@ export default function TasksScreen({ isTab = false }) {
                             reorderMode={reorderMode}
                             selectedListId={selectedListId}
                             group={sec.tasks}
+                            onPress={() => openEditTask(task)}
                             onToggle={() => handleToggle(task)}
                             onLongPress={() => Alert.alert(task.title, null, [
                               { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
@@ -395,6 +431,7 @@ export default function TasksScreen({ isTab = false }) {
               )}
               {showDone && grouped.done.map(task => (
                 <TaskRow key={task.id} task={task} C={C} selectedListId={selectedListId} onToggle={() => handleToggle(task)}
+                  onPress={() => openEditTask(task)}
                   onLongPress={() => Alert.alert(task.title, null, [
                     { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
                     { text: 'cancel', style: 'cancel' },
@@ -467,6 +504,7 @@ export default function TasksScreen({ isTab = false }) {
                   </Text>
                   {calDayTasks.map(task => (
                     <TaskRow key={task.id} task={task} C={C} selectedListId={selectedListId} onToggle={() => handleToggle(task)}
+                      onPress={() => openEditTask(task)}
                       onLongPress={() => Alert.alert(task.title, null, [
                         { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
                         { text: 'cancel', style: 'cancel' },
@@ -616,12 +654,97 @@ export default function TasksScreen({ isTab = false }) {
             </View>
           </View>
         </Modal>
+
+        {/* --- EDIT TASK MODAL --- */}
+        <Modal visible={!!editingTask} transparent animationType="slide" onRequestClose={() => setEditingTask(null)}>
+          <View style={s.modalOverlay}>
+            <View style={[s.modalSheet, { backgroundColor: C.card }]}>
+              <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
+                <Text style={[s.modalTitle, { color: C.text }]}>edit task</Text>
+                <TouchableOpacity onPress={() => setEditingTask(null)}>
+                  <Text style={[s.modalCancel, { color: C.textSecondary }]}>cancel</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={s.modalContent} keyboardShouldPersistTaps="handled">
+                <TextInput
+                  style={[s.input, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                  placeholder="task title"
+                  placeholderTextColor={C.textSecondary}
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                />
+
+                <Text style={[s.fieldLabel, { color: C.textSecondary }]}>list</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                  {lists.map(list => (
+                    <TouchableOpacity
+                      key={list.id}
+                      style={[s.listChip, { borderColor: list.color || C.border, backgroundColor: editListId === list.id ? (list.color || C.accent) : C.background }]}
+                      onPress={() => setEditListId(list.id)}
+                    >
+                      <Text style={[s.listChipText, { color: editListId === list.id ? '#fff' : C.textSecondary }]}>{list.title}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <Text style={[s.fieldLabel, { color: C.textSecondary }]}>due date</Text>
+                <View style={s.dueRow}>
+                  {[['today', today], ['tomorrow', shiftDate(today, 1)], ['next week', shiftDate(today, 7)], ['none', '']].map(([label, val]) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={[s.dueChip, { borderColor: C.border, backgroundColor: editDue === val ? C.accent : C.background }]}
+                      onPress={() => setEditDue(val)}
+                    >
+                      <Text style={[s.dueChipText, { color: editDue === val ? C.background : C.textSecondary }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={[s.input, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                  placeholder="or type YYYY-MM-DD"
+                  placeholderTextColor={C.textSecondary}
+                  value={editDue}
+                  onChangeText={setEditDue}
+                />
+
+                <TextInput
+                  style={[s.input, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                  placeholder="notes (optional)"
+                  placeholderTextColor={C.textSecondary}
+                  value={editNotes}
+                  onChangeText={setEditNotes}
+                  multiline
+                />
+
+                <View style={s.pomRow}>
+                  <Text style={[s.fieldLabel, { color: C.textSecondary, marginBottom: 0 }]}>pomodoros target</Text>
+                  <TextInput
+                    style={[s.pomInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                    value={editPoms}
+                    onChangeText={setEditPoms}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[s.saveBtn, { backgroundColor: C.accent }, saving && { opacity: 0.5 }]}
+                  onPress={handleSaveEdit}
+                  disabled={saving}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.saveBtnText, { color: C.background }]}>{saving ? 'saving...' : 'save task'}</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </View>
     </>
   );
 }
 
-function TaskRow({ task, C, reorderMode, selectedListId, onToggle, onLongPress, onMoveUp, onMoveDown }) {
+function TaskRow({ task, C, reorderMode, selectedListId, onPress, onToggle, onLongPress, onMoveUp, onMoveDown }) {
   const due = fmtDue(task.due_date);
   const isOverdue = task.due_date && task.due_date < todayStr() && !task.completed;
   const accentColor = task.list_color || C.primary;
@@ -631,6 +754,7 @@ function TaskRow({ task, C, reorderMode, selectedListId, onToggle, onLongPress, 
   return (
     <TouchableOpacity
       style={[s.taskCard, { backgroundColor: C.card }]}
+      onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.7}
     >

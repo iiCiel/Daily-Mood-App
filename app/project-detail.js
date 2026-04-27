@@ -6,6 +6,7 @@ import {
 import { Stack, router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
+import AestheticBackground from '../src/components/AestheticBackground';
 import {
   getProjects, getTaskLists, getPlanningTasks,
   createPlanningTask, togglePlanningTask, deletePlanningTask, setTaskOrder,
@@ -146,9 +147,10 @@ export default function ProjectDetailScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[s.container, { backgroundColor: C.background }]}>
+        <AestheticBackground />
 
         {/* Header */}
-        <View style={[s.header, { borderBottomColor: C.border }]}>
+        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -164,6 +166,19 @@ export default function ProjectDetailScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={[s.heroCard, { backgroundColor: project?.color || C.primary }]}>
+          <View style={s.heroGlow} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.heroKicker}>{project?.status || 'active'}</Text>
+            <Text style={s.heroTitle}>{project?.name || 'project'}</Text>
+            {project?.notes ? <Text style={s.heroSub} numberOfLines={2}>{project.notes}</Text> : <Text style={s.heroSub}>project workspace</Text>}
+          </View>
+          <View style={s.heroPill}>
+            <Text style={s.heroPillValue}>{pct}%</Text>
+            <Text style={s.heroPillLabel}>done</Text>
+          </View>
+        </View>
+
         {/* Progress bar */}
         {total > 0 && (
           <View style={[s.progressWrap, { backgroundColor: C.card }]}>
@@ -175,11 +190,11 @@ export default function ProjectDetailScreen() {
         )}
 
         {/* List chips + actions */}
-        <View style={[s.listBar, { borderBottomColor: C.border }]}>
+        <View style={s.listBar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.listChipsRow}>
             {lists.length > 1 && (
               <TouchableOpacity
-                style={[s.listChip, selectedListId === 'all-lists' && { backgroundColor: project?.color || C.accent }]}
+                style={[s.listChip, { backgroundColor: C.card }, selectedListId === 'all-lists' && { backgroundColor: project?.color || C.accent }]}
                 onPress={() => selectList('all-lists')}
               >
                 <Text style={[s.listChipText, { color: selectedListId === 'all-lists' ? '#fff' : C.textSecondary }]}>All</Text>
@@ -188,7 +203,7 @@ export default function ProjectDetailScreen() {
             {lists.map(list => (
               <TouchableOpacity
                 key={list.id}
-                style={[s.listChip, selectedListId === list.id && { backgroundColor: list.color || C.accent }]}
+                style={[s.listChip, { backgroundColor: C.card }, selectedListId === list.id && { backgroundColor: list.color || C.accent }]}
                 onPress={() => selectList(list.id)}
               >
                 <Text style={[s.listChipText, { color: selectedListId === list.id ? '#fff' : C.textSecondary }]}>{list.title}</Text>
@@ -334,27 +349,46 @@ function TaskRow({ task, C, today, reorderMode, onToggle, onLongPress, onMoveUp,
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 58, paddingBottom: 12, borderBottomWidth: 1 },
+  container: { flex: 1, position: 'relative' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 58, paddingBottom: 12 },
   back: { fontSize: 24, fontWeight: '800' },
   title: { fontSize: 20, fontWeight: '900' },
   subtitle: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   statusBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   statusText: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  progressWrap: { paddingHorizontal: 20, paddingVertical: 12, gap: 6 },
+  heroCard: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 26,
+    padding: 20,
+    minHeight: 138,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    elevation: 4,
+  },
+  heroGlow: { position: 'absolute', top: -44, right: -44, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.14)' },
+  heroKicker: { color: 'rgba(255,255,255,0.70)', fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  heroTitle: { color: '#FFFFFF', fontSize: 25, lineHeight: 30, fontWeight: '900', letterSpacing: 0, marginTop: 6 },
+  heroSub: { color: 'rgba(255,255,255,0.86)', fontSize: 12, lineHeight: 17, fontWeight: '800', marginTop: 6 },
+  heroPill: { width: 72, height: 72, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  heroPillValue: { color: '#FFFFFF', fontSize: 20, fontWeight: '900' },
+  heroPillLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  progressWrap: { marginHorizontal: 20, marginBottom: 10, borderRadius: 18, padding: 14, gap: 7, elevation: 2 },
   progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: 6, borderRadius: 3 },
   progressLabel: { fontSize: 11, fontWeight: '700' },
-  listBar: { flexDirection: 'row', alignItems: 'center', paddingRight: 12, borderBottomWidth: 1 },
-  listChipsRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  listChip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: 'transparent' },
+  listBar: { flexDirection: 'row', alignItems: 'center', paddingRight: 12 },
+  listChipsRow: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  listChip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'transparent', elevation: 2 },
   listChipText: { fontSize: 13, fontWeight: '800' },
   listActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   iconBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 1 },
   addBtn: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { fontSize: 13, fontWeight: '900' },
-  content: { padding: 16, paddingBottom: 50 },
-  taskRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 12, marginBottom: 6, gap: 10, elevation: 1 },
+  content: { padding: 16, paddingTop: 8, paddingBottom: 50 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 13, marginBottom: 10, gap: 10, elevation: 3 },
   check: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   checkMark: { color: '#fff', fontSize: 12, fontWeight: '900' },
   taskTitle: { fontSize: 14, fontWeight: '700' },

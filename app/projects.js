@@ -6,6 +6,7 @@ import {
 import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
+import AestheticBackground from '../src/components/AestheticBackground';
 import { getProjects, createProject, updateProject, archiveProject } from '../src/db/plannerDatabase';
 
 const COLORS = ['#4A7856', '#89B4D4', '#C5A8E8', '#F4A56A', '#F9C74F', '#6CC97C', '#D9713E', '#B85B3A'];
@@ -58,12 +59,16 @@ export default function ProjectsScreen() {
   }
 
   const filtered = filter === 'all' ? projects : projects.filter(p => p.status === filter);
+  const activeCount = projects.filter(p => p.status === 'active').length;
+  const totalOpen = projects.reduce((sum, p) => sum + Math.max(0, (p.task_count || 0) - (p.completed_count || 0)), 0);
+  const doneCount = projects.filter(p => p.status === 'done').length;
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[s.container, { backgroundColor: C.background }]}>
-        <View style={[s.header, { borderBottomColor: C.border }]}>
+        <AestheticBackground />
+        <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
             <Text style={[s.back, { color: C.text }]}>←</Text>
           </TouchableOpacity>
@@ -73,11 +78,30 @@ export default function ProjectsScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow} style={[s.filterWrap, { borderBottomColor: C.border }]}>
+        <View style={[s.heroCard, { backgroundColor: C.primary }]}>
+          <View style={s.heroGlow} />
+          <View>
+            <Text style={s.heroKicker}>PROJECTS</Text>
+            <Text style={s.heroTitle}>{activeCount}</Text>
+            <Text style={s.heroSub}>active right now</Text>
+          </View>
+          <View style={s.heroStats}>
+            <View style={s.heroPill}>
+              <Text style={s.heroPillValue}>{totalOpen}</Text>
+              <Text style={s.heroPillLabel}>open</Text>
+            </View>
+            <View style={s.heroPill}>
+              <Text style={s.heroPillValue}>{doneCount}</Text>
+              <Text style={s.heroPillLabel}>done</Text>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow} style={s.filterWrap}>
           {['all', ...STATUSES].map(f => (
             <TouchableOpacity
               key={f}
-              style={[s.filterChip, filter === f && { backgroundColor: C.accent }]}
+              style={[s.filterChip, { backgroundColor: C.card }, filter === f && { backgroundColor: C.accent }]}
               onPress={() => setFilter(f)}
             >
               <Text style={[s.filterText, { color: filter === f ? C.background : C.textSecondary }]}>{f}</Text>
@@ -103,7 +127,7 @@ export default function ProjectsScreen() {
             return (
               <TouchableOpacity
                 key={p.id}
-                style={[s.card, { backgroundColor: C.card, borderLeftColor: p.color || C.primary }]}
+                style={[s.card, { backgroundColor: C.card }]}
                 onPress={() => router.push({ pathname: '/project-detail', params: { id: p.id } })}
                 onLongPress={() => Alert.alert(p.name, null, [
                   { text: 'edit', onPress: () => openEdit(p) },
@@ -112,7 +136,9 @@ export default function ProjectsScreen() {
                 ].filter(Boolean))}
                 activeOpacity={0.75}
               >
+                <View style={[s.cardGlow, { backgroundColor: p.color || C.primary }]} />
                 <View style={s.cardTop}>
+                  <View style={[s.projectDot, { backgroundColor: p.color || C.primary }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.cardName, { color: C.text }]}>{p.name}</Text>
                     {p.notes ? <Text style={[s.cardNotes, { color: C.textSecondary }]} numberOfLines={1}>{p.notes}</Text> : null}
@@ -204,24 +230,46 @@ export default function ProjectsScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 58, paddingBottom: 14, borderBottomWidth: 1 },
+  container: { flex: 1, position: 'relative' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 58, paddingBottom: 12 },
   back: { fontSize: 24, fontWeight: '800' },
   title: { flex: 1, fontSize: 24, fontWeight: '900' },
-  addBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
+  addBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, elevation: 2 },
   addBtnText: { fontSize: 13, fontWeight: '900' },
-  filterWrap: { borderBottomWidth: 1 },
-  filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, flexDirection: 'row' },
-  filterChip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: 'rgba(0,0,0,0.05)' },
+  heroCard: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    borderRadius: 26,
+    padding: 20,
+    minHeight: 132,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 4,
+  },
+  heroGlow: { position: 'absolute', top: -44, right: -44, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.14)' },
+  heroKicker: { color: 'rgba(255,255,255,0.70)', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  heroTitle: { color: '#FFFFFF', fontSize: 44, fontWeight: '900', letterSpacing: 0, marginTop: 4 },
+  heroSub: { color: 'rgba(255,255,255,0.86)', fontSize: 12, fontWeight: '800' },
+  heroStats: { flexDirection: 'row', gap: 8 },
+  heroPill: { minWidth: 58, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center' },
+  heroPillValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
+  heroPillLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  filterWrap: { maxHeight: 56, flexGrow: 0 },
+  filterRow: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, flexDirection: 'row' },
+  filterChip: { borderRadius: 999, paddingHorizontal: 15, paddingVertical: 9, elevation: 2 },
   filterText: { fontSize: 13, fontWeight: '800' },
-  content: { padding: 16, paddingBottom: 50 },
+  content: { padding: 16, paddingTop: 8, paddingBottom: 50 },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '900' },
   emptySub: { fontSize: 13, textAlign: 'center', paddingHorizontal: 40 },
   emptyBtn: { borderRadius: 999, paddingHorizontal: 24, paddingVertical: 14, marginTop: 8 },
   emptyBtnText: { fontSize: 14, fontWeight: '900' },
-  card: { borderRadius: 18, padding: 16, marginBottom: 12, elevation: 2, borderLeftWidth: 4, gap: 8 },
+  card: { borderRadius: 22, padding: 16, marginBottom: 12, elevation: 4, gap: 10, overflow: 'hidden' },
+  cardGlow: { position: 'absolute', top: -50, right: -42, width: 130, height: 130, borderRadius: 65, opacity: 0.10 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  projectDot: { width: 14, height: 14, borderRadius: 7, marginTop: 4 },
   cardName: { fontSize: 16, fontWeight: '900' },
   cardNotes: { fontSize: 12, fontWeight: '600', marginTop: 3 },
   statusBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
