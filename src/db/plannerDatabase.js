@@ -388,6 +388,15 @@ export async function deleteCalendarEvent(id) {
   await db.runAsync('DELETE FROM calendar_events WHERE id = ?', [id]);
 }
 
+export async function getAllPlannerEntries(limit = 2000) {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync(
+    'SELECT * FROM planner_entries ORDER BY date DESC LIMIT ?',
+    [limit]
+  );
+  return rows.map(parsePriorities);
+}
+
 export async function getPlanningSummary(date) {
   const db = await getDatabase();
   const row = await db.getFirstAsync(`

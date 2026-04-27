@@ -5,10 +5,11 @@ import { useTheme } from '../../src/context/ThemeContext';
 function TabBar({ state, navigation }) {
   const C = useTheme();
   const tabs = [
-    { name: 'life', icon: '◆', label: 'Dashboard' },
-    { name: 'habits', icon: '✦', label: 'Habits' },
-    { name: 'focus', icon: '◎', label: 'Pomodoro' },
-    { name: 'mood', icon: '◉', label: 'Mood' },
+    { name: 'life',   icon: '◆', label: 'Today'   },
+    { name: 'tasks',  icon: '✓', label: 'Tasks'   },
+    { name: 'focus',  icon: '◎', label: 'Focus'   },
+    { name: 'habits', icon: '✦', label: 'Habits'  },
+    { name: 'mood',   icon: '◉', label: 'Journal' },
   ];
 
   return (
@@ -48,8 +49,9 @@ export default function TabsLayout() {
   return (
     <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="life" />
-      <Tabs.Screen name="habits" />
+      <Tabs.Screen name="tasks" />
       <Tabs.Screen name="focus" />
+      <Tabs.Screen name="habits" />
       <Tabs.Screen name="mood" />
       <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>

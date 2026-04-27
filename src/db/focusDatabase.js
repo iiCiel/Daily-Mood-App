@@ -88,6 +88,18 @@ export async function getFocusStats(year, month) {
   return map;
 }
 
+export async function getAllFocusSessions(limit = 20000) {
+  const database = await getDatabase();
+  return database.getAllAsync(
+    `SELECT s.*, COALESCE(t.title, '') as task_title
+     FROM pomodoro_sessions s
+     LEFT JOIN tasks t ON s.task_id = t.id
+     ORDER BY s.date DESC, s.started_at DESC
+     LIMIT ?`,
+    [limit]
+  );
+}
+
 export async function getTotalFocusMinutes() {
   const database = await getDatabase();
   const result = await database.getFirstAsync(

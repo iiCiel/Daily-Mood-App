@@ -172,9 +172,6 @@ async function _initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_photos_entry ON photos(entry_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON pomodoro_sessions(date);
     CREATE INDEX IF NOT EXISTS idx_sessions_task ON pomodoro_sessions(task_id);
-    CREATE INDEX IF NOT EXISTS idx_tasks_list ON tasks(list_id);
-    CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
-    CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);
     CREATE INDEX IF NOT EXISTS idx_task_lists_project ON task_lists(project_id);
     CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);
     CREATE INDEX IF NOT EXISTS idx_sleep_date ON sleep_entries(date);
@@ -202,6 +199,9 @@ async function _initDatabase() {
   try { await database.runAsync("ALTER TABLE tasks ADD COLUMN sync_status TEXT DEFAULT 'local'"); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN last_synced_at TEXT'); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN updated_at TEXT'); } catch {}
+  try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_list ON tasks(list_id)'); } catch {}
+  try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)'); } catch {}
+  try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN gratitude TEXT DEFAULT '[]'"); } catch {}
   await database.runAsync(

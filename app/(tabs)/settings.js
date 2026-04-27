@@ -20,6 +20,9 @@ import { getRecentSleep, saveSleep } from '../../src/db/sleepDatabase';
 import { getAllCalorieEntries, importCalorieEntry } from '../../src/db/calorieDatabase';
 import { getAllHabitCompletions, importHabitCompletion } from '../../src/db/habitDatabase';
 import { getWeightEntries, saveWeightEntry } from '../../src/db/weightDatabase';
+import { getAllPlannerEntries, getProjects, getTaskLists, getPlanningTasks } from '../../src/db/plannerDatabase';
+import { getAllFocusSessions } from '../../src/db/focusDatabase';
+import { getSavedMeals } from '../../src/db/savedMealsDatabase';
 import * as FileSystem from 'expo-file-system';
 
 const STORAGE_KEYS = { SUPABASE_URL: 'supabase_url', SUPABASE_KEY: 'supabase_anon_key' };
@@ -174,98 +177,119 @@ export default function SettingsScreen() {
     return rows;
   }
 
+  async function handleExportEverything() {
+    try {
+      const [
+        moodEntries, sleepEntries, calorieEntries, habitCompletions, weightEntries,
+        goals, notes, plannerEntries, focusSessions, tasks, projects, taskLists, savedMeals,
+      ] = await Promise.all([
+        getEntries(10000),
+        getRecentSleep(3650),
+        getAllCalorieEntries(),
+        getAllHabitCompletions(),
+        getWeightEntries(3650),
+        getGoals(),
+        getNotes(),
+        getAllPlannerEntries(),
+        getAllFocusSessions(),
+        getPlanningTasks({ includeCompleted: true }),
+        getProjects(),
+        getTaskLists(),
+        getSavedMeals(),
+      ]);
+
+      const backup = {
+        exported_at: new Date().toISOString(),
+        version: 2,
+        mood: moodEntries,
+        sleep: sleepEntries,
+        calories: calorieEntries,
+        habits: habitCompletions,
+        weight: weightEntries,
+        goals,
+        notes,
+        planner: plannerEntries,
+        focus_sessions: focusSessions,
+        tasks,
+        projects,
+        task_lists: taskLists,
+        saved_meals: savedMeals,
+      };
+
+      await Share.share({
+        message: JSON.stringify(backup, null, 2),
+        title: `daily_app_backup_${new Date().toISOString().slice(0, 10)}.json`,
+      });
+    } catch (e) {
+      Alert.alert('export error', String(e?.message || e));
+    }
+  }
+
   async function handleImportCSV() {
     Alert.alert(
-      'import from csv',
-      'select the folder containing your exported csv files. existing entries for the same date will be overwritten.',
+      'import from backup',
+      'copy the backup JSON text to your clipboard first, then tap import.',
       [
         { text: 'cancel', style: 'cancel' },
         {
-          text: 'continue',
+          text: 'import',
           onPress: async () => {
             try {
-              const perms = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-              if (!perms.granted) return;
+              const text = await Clipboard.getStringAsync();
+              if (!text?.trim()) { Alert.alert('nothing on clipboard', 'copy the backup JSON first.'); return; }
+              let backup;
+              try { backup = JSON.parse(text); } catch { Alert.alert('invalid backup', 'clipboard does not contain valid JSON.'); return; }
+              if (!backup || typeof backup !== 'object') { Alert.alert('invalid backup', 'not a valid backup file.'); return; }
 
-              const fileUris = await FileSystem.StorageAccessFramework.readDirectoryAsync(perms.directoryUri);
-              const find = (name) => fileUris.find((u) => {
-                const decoded = decodeURIComponent(u).toLowerCase();
-                return decoded.endsWith('/' + name) || decoded.endsWith('%2f' + name);
-              });
+              const counts = {};
 
-              const uris = {
-                mood: find('mood.csv'),
-                sleep: find('sleep.csv'),
-                calories: find('calories.csv'),
-                habits: find('habits.csv'),
-                weight: find('weight.csv'),
-              };
-
-              if (!Object.values(uris).some(Boolean)) {
-                Alert.alert('no files found', 'no csv files were found. select the same folder you exported to.');
-                return;
-              }
-
-              const counts = { mood: 0, sleep: 0, calories: 0, habits: 0, weight: 0 };
-
-              if (uris.mood) {
-                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.mood)).slice(1);
-                for (const [date, mood, , note, tags] of rows) {
-                  if (!date || !mood) continue;
-                  const tagsArr = tags ? tags.split(';').map((t) => t.trim()).filter(Boolean) : [];
-                  await saveEntry(date, Number(mood), note || '', [], tagsArr, []);
-                  counts.mood++;
+              if (Array.isArray(backup.mood)) {
+                for (const e of backup.mood) {
+                  if (!e.date || !e.mood) continue;
+                  let tags = []; try { tags = JSON.parse(e.tags || '[]'); } catch {}
+                  let gratitude = []; try { gratitude = JSON.parse(e.gratitude || '[]'); } catch {}
+                  await saveEntry(e.date, Number(e.mood), e.note || '', [], tags, gratitude);
                 }
+                counts.mood = backup.mood.length;
               }
 
-              if (uris.sleep) {
-                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.sleep)).slice(1);
-                for (const [date, bedtime, wakeTime, quality, note] of rows) {
-                  if (!date) continue;
-                  await saveSleep(date, bedtime || null, wakeTime || null, quality ? Number(quality) : null, note || '');
-                  counts.sleep++;
+              if (Array.isArray(backup.sleep)) {
+                for (const e of backup.sleep) {
+                  if (!e.date) continue;
+                  await saveSleep(e.date, e.bedtime || null, e.wake_time || null, e.quality ? Number(e.quality) : null, e.note || '');
                 }
+                counts.sleep = backup.sleep.length;
               }
 
-              if (uris.calories) {
-                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.calories)).slice(1);
-                for (const [date, meal, name, calories, protein, carbs, fat, note] of rows) {
-                  if (!date || !name || !calories) continue;
-                  await importCalorieEntry({ date, meal, name, calories, protein, carbs, fat, note });
-                  counts.calories++;
+              if (Array.isArray(backup.calories)) {
+                for (const e of backup.calories) {
+                  if (!e.date || !e.name || !e.calories) continue;
+                  await importCalorieEntry({ date: e.date, meal: e.meal, name: e.name, calories: e.calories, protein: e.protein, carbs: e.carbs, fat: e.fat, note: e.note });
                 }
+                counts.calories = backup.calories.length;
               }
 
-              if (uris.habits) {
-                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.habits)).slice(1);
-                for (const [date, title, emoji] of rows) {
-                  if (!date || !title) continue;
-                  await importHabitCompletion(title, emoji, date);
-                  counts.habits++;
+              if (Array.isArray(backup.habits)) {
+                for (const e of backup.habits) {
+                  if (!e.date || !e.title) continue;
+                  await importHabitCompletion(e.title, e.emoji, e.date);
                 }
+                counts.habits = backup.habits.length;
               }
 
-              if (uris.weight) {
-                const rows = parseCSV(await FileSystem.readAsStringAsync(uris.weight)).slice(1);
-                for (const [date, weight, unit, note] of rows) {
-                  if (!date || !weight) continue;
-                  await saveWeightEntry({ date, weight: parseFloat(weight), unit: unit || 'kg', note: note || '' });
-                  counts.weight++;
+              if (Array.isArray(backup.weight)) {
+                for (const e of backup.weight) {
+                  if (!e.date || !e.weight) continue;
+                  await saveWeightEntry({ date: e.date, weight: parseFloat(e.weight), unit: e.unit || 'kg', note: e.note || '' });
                 }
+                counts.weight = backup.weight.length;
               }
 
-              const summary = [
-                counts.mood && `${counts.mood} mood entries`,
-                counts.sleep && `${counts.sleep} sleep entries`,
-                counts.calories && `${counts.calories} calorie entries`,
-                counts.habits && `${counts.habits} habit completions`,
-                counts.weight && `${counts.weight} weight entries`,
-              ].filter(Boolean).join(', ');
-
+              const summary = Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ');
               Alert.alert('import complete', summary || 'nothing was imported.');
             } catch (e) {
               console.error(e);
-              Alert.alert('error', 'import failed. make sure the csv files are valid.');
+              Alert.alert('error', `import failed: ${e?.message || e}`);
             }
           },
         },
@@ -420,7 +444,7 @@ export default function SettingsScreen() {
                 style={[ss.chip, { borderColor: C.border, backgroundColor: active ? C.text : C.card }]}
                 onPress={() => toggleReminder(p.hour, p.minute)}
               >
-                <Text style={[ss.chipText, { color: active ? C.white : C.textSecondary }]}>{p.label}</Text>
+                <Text style={[ss.chipText, { color: active ? '#fff' : C.textSecondary }]}>{p.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -446,7 +470,7 @@ export default function SettingsScreen() {
                 style={[ss.chip, { borderColor: C.border, backgroundColor: active ? C.text : C.card }]}
                 onPress={() => toggleHabitReminder(p.hour, p.minute)}
               >
-                <Text style={[ss.chipText, { color: active ? C.white : C.textSecondary }]}>{p.label}</Text>
+                <Text style={[ss.chipText, { color: active ? '#fff' : C.textSecondary }]}>{p.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -513,16 +537,12 @@ export default function SettingsScreen() {
             <Text style={[ss.aboutLabel, { color: C.text }]}>privacy policy</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExport}>
-            <Text style={[ss.aboutLabel, { color: C.text }]}>export my data (json)</Text>
-            <Text style={{ color: C.textSecondary }}>›</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExportCSV}>
-            <Text style={[ss.aboutLabel, { color: C.text }]}>export as csv</Text>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExportEverything}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>export everything (csv)</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleImportCSV}>
-            <Text style={[ss.aboutLabel, { color: C.text }]}>import from csv</Text>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>restore from backup</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={() => setShowImport(true)}>

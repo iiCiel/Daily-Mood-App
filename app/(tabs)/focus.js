@@ -22,12 +22,14 @@ import MindfulHeader from '../../src/components/MindfulHeader';
 import AestheticBackground from '../../src/components/AestheticBackground';
 import { showTimerNotification, cancelTimerNotification } from '../../src/notifications';
 import {
-  getTasks, createTask, toggleTask, deleteTask,
-  saveSession, getSessionsForDay, getTotalFocusMinutes,
-  setTaskPomodoros, getTaskPomodoroCount,
+  saveSession, getSessionsForDay, getTotalFocusMinutes, getTaskPomodoroCount,
 } from '../../src/db/focusDatabase';
+import { getPlanningTasks, togglePlanningTask } from '../../src/db/plannerDatabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+const FOCUS_ORANGE = '#D9713E';
+const FOCUS_ORANGE_LIGHT = 'rgba(217, 113, 62, 0.10)';
 
 const DEFAULT_DURATIONS = { focus: 25, short: 5, long: 15 };
 const TIMER_KEY = 'focus_timer_state';
@@ -109,8 +111,6 @@ export default function FocusScreen() {
   // Tasks
   const [tasks, setTasks] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [newTaskText, setNewTaskText] = useState('');
-  const [newTaskTarget, setNewTaskTarget] = useState('1');
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [taskCounts, setTaskCounts] = useState({});
 
@@ -222,9 +222,8 @@ export default function FocusScreen() {
   }, [running]);
 
   async function loadTasks() {
-    const t = await getTasks();
+    const t = await getPlanningTasks({ includeCompleted: false });
     setTasks(t);
-    // Load completed pomodoro counts for each task in parallel
     const countEntries = await Promise.all(
       t.map(async (task) => [task.id, await getTaskPomodoroCount(task.id)])
     );
@@ -308,28 +307,13 @@ export default function FocusScreen() {
     setEditingDuration(false);
   }
 
-  async function addTask() {
-    const text = newTaskText.trim();
-    if (!text) return;
-    const target = Math.max(1, parseInt(newTaskTarget) || 1);
-    try {
-      await createTask(text, target);
-      setNewTaskText('');
-      setNewTaskTarget('1');
-      await loadTasks();
-    } catch (e) {
-      Alert.alert('error', `could not add task: ${e?.message || e}`);
-    }
+  function addTask() {
+    router.push('/tasks');
   }
 
   async function handleToggleTask(id) {
-    await toggleTask(id);
-    loadTasks();
-  }
-
-  async function handleDeleteTask(id) {
+    await togglePlanningTask(id);
     if (selectedTask?.id === id) setSelectedTask(null);
-    await deleteTask(id);
     loadTasks();
   }
 
@@ -378,286 +362,189 @@ export default function FocusScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    <View style={[styles.container, { backgroundColor: C.background }]}>
-      <AestheticBackground />
+    <View style={styles.container}>
+
+      {/* ── TIMER HERO: dark background, animated blobs visible ── */}
+      <View style={styles.timerHero}>
+        <AestheticBackground dark={true} />
+
+        <MindfulHeader C={{ ...C, text: '#fff', textSecondary: 'rgba(255,255,255,0.6)', background: 'transparent' }} title="Focus" onRightPress={() => router.push('/focus-stats')} rightLabel="📊" />
+
+        {/* Mode selector */}
+        <View style={styles.modeRow}>
+          {Object.keys(DEFAULT_DURATIONS).map((m) => (
+            <TouchableOpacity
+              key={m}
+              style={[styles.modeBtn, mode === m && { backgroundColor: FOCUS_ORANGE }]}
+              onPress={() => switchMode(m)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.modeBtnText, { color: mode === m ? '#fff' : 'rgba(255,255,255,0.55)' }]}>
+                {MODE_LABELS[m]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Timer ring */}
+        <View style={styles.timerWrap}>
+          <View style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: RING / 2 }}>
+            <ProgressRing
+              progress={progress}
+              size={RING}
+              strokeWidth={STROKE}
+              color={FOCUS_ORANGE}
+              bgColor="rgba(255,255,255,0.18)"
+            />
+            <View style={styles.ringCenter}>
+              <TouchableOpacity onPress={running ? undefined : openEditDuration} activeOpacity={0.7}>
+                <Text style={[styles.timerText, { color: '#FFFFFF' }]}>{formatTime(secondsLeft)}</Text>
+              </TouchableOpacity>
+              <Text style={[styles.timerMode, { color: 'rgba(255,255,255,0.6)' }]}>
+                {MODE_LABELS[mode]} · {durations[mode]}m
+              </Text>
+              {selectedTask && (
+                <Text style={[styles.timerTask, { color: 'rgba(255,255,255,0.7)' }]} numberOfLines={1}>
+                  {selectedTask.title}
+                </Text>
+              )}
+              <Text style={[styles.sessionDots, { color: 'rgba(255,255,255,0.5)' }]}>
+                {sessionCount > 0 ? '◉ '.repeat(sessionCount).trim() : '○ ○ ○ ○'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Controls */}
+        <View style={styles.controls}>
+          <TouchableOpacity style={[styles.sideBtn, { backgroundColor: 'rgba(255,255,255,0.13)' }]} onPress={resetTimer} activeOpacity={0.7}>
+            <Text style={[styles.sideBtnText, { color: 'rgba(255,255,255,0.7)' }]}>reset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.mainBtn, { backgroundColor: FOCUS_ORANGE }]} onPress={running ? pauseTimer : startTimer} activeOpacity={0.8}>
+            <Text style={[styles.mainBtnText, { color: '#fff' }]}>
+              {running ? 'pause' : secondsLeft === totalSecs ? 'start' : 'resume'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.sideBtn, { backgroundColor: 'rgba(255,255,255,0.13)' }]} onPress={() => setShowTaskPicker(true)} activeOpacity={0.7}>
+            <Text style={[styles.sideBtnText, { color: 'rgba(255,255,255,0.7)' }]}>task</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── SCROLLABLE: stats / tasks / breathing ── */}
       <ScrollView
-        style={{ flex: 1, backgroundColor: 'transparent' }}
-        contentContainerStyle={styles.content}
+        style={{ flex: 1, backgroundColor: C.background }}
+        contentContainerStyle={styles.bottomContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-      <MindfulHeader C={C} title="Focus" onRightPress={() => router.push('/focus-stats')} rightLabel="📊" />
-
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: C.text }]}>Pomodoro Timer</Text>
-      </View>
-
-      <View style={[styles.focusHero, { backgroundColor: C.primary }]}>
-        <View>
-          <Text style={styles.focusHeroKicker}>TODAY'S FOCUS</Text>
-          <Text style={styles.focusHeroTitle}>{todayMins} min</Text>
-          <Text style={styles.focusHeroSub}>{todayCount} completed session{todayCount === 1 ? '' : 's'}</Text>
-        </View>
-      </View>
-
-      {/* Mode selector */}
-      <View style={[styles.modeRow, { backgroundColor: C.card }]}>
-        {Object.keys(DEFAULT_DURATIONS).map((m) => (
-          <TouchableOpacity
-            key={m}
-            style={[styles.modeBtn, mode === m && { backgroundColor: C.primary }]}
-            onPress={() => switchMode(m)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.modeBtnText, { color: mode === m ? C.white : C.textSecondary }]}>
-              {MODE_LABELS[m]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Timer */}
-      <View style={styles.timerWrap}>
-        <View style={[{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center', backgroundColor: C.primaryLight, borderRadius: RING / 2 }]}>
-          <ProgressRing
-            progress={progress}
-            size={RING}
-            strokeWidth={STROKE}
-            color={C.primary}
-            bgColor={C.border}
-          />
-          {/* Center */}
-          <View style={styles.ringCenter}>
-            <TouchableOpacity onPress={running ? undefined : openEditDuration} activeOpacity={0.7}>
-              <Text style={[styles.timerText, { color: C.text }]}>{formatTime(secondsLeft)}</Text>
-            </TouchableOpacity>
-            <Text style={[styles.timerMode, { color: C.textSecondary }]}>
-              {MODE_LABELS[mode]} · {durations[mode]}m
-            </Text>
-            {selectedTask && (
-              <Text style={[styles.timerTask, { color: C.textSecondary }]} numberOfLines={1}>
-                {selectedTask.title}
-              </Text>
-            )}
-            <Text style={[styles.sessionDots, { color: C.textSecondary }]}>
-              {sessionCount > 0 ? '◉ '.repeat(sessionCount).trim() : '○ ○ ○ ○'}
-            </Text>
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
+            <Text style={[styles.statVal, { color: C.text }]}>{todayCount}</Text>
+            <Text style={[styles.statLbl, { color: C.textSecondary }]}>today</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
+            <Text style={[styles.statVal, { color: C.text }]}>{todayMins}m</Text>
+            <Text style={[styles.statLbl, { color: C.textSecondary }]}>focused</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: C.card }]}>
+            <Text style={[styles.statVal, { color: C.text }]}>{Math.floor(totalMinutes / 60)}h</Text>
+            <Text style={[styles.statLbl, { color: C.textSecondary }]}>all time</Text>
           </View>
         </View>
-      </View>
 
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          style={[styles.sideBtn, { backgroundColor: C.card }]}
-          onPress={resetTimer}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.sideBtnText, { color: C.textSecondary }]}>reset</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.mainBtn, { backgroundColor: C.primary }]}
-          onPress={running ? pauseTimer : startTimer}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.mainBtnText, { color: C.white }]}>
-            {running ? 'pause' : secondsLeft === totalSecs ? 'start' : 'resume'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.sideBtn, { backgroundColor: C.card }]}
-          onPress={() => setShowTaskPicker(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.sideBtnText, { color: C.textSecondary }]}>task</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: C.card }]}>
-          <Text style={[styles.statVal, { color: C.text }]}>{todayCount}</Text>
-          <Text style={[styles.statLbl, { color: C.textSecondary }]}>today</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: C.card }]}>
-          <Text style={[styles.statVal, { color: C.text }]}>{todayMins}m</Text>
-          <Text style={[styles.statLbl, { color: C.textSecondary }]}>focused</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: C.card }]}>
-          <Text style={[styles.statVal, { color: C.text }]}>{Math.floor(totalMinutes / 60)}h</Text>
-          <Text style={[styles.statLbl, { color: C.textSecondary }]}>all time</Text>
-        </View>
-      </View>
-
-      {/* Tasks */}
-      <View style={styles.taskSection}>
-        <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>tasks</Text>
-
-        {/* Add task */}
-        <View style={[styles.addRow, { backgroundColor: C.card }]}>
-          <TextInput
-            style={[styles.taskInput, { color: C.text, flex: 1 }]}
-            placeholder="add a task..."
-            placeholderTextColor={C.textSecondary}
-            value={newTaskText}
-            onChangeText={setNewTaskText}
-            onSubmitEditing={addTask}
-            returnKeyType="done"
-          />
-          <View style={[styles.pomodoroTarget, { borderColor: C.border }]}>
-            <Text style={[styles.pomodoroTargetIcon, { color: C.textSecondary }]}>◉</Text>
-            <TextInput
-              style={[styles.pomodoroTargetInput, { color: C.text }]}
-              value={newTaskTarget}
-              onChangeText={setNewTaskTarget}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-          </View>
-          <TouchableOpacity onPress={addTask} style={styles.addBtn}>
-            <Text style={[styles.addBtnText, { color: C.text }]}>+</Text>
-          </TouchableOpacity>
-        </View>
-
-        {tasks.map((task) => {
-          const done = taskCounts[task.id] || 0;
-          const target = task.target_pomodoros || 1;
-          const isSelected = selectedTask?.id === task.id;
-          return (
-            <TouchableOpacity
-              key={task.id}
-              style={[
-                styles.taskRow,
-                { backgroundColor: C.card, borderColor: isSelected ? C.text : C.border },
-              ]}
-              onPress={() => setSelectedTask(isSelected ? null : task)}
-              onLongPress={() => Alert.alert('delete task', `"${task.title}"?`, [
-                { text: 'cancel', style: 'cancel' },
-                { text: 'delete', style: 'destructive', onPress: () => handleDeleteTask(task.id) },
-              ])}
-              activeOpacity={0.7}
-            >
-              <TouchableOpacity onPress={() => handleToggleTask(task.id)} style={styles.checkbox}>
-                <View style={[
-                  styles.checkCircle,
-                  { borderColor: task.completed ? C.success : C.border },
-                  task.completed && { backgroundColor: C.success },
-                ]}>
-                  {task.completed && <Text style={styles.checkMark}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <Text style={[
-                  styles.taskTitle,
-                  { color: task.completed ? C.textSecondary : C.text },
-                  task.completed && { textDecorationLine: 'line-through', opacity: 0.6 },
-                ]} numberOfLines={1}>
-                  {task.title}
-                </Text>
-                {/* Pomodoro progress */}
-                <View style={styles.pomodoroRow}>
-                  {Array.from({ length: target }).map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.pomodoroDot,
-                        { backgroundColor: i < done ? C.text : C.border },
-                      ]}
-                    />
-                  ))}
-                  <Text style={[styles.pomodoroCount, { color: C.textSecondary }]}>
-                    {done}/{target}
-                  </Text>
-                </View>
-              </View>
-              {isSelected && <Text style={[styles.taskActive, { color: C.text }]}>◉</Text>}
+        {/* Tasks */}
+        <View style={styles.taskSection}>
+          <View style={styles.taskSectionHeader}>
+            <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>tasks</Text>
+            <TouchableOpacity onPress={() => router.push('/tasks')}>
+              <Text style={[styles.viewAllLink, { color: C.primary }]}>view all →</Text>
             </TouchableOpacity>
-          );
-        })}
-
-        {tasks.length === 0 && (
-          <Text style={[styles.emptyText, { color: C.textSecondary }]}>no tasks yet</Text>
-        )}
-      </View>
-
-      {/* Breathing */}
-      <TouchableOpacity
-        style={[styles.breathCard, { backgroundColor: C.card }]}
-        onPress={() => { if (breathPhase) stopBreathing(); setBreathingOpen(o => !o); }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.breathHeader}>
-          <Text style={[styles.breathTitle, { color: C.text }]}>breathing</Text>
-          <Text style={[styles.breathChevron, { color: C.border }]}>{breathingOpen ? '↑' : '↓'}</Text>
-        </View>
-      </TouchableOpacity>
-
-      {breathingOpen && (
-        <View style={[styles.breathPanel, { backgroundColor: C.card }]}>
-          {/* Pattern selector */}
-          <View style={styles.breathPatterns}>
-            {Object.entries(BREATH_PATTERNS).map(([key, pat]) => (
+          </View>
+          {tasks.slice(0, 3).map((task) => {
+            const done = taskCounts[task.id] || 0;
+            const target = task.target_pomodoros || 1;
+            const isSelected = selectedTask?.id === task.id;
+            return (
               <TouchableOpacity
-                key={key}
-                style={[styles.breathPatBtn, {
-                  backgroundColor: breathPattern === key ? C.text : C.background,
-                  borderColor: C.border,
-                }]}
-                onPress={() => { stopBreathing(); setBreathPattern(key); }}
+                key={task.id}
+                style={[styles.taskRow, { backgroundColor: C.card, borderColor: isSelected ? FOCUS_ORANGE : C.border }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedTask(isSelected ? null : task); }}
+                activeOpacity={0.7}
               >
-                <Text style={[styles.breathPatText, { color: breathPattern === key ? C.background : C.textSecondary }]}>
-                  {pat.label}
-                </Text>
+                <TouchableOpacity onPress={() => handleToggleTask(task.id)} style={styles.checkbox} hitSlop={8}>
+                  <View style={[styles.checkCircle, { borderColor: C.border }]} />
+                </TouchableOpacity>
+                <Text style={[styles.taskTitle, { color: C.text, flex: 1 }]} numberOfLines={1}>{task.title}</Text>
+                <View style={styles.pomodoroRow}>
+                  {Array.from({ length: Math.min(target, 4) }).map((_, i) => (
+                    <View key={i} style={[styles.pomodoroDot, { backgroundColor: i < done ? FOCUS_ORANGE : C.border }]} />
+                  ))}
+                </View>
+                {isSelected && <Text style={[styles.taskActive, { color: FOCUS_ORANGE }]}>◉</Text>}
               </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Active state */}
-          {breathPhase ? (
-            <View style={styles.breathActive}>
-              <Text style={[styles.breathPhaseText, { color: C.text }]}>{breathPhase}</Text>
-              <Text style={[styles.breathCountText, { color: C.textSecondary }]}>{breathCount}</Text>
-              <Text style={[styles.breathCycleText, { color: C.textSecondary }]}>cycle {breathCycle}</Text>
-              <TouchableOpacity style={[styles.breathBtn, { borderColor: C.border }]} onPress={stopBreathing}>
-                <Text style={[styles.breathBtnText, { color: C.textSecondary }]}>stop</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.breathActive}>
-              <Text style={[styles.breathHint, { color: C.textSecondary }]}>
-                {BREATH_PATTERNS[breathPattern].phaseLabels.map((l, i) => `${l} ${BREATH_PATTERNS[breathPattern].durations[i]}s`).join('  ·  ')}
-              </Text>
-              <TouchableOpacity style={[styles.breathBtn, { backgroundColor: C.text }]} onPress={startBreathing}>
-                <Text style={[styles.breathBtnText, { color: C.background }]}>start</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            );
+          })}
+          <TouchableOpacity style={[styles.addRow, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/tasks')} activeOpacity={0.75}>
+            <Text style={[styles.addRowText, { color: C.textSecondary }]}>
+              {tasks.length === 0 ? '+ add tasks' : tasks.length > 3 ? `+${tasks.length - 3} more tasks` : '+ add task'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
+
+        {/* Breathing */}
+        <TouchableOpacity style={[styles.breathCard, { backgroundColor: C.card }]} onPress={() => { if (breathPhase) stopBreathing(); setBreathingOpen(o => !o); }} activeOpacity={0.7}>
+          <View style={styles.breathHeader}>
+            <Text style={[styles.breathTitle, { color: C.text }]}>breathing</Text>
+            <Text style={[styles.breathChevron, { color: C.border }]}>{breathingOpen ? '↑' : '↓'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {breathingOpen && (
+          <View style={[styles.breathPanel, { backgroundColor: C.card }]}>
+            <View style={styles.breathPatterns}>
+              {Object.entries(BREATH_PATTERNS).map(([key, pat]) => (
+                <TouchableOpacity key={key} style={[styles.breathPatBtn, { backgroundColor: breathPattern === key ? C.text : C.background, borderColor: C.border }]} onPress={() => { stopBreathing(); setBreathPattern(key); }}>
+                  <Text style={[styles.breathPatText, { color: breathPattern === key ? C.background : C.textSecondary }]}>{pat.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {breathPhase ? (
+              <View style={styles.breathActive}>
+                <Text style={[styles.breathPhaseText, { color: C.text }]}>{breathPhase}</Text>
+                <Text style={[styles.breathCountText, { color: C.textSecondary }]}>{breathCount}</Text>
+                <Text style={[styles.breathCycleText, { color: C.textSecondary }]}>cycle {breathCycle}</Text>
+                <TouchableOpacity style={[styles.breathBtn, { borderColor: C.border }]} onPress={stopBreathing}>
+                  <Text style={[styles.breathBtnText, { color: C.textSecondary }]}>stop</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.breathActive}>
+                <Text style={[styles.breathHint, { color: C.textSecondary }]}>
+                  {BREATH_PATTERNS[breathPattern].phaseLabels.map((l, i) => `${l} ${BREATH_PATTERNS[breathPattern].durations[i]}s`).join('  ·  ')}
+                </Text>
+                <TouchableOpacity style={[styles.breathBtn, { backgroundColor: C.text }]} onPress={startBreathing}>
+                  <Text style={[styles.breathBtnText, { color: C.background }]}>start</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+      </ScrollView>
 
       {/* Task picker modal */}
       <Modal visible={showTaskPicker} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowTaskPicker(false)} activeOpacity={1}>
           <View style={[styles.modalSheet, { backgroundColor: C.card }]}>
             <Text style={[styles.modalTitle, { color: C.text }]}>select task</Text>
-            <TouchableOpacity
-              style={[styles.modalTask, { borderColor: !selectedTask ? C.text : C.border }]}
-              onPress={() => { setSelectedTask(null); setShowTaskPicker(false); }}
-            >
+            <TouchableOpacity style={[styles.modalTask, { borderColor: !selectedTask ? C.text : C.border }]} onPress={() => { setSelectedTask(null); setShowTaskPicker(false); }}>
               <Text style={[styles.modalTaskText, { color: C.textSecondary }]}>no task</Text>
             </TouchableOpacity>
             {tasks.filter(t => !t.completed).map((task) => (
-              <TouchableOpacity
-                key={task.id}
-                style={[styles.modalTask, { borderColor: selectedTask?.id === task.id ? C.text : C.border }]}
-                onPress={() => { setSelectedTask(task); setShowTaskPicker(false); }}
-              >
+              <TouchableOpacity key={task.id} style={[styles.modalTask, { borderColor: selectedTask?.id === task.id ? C.text : C.border }]} onPress={() => { setSelectedTask(task); setShowTaskPicker(false); }}>
                 <Text style={[styles.modalTaskText, { color: C.text }]} numberOfLines={1}>{task.title}</Text>
-                <Text style={[styles.modalTaskCount, { color: C.textSecondary }]}>
-                  {taskCounts[task.id] || 0}/{task.target_pomodoros} ◉
-                </Text>
+                <Text style={[styles.modalTaskCount, { color: C.textSecondary }]}>{taskCounts[task.id] || 0}/{task.target_pomodoros} ◉</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -670,23 +557,15 @@ export default function FocusScreen() {
           <View style={[styles.durationSheet, { backgroundColor: C.card }]}>
             <Text style={[styles.modalTitle, { color: C.text }]}>set {MODE_LABELS[mode]} duration</Text>
             <View style={[styles.durationInputRow, { borderColor: C.border }]}>
-              <TextInput
-                style={[styles.durationInput, { color: C.text }]}
-                value={draftDuration}
-                onChangeText={setDraftDuration}
-                keyboardType="number-pad"
-                autoFocus
-                maxLength={3}
-              />
+              <TextInput style={[styles.durationInput, { color: C.text }]} value={draftDuration} onChangeText={setDraftDuration} keyboardType="number-pad" autoFocus maxLength={3} />
               <Text style={[styles.durationUnit, { color: C.textSecondary }]}>minutes</Text>
             </View>
-            <TouchableOpacity style={[styles.durationSaveBtn, { backgroundColor: C.accent }]} onPress={saveDuration}>
-              <Text style={[styles.durationSaveText, { color: C.white }]}>set</Text>
+            <TouchableOpacity style={[styles.durationSaveBtn, { backgroundColor: FOCUS_ORANGE }]} onPress={saveDuration}>
+              <Text style={[styles.durationSaveText, { color: '#fff' }]}>set</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
-    </ScrollView>
     </View>
     </KeyboardAvoidingView>
   );
@@ -694,6 +573,19 @@ export default function FocusScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  timerHero: {
+    minHeight: 520,
+    paddingHorizontal: 24,
+    paddingTop: 54,
+    paddingBottom: 26,
+    backgroundColor: '#15110F',
+    overflow: 'hidden',
+  },
+  bottomContent: {
+    padding: 24,
+    paddingTop: 22,
+    paddingBottom: 36,
+  },
   content: { padding: 24, paddingTop: 54, paddingBottom: 28 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -747,6 +639,7 @@ const styles = StyleSheet.create({
   modeRow: {
     flexDirection: 'row', borderRadius: 22,
     padding: 5, elevation: 2, marginBottom: 22, gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   modeBtn: { flex: 1, paddingVertical: 10, borderRadius: 17, alignItems: 'center' },
   modeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0 },
@@ -780,21 +673,15 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 20, fontWeight: '700', letterSpacing: 0 },
   statLbl: { fontSize: 11, letterSpacing: 0.3 },
   taskSection: { gap: 8 },
-  sectionLabel: { fontSize: 13, letterSpacing: 0, marginBottom: 4, fontWeight: '900' },
+  taskSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  sectionLabel: { fontSize: 13, letterSpacing: 0, fontWeight: '900' },
+  viewAllLink: { fontSize: 12, fontWeight: '800' },
   addRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 18, elevation: 1,
-    paddingHorizontal: 14, paddingVertical: 4,
+    borderRadius: 18, elevation: 1, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 14,
+    alignItems: 'center',
   },
-  taskInput: { fontSize: 15, paddingVertical: 10 },
-  pomodoroTarget: {
-    flexDirection: 'row', alignItems: 'center',
-    borderLeftWidth: 1, paddingLeft: 10, gap: 4,
-  },
-  pomodoroTargetIcon: { fontSize: 12 },
-  pomodoroTargetInput: { fontSize: 15, width: 28, textAlign: 'center' },
-  addBtn: { padding: 8 },
-  addBtnText: { fontSize: 22, fontWeight: '300' },
+  addRowText: { fontSize: 14, fontWeight: '700' },
   taskRow: {
     flexDirection: 'row', alignItems: 'center',
     borderRadius: 18, borderWidth: 1.5,
