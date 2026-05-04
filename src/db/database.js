@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { deleteManagedPhotoAsync } from '../lib/photoStorage';
 
 let dbPromise = null;
 
@@ -40,6 +41,7 @@ async function _initDatabase() {
       notes TEXT,
       due_date TEXT,
       completed INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'todo',
       target_pomodoros INTEGER DEFAULT 1,
       position INTEGER NOT NULL DEFAULT 0,
       google_task_id TEXT,
@@ -194,6 +196,7 @@ async function _initDatabase() {
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN list_id TEXT'); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN notes TEXT'); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN due_date TEXT'); } catch {}
+  try { await database.runAsync("ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'todo'"); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN position INTEGER DEFAULT 0'); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN google_task_id TEXT'); } catch {}
   try { await database.runAsync("ALTER TABLE tasks ADD COLUMN sync_status TEXT DEFAULT 'local'"); } catch {}
@@ -214,6 +217,7 @@ async function _initDatabase() {
   );
   await database.runAsync("UPDATE tasks SET project_id = 'default-project' WHERE project_id IS NULL");
   await database.runAsync("UPDATE tasks SET list_id = 'focus-list' WHERE list_id IS NULL");
+  await database.runAsync("UPDATE tasks SET status = CASE WHEN completed = 1 THEN 'done' WHEN status IS NULL OR status = '' THEN 'todo' ELSE status END");
   await database.runAsync("UPDATE tasks SET position = rowid WHERE (position IS NULL OR position = 0) AND updated_at IS NULL");
   await database.runAsync("UPDATE tasks SET updated_at = COALESCE(updated_at, created_at, datetime('now'))");
   return database;
@@ -258,6 +262,7 @@ export async function saveEntry(date, mood, note, photoUris = [], tags = [], gra
   // Delete removed photos
   for (const photo of existingPhotos) {
     if (!newUris.has(photo.uri)) {
+      await deleteManagedPhotoAsync(photo.uri);
       await database.runAsync('DELETE FROM photos WHERE entry_id = ? AND uri = ?', [
         entryId,
         photo.uri,
@@ -412,6 +417,13 @@ export async function importFromText(text) {
 
 export async function deleteEntry(date) {
   const database = await getDatabase();
+  const entry = await database.getFirstAsync('SELECT id FROM entries WHERE date = ?', [date]);
+  if (entry?.id) {
+    const photos = await database.getAllAsync('SELECT uri FROM photos WHERE entry_id = ?', [entry.id]);
+    for (const photo of photos) {
+      await deleteManagedPhotoAsync(photo.uri);
+    }
+  }
   await database.runAsync('DELETE FROM entries WHERE date = ?', [date]);
 }
 

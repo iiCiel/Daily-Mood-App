@@ -107,6 +107,8 @@ export default function HabitsScreen() {
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
   const [streaks, setStreaks] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editingHabit, setEditingHabit] = useState(null);
 
@@ -153,15 +155,22 @@ export default function HabitsScreen() {
   }, [calYear, calMonth]);
 
   async function load() {
-    const h = await getHabits();
-    setHabits(h);
-    const done = await getCompletionsForDate(today);
-    setCompleted(done);
-    const streakEntries = await Promise.all(
-      h.map(async (habit) => [habit.id, await getHabitStreak(habit.id)])
-    );
-    setStreaks(Object.fromEntries(streakEntries));
-    loadMonthCompletions();
+    setLoadError(false);
+    try {
+      const h = await getHabits();
+      setHabits(h);
+      const done = await getCompletionsForDate(today);
+      setCompleted(done);
+      const streakEntries = await Promise.all(
+        h.map(async (habit) => [habit.id, await getHabitStreak(habit.id)])
+      );
+      setStreaks(Object.fromEntries(streakEntries));
+      loadMonthCompletions();
+    } catch (e) {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadMonthCompletions() {
@@ -264,6 +273,21 @@ export default function HabitsScreen() {
 
   const doneCount = habits.filter(h => completed.has(h.id)).length;
   const total = habits.length;
+
+  if (loading) return (
+    <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>loading...</Text>
+    </View>
+  );
+
+  if (loadError) return (
+    <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>couldn't load habits</Text>
+      <TouchableOpacity onPress={load} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}>
+        <Text style={{ color: C.text, fontSize: 14 }}>try again</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>

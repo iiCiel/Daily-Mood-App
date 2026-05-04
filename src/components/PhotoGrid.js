@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Image, TouchableOpacity, Text, StyleSheet, Dimensions } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
+import { persistPhotoAsync } from '../lib/photoStorage';
 import PhotoViewer from './PhotoViewer';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -24,7 +25,8 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
       selectionLimit: 10,
     });
     if (!result.canceled) {
-      onPhotosChange([...photos, ...result.assets.map((a) => a.uri)]);
+      const stored = await Promise.all(result.assets.map((a) => persistPhotoAsync(a.uri)));
+      onPhotosChange([...photos, ...stored.filter(Boolean)]);
     }
   };
 
@@ -36,7 +38,8 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     if (!result.canceled) {
-      onPhotosChange([...photos, result.assets[0].uri]);
+      const stored = await persistPhotoAsync(result.assets[0].uri);
+      onPhotosChange([...photos, stored].filter(Boolean));
     }
   };
 

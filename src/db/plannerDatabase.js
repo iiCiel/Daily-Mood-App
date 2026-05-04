@@ -19,9 +19,11 @@ function parsePriorities(entry) {
 
 function normalizeTask(task) {
   if (!task) return null;
+  const status = task.completed ? 'done' : (task.status || 'todo');
   return {
     ...task,
-    completed: task.completed ? 1 : 0,
+    status,
+    completed: status === 'done' ? 1 : 0,
     target_pomodoros: task.target_pomodoros || 1,
   };
 }
@@ -172,7 +174,7 @@ export async function archiveTaskList(id) {
   );
 }
 
-export async function getPlanningTasks({ listId = null, projectId = null, includeCompleted = true } = {}) {
+export async function getPlanningTasks({ listId = null, projectId = null, includeCompleted = true, orderByPosition = false } = {}) {
   const db = await getDatabase();
   const params = [];
   const filters = ['(l.archived = 0 OR l.id IS NULL)', '(p.archived = 0 OR p.id IS NULL)'];
@@ -185,13 +187,16 @@ export async function getPlanningTasks({ listId = null, projectId = null, includ
     params.push(projectId);
   }
   if (!includeCompleted) filters.push('t.completed = 0');
+  const orderBy = orderByPosition
+    ? 't.completed ASC, t.position ASC, CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date ASC, t.created_at DESC'
+    : 't.completed ASC, CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date ASC, t.position ASC, t.created_at DESC';
   const rows = await db.getAllAsync(`
     SELECT t.*, l.title as list_title, l.color as list_color, p.name as project_name, p.color as project_color
     FROM tasks t
     LEFT JOIN task_lists l ON l.id = t.list_id
     LEFT JOIN projects p ON p.id = t.project_id
     WHERE ${filters.join(' AND ')}
-    ORDER BY t.completed ASC, CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date ASC, t.position ASC, t.created_at DESC
+    ORDER BY ${orderBy}
   `, params);
   return rows.map(normalizeTask);
 }
@@ -209,6 +214,7 @@ export async function createPlanningTask({
   notes = '',
   dueDate = null,
   targetPomodoros = 1,
+  status = 'todo',
 }) {
   const db = await getDatabase();
   const finalProjectId = projectId || await getListProject(db, listId);
@@ -220,8 +226,8 @@ export async function createPlanningTask({
   const now = nowIso();
   await db.runAsync(
     `INSERT INTO tasks
-      (id, project_id, list_id, title, notes, due_date, completed, target_pomodoros, position, sync_status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 'local', ?, ?)`,
+      (id, project_id, list_id, title, notes, due_date, completed, status, target_pomodoros, position, sync_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
     [
       id,
       finalProjectId,
@@ -229,6 +235,8 @@ export async function createPlanningTask({
       title.trim(),
       notes || null,
       dueDate || null,
+      status === 'done' ? 1 : 0,
+      ['todo', 'doing', 'done'].includes(status) ? status : 'todo',
       Math.max(1, parseInt(targetPomodoros, 10) || 1),
       pos?.next_position || 0,
       now,
@@ -246,7 +254,7 @@ export async function updatePlanningTask(id, fields) {
   const projectId = fields.projectId ?? await getListProject(db, listId);
   await db.runAsync(
     `UPDATE tasks
-     SET title = ?, notes = ?, due_date = ?, list_id = ?, project_id = ?, target_pomodoros = ?,
+     SET title = ?, notes = ?, due_date = ?, list_id = ?, project_id = ?, target_pomodoros = ?, status = ?, completed = ?,
          sync_status = 'pending', updated_at = ?
      WHERE id = ?`,
     [
@@ -256,6 +264,8 @@ export async function updatePlanningTask(id, fields) {
       listId,
       projectId,
       Math.max(1, parseInt(fields.targetPomodoros ?? existing.target_pomodoros, 10) || 1),
+      fields.status ?? existing.status ?? 'todo',
+      (fields.status ?? existing.status) === 'done' ? 1 : 0,
       nowIso(),
       id,
     ]
@@ -267,10 +277,25 @@ export async function togglePlanningTask(id) {
   await db.runAsync(
     `UPDATE tasks
      SET completed = CASE WHEN completed = 1 THEN 0 ELSE 1 END,
+         status = CASE WHEN completed = 1 THEN 'todo' ELSE 'done' END,
          sync_status = 'pending',
          updated_at = ?
      WHERE id = ?`,
     [nowIso(), id]
+  );
+}
+
+export async function updateTaskStatus(id, status) {
+  const db = await getDatabase();
+  const nextStatus = ['todo', 'doing', 'done'].includes(status) ? status : 'todo';
+  await db.runAsync(
+    `UPDATE tasks
+     SET status = ?,
+         completed = ?,
+         sync_status = 'pending',
+         updated_at = ?
+     WHERE id = ?`,
+    [nextStatus, nextStatus === 'done' ? 1 : 0, nowIso(), id]
   );
 }
 
@@ -395,6 +420,30 @@ export async function getAllPlannerEntries(limit = 2000) {
     [limit]
   );
   return rows.map(parsePriorities);
+}
+
+export async function getAllProjectsForBackup(limit = 2000) {
+  const db = await getDatabase();
+  return db.getAllAsync(
+    'SELECT * FROM projects ORDER BY created_at ASC LIMIT ?',
+    [limit]
+  );
+}
+
+export async function getAllTaskListsForBackup(limit = 5000) {
+  const db = await getDatabase();
+  return db.getAllAsync(
+    'SELECT * FROM task_lists ORDER BY project_id ASC, position ASC, created_at ASC LIMIT ?',
+    [limit]
+  );
+}
+
+export async function getAllPlanningTasksForBackup(limit = 20000) {
+  const db = await getDatabase();
+  return db.getAllAsync(
+    'SELECT * FROM tasks ORDER BY created_at ASC LIMIT ?',
+    [limit]
+  );
 }
 
 export async function getPlanningSummary(date) {

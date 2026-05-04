@@ -7,10 +7,11 @@ import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
 import AestheticBackground from '../src/components/AestheticBackground';
+import TaskKanbanBoard from '../src/components/TaskKanbanBoard';
 import {
   getTaskLists, createTaskList, archiveTaskList,
   getPlanningTasks, createPlanningTask, togglePlanningTask,
-  deletePlanningTask, updatePlanningTask, setTaskOrder,
+  deletePlanningTask, updatePlanningTask, updateTaskStatus,
 } from '../src/db/plannerDatabase';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -71,9 +72,7 @@ export default function TasksScreen({ isTab = false }) {
   const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState('all');
   const [tasks, setTasks] = useState([]);
-  const [viewMode, setViewMode] = useState('list');
-  const [reorderMode, setReorderMode] = useState(false);
-  const [showDone, setShowDone] = useState(false);
+  const [viewMode, setViewMode] = useState('board');
 
   const [calYear, setCalYear] = useState(nowD.getFullYear());
   const [calMonth, setCalMonth] = useState(nowD.getMonth() + 1);
@@ -102,7 +101,7 @@ export default function TasksScreen({ isTab = false }) {
   async function load() {
     const [ls, ts] = await Promise.all([
       getTaskLists(),
-      getPlanningTasks({ listId: selectedListId === 'all' ? null : selectedListId, includeCompleted: true }),
+      getPlanningTasks({ listId: selectedListId === 'all' ? null : selectedListId, includeCompleted: true, orderByPosition: true }),
     ]);
     setLists(ls);
     setTasks(ts);
@@ -113,8 +112,7 @@ export default function TasksScreen({ isTab = false }) {
 
   async function selectList(id) {
     setSelectedListId(id);
-    setReorderMode(false);
-    const ts = await getPlanningTasks({ listId: id === 'all' ? null : id, includeCompleted: true });
+    const ts = await getPlanningTasks({ listId: id === 'all' ? null : id, includeCompleted: true, orderByPosition: true });
     setTasks(ts);
   }
 
@@ -177,22 +175,8 @@ export default function TasksScreen({ isTab = false }) {
     }
   }
 
-  async function moveUp(task, group) {
-    const idx = group.findIndex(t => t.id === task.id);
-    if (idx <= 0) return;
-    const next = [...group];
-    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-    await setTaskOrder(task.list_id, next.map(t => t.id));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await load();
-  }
-
-  async function moveDown(task, group) {
-    const idx = group.findIndex(t => t.id === task.id);
-    if (idx >= group.length - 1) return;
-    const next = [...group];
-    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    await setTaskOrder(task.list_id, next.map(t => t.id));
+  async function handleStatusChange(task, status) {
+    await updateTaskStatus(task.id, status);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await load();
   }
@@ -207,20 +191,6 @@ export default function TasksScreen({ isTab = false }) {
 
   const grouped = groupTasks(tasks, today);
 
-  // In "All" view: group incomplete tasks by list so you see each list as a section
-  const listSections = selectedListId === 'all'
-    ? Object.values(
-        tasks
-          .filter(t => !t.completed)
-          .reduce((acc, t) => {
-            const key = t.list_id || 'none';
-            if (!acc[key]) acc[key] = { listId: t.list_id, listTitle: t.list_title || 'Tasks', listColor: t.list_color || null, tasks: [] };
-            acc[key].tasks.push(t);
-            return acc;
-          }, {})
-      )
-    : null;
-
   const calGrid = buildCalGrid(calYear, calMonth);
   const calTaskMap = {};
   tasks.filter(t => t.due_date && !t.completed).forEach(t => {
@@ -229,16 +199,6 @@ export default function TasksScreen({ isTab = false }) {
   });
   const calDayTasks = calTaskMap[calSelected] || [];
 
-  const sections = [
-    { key: 'overdue', label: 'overdue', tasks: grouped.overdue, accent: C.danger },
-    { key: 'today', label: 'today', tasks: grouped.today, accent: C.primary },
-    { key: 'tomorrow', label: 'tomorrow', tasks: grouped.tomorrow, accent: C.primary },
-    { key: 'thisWeek', label: 'this week', tasks: grouped.thisWeek, accent: C.textSecondary },
-    { key: 'later', label: 'later', tasks: grouped.later, accent: C.textSecondary },
-    { key: 'noDue', label: 'no due date', tasks: grouped.noDue, accent: C.textSecondary },
-  ];
-
-  const reorderGroup = selectedListId !== 'all' ? grouped.noDue.concat(grouped.later) : [];
   const openTasks = tasks.filter(t => !t.completed);
   const dueToday = openTasks.filter(t => t.due_date && t.due_date <= today).length;
   const selectedList = selectedListId === 'all' ? null : lists.find(list => list.id === selectedListId);
@@ -261,20 +221,11 @@ export default function TasksScreen({ isTab = false }) {
           <View style={s.headerRight}>
             <TouchableOpacity
               style={[s.iconBtn, { backgroundColor: C.card }]}
-              onPress={() => { setViewMode(v => v === 'list' ? 'calendar' : 'list'); setReorderMode(false); }}
+              onPress={() => setViewMode(v => v === 'board' ? 'calendar' : 'board')}
               activeOpacity={0.75}
             >
-              <Text style={{ fontSize: 14 }}>{viewMode === 'list' ? '📅' : '☰'}</Text>
+              <Text style={{ fontSize: 14 }}>{viewMode === 'board' ? 'cal' : 'kan'}</Text>
             </TouchableOpacity>
-            {viewMode === 'list' && selectedListId !== 'all' && (
-              <TouchableOpacity
-                style={[s.iconBtn, { backgroundColor: reorderMode ? C.accent : C.card }]}
-                onPress={() => setReorderMode(r => !r)}
-                activeOpacity={0.75}
-              >
-                <Text style={{ fontSize: 14, color: reorderMode ? C.background : C.text }}>↕</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={[s.addBtn, { backgroundColor: C.accent }]}
               onPress={() => setShowAdd(true)}
@@ -346,99 +297,18 @@ export default function TasksScreen({ isTab = false }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* --- LIST VIEW --- */}
-          {viewMode === 'list' && (
-            <>
-              {selectedListId === 'all' ? (
-                /* ALL VIEW: group by list — lets you see School → Math/Physics/CS all together */
-                listSections && listSections.length > 0 ? listSections.map(group => (
-                  <View key={group.listId || 'none'} style={s.section}>
-                    <View style={[s.sectionHeader, { backgroundColor: C.card }]}>
-                      <View style={[s.sectionDot, { backgroundColor: group.listColor || C.primary }]} />
-                      <Text style={[s.sectionLabel, { color: C.text }]}>{group.listTitle}</Text>
-                      <Text style={[s.sectionCount, { color: C.textSecondary }]}>{group.tasks.length}</Text>
-                    </View>
-                    {group.tasks.map(task => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        C={C}
-                        reorderMode={false}
-                        selectedListId={selectedListId}
-                        onPress={() => openEditTask(task)}
-                        onToggle={() => handleToggle(task)}
-                        onLongPress={() => Alert.alert(task.title, null, [
-                          { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
-                          { text: 'cancel', style: 'cancel' },
-                        ])}
-                      />
-
-                    ))}
-                  </View>
-                )) : (
-                  <View style={s.emptyState}>
-                    <Text style={[s.emptyTitle, { color: C.text }]}>no tasks</Text>
-                    <Text style={[s.emptySub, { color: C.textSecondary }]}>tap + add to get started</Text>
-                  </View>
-                )
-              ) : (
-                /* SPECIFIC LIST VIEW: group by due date */
-                <>
-                  {sections.map(sec => {
-                    if (!sec.tasks.length) return null;
-                    return (
-                      <View key={sec.key} style={s.section}>
-                        <View style={[s.sectionHeader, { backgroundColor: C.card }]}>
-                          <Text style={[s.sectionLabel, { color: sec.accent }]}>{sec.label}</Text>
-                          <Text style={[s.sectionCount, { color: sec.accent }]}>{sec.tasks.length}</Text>
-                        </View>
-                        {sec.tasks.map(task => (
-                          <TaskRow
-                            key={task.id}
-                            task={task}
-                            C={C}
-                            reorderMode={reorderMode}
-                            selectedListId={selectedListId}
-                            group={sec.tasks}
-                            onPress={() => openEditTask(task)}
-                            onToggle={() => handleToggle(task)}
-                            onLongPress={() => Alert.alert(task.title, null, [
-                              { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
-                              { text: 'cancel', style: 'cancel' },
-                            ])}
-                            onMoveUp={() => moveUp(task, sec.tasks)}
-                            onMoveDown={() => moveDown(task, sec.tasks)}
-                          />
-                        ))}
-                      </View>
-                    );
-                  })}
-                  {tasks.filter(t => !t.completed).length === 0 && (
-                    <View style={s.emptyState}>
-                      <Text style={[s.emptyTitle, { color: C.text }]}>no tasks</Text>
-                      <Text style={[s.emptySub, { color: C.textSecondary }]}>tap + add to get started</Text>
-                    </View>
-                  )}
-                </>
-              )}
-
-              {grouped.done.length > 0 && (
-                <TouchableOpacity onPress={() => setShowDone(d => !d)} style={s.doneToggle}>
-                  <Text style={[s.doneToggleText, { color: C.textSecondary }]}>
-                    {showDone ? '▲' : '▼'} {grouped.done.length} completed
-                  </Text>
-                </TouchableOpacity>
-              )}
-              {showDone && grouped.done.map(task => (
-                <TaskRow key={task.id} task={task} C={C} selectedListId={selectedListId} onToggle={() => handleToggle(task)}
-                  onPress={() => openEditTask(task)}
-                  onLongPress={() => Alert.alert(task.title, null, [
-                    { text: 'delete', style: 'destructive', onPress: () => confirmDelete(task) },
-                    { text: 'cancel', style: 'cancel' },
-                  ])}
-                />
-              ))}
-            </>
+          {/* --- BOARD VIEW --- */}
+          {viewMode !== 'calendar' && (
+            <TaskKanbanBoard
+              tasks={tasks}
+              C={C}
+              showList={selectedListId === 'all'}
+              emptyText="drop work here"
+              onPress={openEditTask}
+              onToggle={handleToggle}
+              onDelete={confirmDelete}
+              onStatusChange={handleStatusChange}
+            />
           )}
 
           {/* --- CALENDAR VIEW --- */}
@@ -744,7 +614,7 @@ export default function TasksScreen({ isTab = false }) {
   );
 }
 
-function TaskRow({ task, C, reorderMode, selectedListId, onPress, onToggle, onLongPress, onMoveUp, onMoveDown }) {
+function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, dragEnabled, dragHandlers, isDragging }) {
   const due = fmtDue(task.due_date);
   const isOverdue = task.due_date && task.due_date < todayStr() && !task.completed;
   const accentColor = task.list_color || C.primary;
@@ -753,7 +623,11 @@ function TaskRow({ task, C, reorderMode, selectedListId, onPress, onToggle, onLo
 
   return (
     <TouchableOpacity
-      style={[s.taskCard, { backgroundColor: C.card }]}
+      style={[
+        s.taskCard,
+        { backgroundColor: C.card, borderColor: isDragging ? accentColor : C.border },
+        isDragging && s.taskCardDragging,
+      ]}
       onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.7}
@@ -781,17 +655,25 @@ function TaskRow({ task, C, reorderMode, selectedListId, onPress, onToggle, onLo
         {!!task.notes && (
           <Text style={[s.taskNotes, { color: C.textSecondary }]} numberOfLines={1}>{task.notes}</Text>
         )}
-        {!!due && !task.completed && (
-          <View style={[s.dueBadge, { backgroundColor: dueBg }]}>
-            <Text style={[s.dueLabel, { color: dueColor }]}>{due}</Text>
+        {(!!due || (selectedListId === 'all' && !!task.list_title)) && !task.completed && (
+          <View style={s.taskMetaRow}>
+            {!!due && (
+              <View style={[s.dueBadge, { backgroundColor: dueBg }]}>
+                <Text style={[s.dueLabel, { color: dueColor }]}>{due}</Text>
+              </View>
+            )}
+            {selectedListId === 'all' && !!task.list_title && (
+              <View style={[s.listBadge, { backgroundColor: accentColor + '18' }]}>
+                <Text style={[s.listBadgeText, { color: accentColor }]} numberOfLines={1}>{task.list_title}</Text>
+              </View>
+            )}
           </View>
         )}
       </View>
 
-      {reorderMode && (
-        <View style={s.reorderBtns}>
-          <TouchableOpacity onPress={onMoveUp} hitSlop={8}><Text style={[s.reorderArrow, { color: C.primary }]}>↑</Text></TouchableOpacity>
-          <TouchableOpacity onPress={onMoveDown} hitSlop={8}><Text style={[s.reorderArrow, { color: C.primary }]}>↓</Text></TouchableOpacity>
+      {dragEnabled && (
+        <View {...dragHandlers} style={s.dragHandle}>
+          <Text style={[s.dragHandleText, { color: C.textSecondary }]}>☰</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -870,6 +752,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 20,
     marginBottom: 10,
+    borderWidth: 1,
     elevation: 4,
     overflow: 'hidden',
     minHeight: 66,
@@ -878,17 +761,31 @@ const s = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
+  taskCardDragging: {
+    opacity: 0.96,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    transform: [{ scale: 1.01 }],
+  },
   taskAccent: { width: 5, alignSelf: 'stretch' },
   circleWrap: { paddingHorizontal: 15 },
   circle: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   circleTick: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  taskBody: { flex: 1, paddingVertical: 14, paddingRight: 14 },
+  taskBody: { flex: 1, paddingVertical: 14, paddingRight: 8 },
   taskTitle: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
   taskNotes: { fontSize: 12, fontWeight: '400', marginTop: 3, opacity: 0.7 },
-  dueBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
+  taskMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+  dueBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   dueLabel: { fontSize: 11, fontWeight: '700' },
-  reorderBtns: { flexDirection: 'row', gap: 2, paddingRight: 10 },
-  reorderArrow: { fontSize: 20, fontWeight: '900', paddingHorizontal: 4 },
+  listBadge: { maxWidth: 120, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  listBadgeText: { fontSize: 11, fontWeight: '800' },
+  dragHandle: {
+    alignSelf: 'stretch',
+    width: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dragHandleText: { fontSize: 20, fontWeight: '900', lineHeight: 22 },
   doneToggle: { paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   doneToggleText: { fontSize: 12, fontWeight: '700' },
   emptyState: { alignItems: 'center', paddingTop: 70, gap: 10 },

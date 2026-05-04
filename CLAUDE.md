@@ -34,8 +34,8 @@ The user has thought this through — do not suggest rebuilding after every chan
 4. Repeat: dev client for coding, preview build for releases
 
 ### Current state (as of last session)
-- Visual redesign (sage green palette) is complete and pushed to `features/all-in-one-additions`
-- Preview build was triggered on EAS account `lolaangelo` (project ID: `9cd610bd-40a4-4248-b3e2-2eb85e097440`)
+- Active branch: `codex`
+- Recent work: task drag-to-reorder, Kanban board (`TaskKanbanBoard`), projects tracker, polish on focus/planner/Today screens
 - Old warm beige design is preserved in branch `design/classic-warm` (based on commit `3ac1dc5`)
 - Dev Client needs a rebuild if switching EAS accounts (project ID changed)
 
@@ -62,26 +62,37 @@ app/
   privacy.js          — privacy policy screen (required for Play Store)
   sleep.js            — sleep tracker (bedtime, wake time, quality, note, history)
   planner.js          — daily planner (morning intention, top 3 priorities, evening review)
+  tasks.js            — task manager with Kanban board (todo/in-progress/done), lists, drag reorder; also used by tasks tab (isTab prop)
+  projects.js         — projects tracker (create, color, status: active/on hold/done)
+  project-detail.js   — tasks within a project
   notes.js            — freeform notes (create, edit, pin, search, delete)
   goals.js            — goals tracker (create, progress bar, categories, mark complete)
+  calories.js         — calorie tracker (log food entries, daily goal, history)
+  saved-meals.js      — saved meal presets for quick calorie logging
+  macro-calculator.js — macro calculator (protein/carbs/fat targets)
+  weight.js           — weight tracker (log entries, trend chart)
   weekly-review.js    — auto-generated weekly summary (mood, habits, focus, sleep) with share
   (tabs)/
-    _layout.js        — custom tab bar: mood (◉), habits (◈), focus (◎), life (◇)
-    mood.js           — calendar home, streak, 7-day trend, correlation insight, search, insights button
-    habits.js         — daily habit check-in, add/edit habits, calendar with day-editing
+    _layout.js        — custom tab bar: Today (◆), Tasks (✓), Focus (◎), Habits (✦), Journal (◉)
+    life.js           — Today hub: mood quick-log, planner, habits, focus summary, calorie/weight widgets
+    tasks.js          — thin wrapper around app/tasks.js with isTab=true
     focus.js          — pomodoro timer, tasks, custom durations, breathing exercises
-    life.js           — hub: planner, sleep, goals, notes cards + weekly review button
+    habits.js         — daily habit check-in, add/edit habits, calendar with day-editing
+    mood.js           — calendar home, streak, 7-day trend, correlation insight, search, insights button
     settings.js       — theme toggle, reminders, app lock, cloud sync, data export, about
 
 src/
   db/
-    database.js       — mood entries SQLite (getEntry, saveEntry w/ gratitude, deleteEntry, getStreak, searchEntries, getMoodInsights, getEntriesForYear, getLastNDaysMoods)
-    focusDatabase.js  — tasks + pomodoro_sessions (getTasks, createTask, toggleTask, saveSession, getFocusInsights)
+    database.js       — DB singleton + schema migrations; mood entries (getEntry, saveEntry w/ gratitude, deleteEntry, getStreak, searchEntries, getMoodInsights, getEntriesForYear, getLastNDaysMoods)
+    focusDatabase.js  — thin re-export layer for tasks (delegates to plannerDatabase) + pomodoro_sessions (saveSession, getFocusInsights)
+    plannerDatabase.js — planner_entries, tasks (planning_tasks), task_lists, projects (getTaskLists, createTaskList, getPlanningTasks, createPlanningTask, togglePlanningTask, updateTaskStatus, getProjects, createProject, archiveProject, getPlanningSummary)
     habitDatabase.js  — habits + habit_completions (getHabits, createHabit, toggleCompletion, getHabitStreak, getHabitInsights)
     sleepDatabase.js  — sleep_entries (saveSleep, getSleepEntry, getRecentSleep, getSleepInsights, calcDuration)
     notesDatabase.js  — notes (getNotes, saveNote, deleteNote, togglePinNote, searchNotes)
     goalsDatabase.js  — goals (getGoals, createGoal, updateGoal, updateGoalProgress, toggleGoalComplete, deleteGoal)
-    plannerDatabase.js — planner_entries (getPlannerEntry, savePlannerEntry, getRecentPlanner)
+    calorieDatabase.js — calorie_entries + calorie goal (getCalorieEntries, logCalorieEntry, getCalorieDaySummary, getCalorieGoal, setCalorieGoal)
+    savedMealsDatabase.js — saved meal presets for calorie logging
+    weightDatabase.js — weight_entries (logWeight, getWeightEntries, getLatestWeight)
   context/
     ThemeContext.js   — light/dark colors, ThemeProvider, useTheme(), useSetTheme(), useThemePref()
   constants/
@@ -93,7 +104,9 @@ src/
     CorrelationInsight.js — mood × focus insight card
     PhotoGrid.js      — photo thumbnails with fullscreen viewer
     PhotoViewer.js    — fullscreen modal photo viewer
-    AestheticBackground.js — decorative blobs component (FILE EXISTS but is NOT used anywhere — do not add it to new screens)
+    AestheticBackground.js — decorative animated blobs; used in life.js and tasks.js
+    MindfulHeader.js  — simple screen header with optional right action button (title + onRightPress)
+    TaskKanbanBoard.js — Kanban board for tasks (todo/in-progress/done columns)
   notifications.js    — addReminder/removeReminder (multiple daily reminders), timer notifications, streak milestones
   lib/
     supabase.js       — optional cloud sync (user configures URL + anon key in settings)
@@ -132,7 +145,7 @@ MOODS = [
 - **Stale closure fix for PanResponder:** use `ref.current` pattern (see changeMonthRef in mood.js)
 - **Background timer:** AppState listener stores timestamp when backgrounded, calculates elapsed on return
 - **Progress ring:** Two half-circle clip technique in focus.js ProgressRing component (no SVG, no reanimated)
-- **No decorative background:** AestheticBackground was removed from all screens in the redesign — do NOT add it to new screens
+- **Decorative background:** `AestheticBackground` is used in `life.js` and `tasks.js`. It's fine to add to new full-page screens but not required.
 
 ## App lock
 `AsyncStorage` key `'app_lock_enabled'` = `'true'/'false'`. Lock triggers after 5min in background if biometrics enrolled. Toggle in Settings. Lock screen is `app/lock.js`.
@@ -145,8 +158,9 @@ MOODS = [
 - `AsyncStorage` key `'last_milestone'` prevents duplicate celebrations
 
 ## DB tables (all in mood_journal.db via shared getDatabase() singleton)
-entries, photos, tasks, pomodoro_sessions, habits, habit_completions,
-sleep_entries, notes, goals, planner_entries
+entries, photos, tasks, projects, task_lists, calendar_events, pomodoro_sessions,
+habits, habit_completions, sleep_entries, notes, goals, planner_entries,
+calorie_entries, weight_entries
 
 ## Breathing patterns (focus tab)
 - Box: 4-4-4-4 (inhale/hold/exhale/hold)

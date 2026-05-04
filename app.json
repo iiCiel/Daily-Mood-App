@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mood",
+    "name": "Daily Mood",
     "slug": "mood-journal",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,8 +16,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "We need access to your photos so you can add them to your mood entries.",
-        "NSCameraUsageDescription": "We need camera access so you can take photos for your mood entries."
+        "NSPhotoLibraryUsageDescription": "Daily Mood needs photo access so you can attach photos to mood entries.",
+        "NSCameraUsageDescription": "Daily Mood needs camera access so you can take photos for mood entries."
       }
     },
     "android": {
@@ -26,9 +26,7 @@
         "backgroundColor": "#F0EBE1"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
       ],
       "package": "com.iiciel.moodjournal"
     },
@@ -44,8 +42,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Mood Journal to access your photos.",
-          "cameraPermission": "Allow Mood Journal to use your camera."
+          "photosPermission": "Allow Daily Mood to access your photos.",
+          "cameraPermission": "Allow Daily Mood to use your camera."
         }
       ]
     ],

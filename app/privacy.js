@@ -17,10 +17,10 @@ export default function PrivacyScreen() {
 
         {[
           ['your data stays on your device', 'Daily Mood stores all your journal entries, habits, and focus sessions locally on your device using SQLite. We do not collect, transmit, or sell any personal data.'],
-          ['optional cloud sync', 'If you choose to enable cloud sync in settings, your mood entries may be uploaded to a Supabase instance you configure yourself. You control this entirely — the app does not connect to any external server by default.'],
+          ['optional cloud sync', 'If you choose to enable cloud sync in settings, your mood entries may be uploaded to a Supabase instance you configure yourself. Other app modules stay local unless you export or share a backup.'],
           ['notifications', 'If you enable reminders, the app schedules local notifications on your device. No notification data is sent to any server.'],
-          ['photos', 'Photos attached to journal entries are stored locally on your device. They are never uploaded or shared.'],
-          ['biometrics', 'If you enable app lock, biometric authentication (fingerprint or face unlock) is handled entirely by your device\'s operating system. The app never accesses or stores biometric data.'],
+          ['photos', 'Photos attached to journal entries are copied into local app storage. Backup files include photo metadata, but not embedded photo files.'],
+          ['biometrics', 'If you enable app lock, biometric authentication (fingerprint or face unlock) is handled entirely by your device\'s operating system. The app never accesses or stores biometric data. App lock does not encrypt the local database.'],
           ['analytics', 'This app contains no third-party analytics, tracking, or advertising SDKs.'],
           ['contact', 'Questions? Reach out via the app listing on the Google Play Store.'],
         ].map(([title, body]) => (

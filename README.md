@@ -1,29 +1,48 @@
-# Mood Journal
+# Daily Mood
 
-A daily mood journaling app built with React Native and Expo. Track your mood, write about your day, and attach photos.
+Daily Mood is an offline-first personal dashboard built with React Native and Expo. It combines mood journaling, habits, focus sessions, planning, notes, goals, sleep, calories, and weight tracking in one private daily workspace.
 
 ## Features
 
-- **Daily Mood Tracking** - Pick from 5 emoji-based moods each day
-- **Journal Notes** - Write about what happened
-- **Photo Attachments** - Add photos from your gallery or camera
-- **Calendar View** - See your mood history at a glance
-- **Cloud Sync** - Optional Supabase sync across devices
-- **Offline First** - Everything works locally with SQLite
+- **Today Hub** - A daily overview with mood, habits, focus, tasks, health logs, planner, insights, and weekly review shortcuts.
+- **Mood Journal** - Log a mood, notes, tags, gratitude, and local photos for each day.
+- **Habits** - Track daily habits, streaks, monthly completion, and historical check-ins.
+- **Focus Timer** - Run focus/break sessions, attach sessions to tasks, and review focus stats.
+- **Planner and Tasks** - Plan priorities, manage projects/lists, use a kanban task board, and add evening reflection.
+- **Health Logs** - Track sleep, calories, macros, saved meals, and weight.
+- **Insights** - Review mood, habit, focus, calorie, sleep, and weight trends.
+- **Backup and Export** - Export a JSON backup, restore from a copied backup, or export CSV files on Android.
+- **Privacy First** - Local SQLite storage by default, optional user-provided Supabase sync for mood entries.
 
 ## Getting Started
 
 ```bash
 npm install
-npx expo start
+npm start
 ```
 
-Scan the QR code with Expo Go on your phone, or press `a` for Android / `i` for iOS simulator.
+Scan the QR code with Expo Go, or press `a` for Android, `i` for iOS, or `w` for web.
 
-## Cloud Sync Setup (Optional)
+## Verification
 
-1. Create a free project at [supabase.com](https://supabase.com)
-2. Run this SQL in the Supabase SQL editor:
+```bash
+npm run verify
+```
+
+This checks Expo dependency versions, fails on high-severity production audit findings, runs Expo Doctor, and verifies the web export.
+
+Individual checks:
+
+```bash
+npm run check:deps
+npm run audit:prod
+npm run doctor
+npm run export:web
+```
+
+## Cloud Sync Setup
+
+Cloud sync is optional and currently covers mood entries. Create a Supabase project and run:
 
 ```sql
 CREATE TABLE entries (
@@ -36,13 +55,19 @@ CREATE TABLE entries (
 );
 ```
 
-3. Go to Settings > API in your Supabase dashboard
-4. Copy the Project URL and anon key
-5. Enter them in the app's Settings screen
+Then copy your Project URL and anon key into the app's Settings screen.
+
+## Data Notes
+
+- App data is stored locally in SQLite and AsyncStorage unless you enable mood sync.
+- Photos are copied into app-owned local storage before being attached to journal entries.
+- JSON backups include entry data and photo metadata, but not embedded photo files.
+- Biometric app lock protects access to the app UI; it does not encrypt the local database.
 
 ## Tech Stack
 
 - Expo SDK 54 + Expo Router
-- expo-sqlite (local database)
-- expo-image-picker (photos)
-- Supabase (optional cloud sync)
+- React Native 0.81 + React 19
+- expo-sqlite for local database storage
+- expo-image-picker and expo-file-system for local photo attachments
+- Supabase for optional mood sync

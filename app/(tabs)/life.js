@@ -6,9 +6,9 @@ import { useTheme } from '../../src/context/ThemeContext';
 import AestheticBackground from '../../src/components/AestheticBackground';
 import MoodFace from '../../src/components/MoodFace';
 import { getPlannerEntry, getPlanningSummary } from '../../src/db/plannerDatabase';
-// import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
-// import { getGoals } from '../../src/db/goalsDatabase';
-// import { getNotes } from '../../src/db/notesDatabase';
+import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
+import { getGoals } from '../../src/db/goalsDatabase';
+import { getNotes } from '../../src/db/notesDatabase';
 import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db/habitDatabase';
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
@@ -42,9 +42,9 @@ export default function DashboardScreen() {
 
   const [planner, setPlanner] = useState(null);
   const [planningSummary, setPlanningSummary] = useState(null);
-  // const [sleep, setSleep] = useState(null);
-  // const [goals, setGoals] = useState([]);
-  // const [notes, setNotes] = useState([]);
+  const [sleep, setSleep] = useState(null);
+  const [goals, setGoals] = useState([]);
+  const [notes, setNotes] = useState([]);
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
   const [sessions, setSessions] = useState([]);
@@ -52,18 +52,22 @@ export default function DashboardScreen() {
   const [calorieSummary, setCalorieSummary] = useState(null);
   const [calorieGoal, setCalorieGoal] = useState(2000);
   const [latestWeight, setLatestWeight] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useFocusEffect(useCallback(() => {
     load();
   }, []));
 
   async function load() {
-    const [p, planSummary, h, done, focusSessions, moodEntry, cals, cGoal, wt] = await Promise.all([
+    setLoadError(false);
+    try {
+    const [p, planSummary, sl, g, n, h, done, focusSessions, moodEntry, cals, cGoal, wt] = await Promise.all([
       getPlannerEntry(today),
       getPlanningSummary(today),
-      // getSleepEntry(today),
-      // getGoals(),
-      // getNotes(),
+      getSleepEntry(today),
+      getGoals(),
+      getNotes(),
       getHabits(),
       getCompletionsForDate(today),
       getSessionsForDay(today),
@@ -74,9 +78,9 @@ export default function DashboardScreen() {
     ]);
     setPlanner(p);
     setPlanningSummary(planSummary);
-    // setSleep(sl);
-    // setGoals(g);
-    // setNotes(n);
+    setSleep(sl);
+    setGoals(g);
+    setNotes(n);
     setHabits(h);
     setCompleted(done);
     setSessions(focusSessions);
@@ -84,6 +88,11 @@ export default function DashboardScreen() {
     setCalorieSummary(cals);
     setCalorieGoal(cGoal);
     setLatestWeight(wt);
+    } catch (e) {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function toggleHabit(id) {
@@ -110,9 +119,24 @@ export default function DashboardScreen() {
   const completedHabits = habits.filter((h) => completed.has(h.id)).length;
   const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  // const activeGoals = goals.filter(g => !g.completed);
-  // const sleepDur = sleep ? fmtDuration(calcDuration(sleep.bedtime, sleep.wake_time)) : null;
+  const activeGoals = goals.filter(g => !g.completed);
+  const sleepDur = sleep ? fmtDuration(calcDuration(sleep.bedtime, sleep.wake_time)) : null;
   const moodObj = todayMood ? MOODS.find((m) => m.value === todayMood.mood) : null;
+
+  if (loading) return (
+    <View style={[styles.container, { backgroundColor: C.background, alignItems: 'center', justifyContent: 'center' }]}>
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>loading...</Text>
+    </View>
+  );
+
+  if (loadError) return (
+    <View style={[styles.container, { backgroundColor: C.background, alignItems: 'center', justifyContent: 'center', gap: 12 }]}>
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>couldn't load your data</Text>
+      <TouchableOpacity onPress={load} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}>
+        <Text style={{ color: C.text, fontSize: 14 }}>try again</Text>
+      </TouchableOpacity>
+    </View>
+  );
   const completedSessions = sessions.filter((s) => s.completed).length;
 
   return (
@@ -259,12 +283,12 @@ export default function DashboardScreen() {
 
       {/* Tool cards */}
       <View style={styles.toolsGrid}>
-        {/* <ToolCard C={C} title="Sleep"  sub={sleepDur || 'log sleep'}  icon="🌙"  onPress={() => router.push('/sleep')} /> */}
+        <ToolCard C={C} title="Sleep"     sub={sleepDur || 'log sleep'}                                                       icon="🌙"  onPress={() => router.push('/sleep')} />
         <ToolCard C={C} title="Calories"  sub={calorieSummary ? `${calorieSummary.calories}/${calorieGoal} kcal` : 'log food'} icon="🍽"  onPress={() => router.push('/calories')} />
-        <ToolCard C={C} title="Weight"    sub={latestWeight ? `${latestWeight.weight} ${latestWeight.unit}` : 'log weight'}  icon="⚖️"  onPress={() => router.push('/weight')} />
-        {/* <ToolCard C={C} title="Goals"  sub={`${activeGoals.length} active`}  icon="🎯"  onPress={() => router.push('/goals')} /> */}
-        {/* <ToolCard C={C} title="Notes"  sub={notes.length ? `${notes.length} notes` : 'write a note'}  icon="📝"  onPress={() => router.push('/notes')} /> */}
-        <ToolCard C={C} title="Planner"   sub={planningSummary ? `${planningSummary.dueTasks} due today` : 'daily plan'}     icon="📋"  onPress={() => router.push('/planner')} />
+        <ToolCard C={C} title="Weight"    sub={latestWeight ? `${latestWeight.weight} ${latestWeight.unit}` : 'log weight'}    icon="⚖️"  onPress={() => router.push('/weight')} />
+        <ToolCard C={C} title="Goals"     sub={`${activeGoals.length} active`}                                                 icon="🎯"  onPress={() => router.push('/goals')} />
+        <ToolCard C={C} title="Notes"     sub={notes.length ? `${notes.length} notes` : 'write a note'}                       icon="📝"  onPress={() => router.push('/notes')} />
+        <ToolCard C={C} title="Planner"   sub={planningSummary ? `${planningSummary.dueTasks} due today` : 'daily plan'}       icon="📋"  onPress={() => router.push('/planner')} />
       </View>
 
       {/* Bottom links */}

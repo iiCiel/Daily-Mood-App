@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, Alert,
@@ -6,6 +6,7 @@ import {
 import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
+import TaskKanbanBoard from '../src/components/TaskKanbanBoard';
 import {
   archiveProject,
   archiveTaskList,
@@ -22,8 +23,8 @@ import {
   getTaskLists,
   getTodayPlan,
   savePlannerEntry,
-  setTaskOrder,
   togglePlanningTask,
+  updateTaskStatus,
 } from '../src/db/plannerDatabase';
 
 const TABS = ['today', 'lists', 'projects', 'calendar'];
@@ -56,14 +57,6 @@ function shortDate(value) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase();
 }
 
-function reorderItems(items, fromIndex, toIndex) {
-  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return items;
-  const next = [...items];
-  const [item] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, item);
-  return next;
-}
-
 export default function PlannerScreen() {
   const C = useTheme();
   const today = dateStr();
@@ -74,7 +67,7 @@ export default function PlannerScreen() {
   const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [dragState, setDragState] = useState(null);
+  const [allTasks, setAllTasks] = useState([]);
   const [todayPlan, setTodayPlan] = useState({ tasks: [], events: [] });
   const [dailyEntry, setDailyEntry] = useState(null);
 
@@ -92,6 +85,8 @@ export default function PlannerScreen() {
 
   const [intention, setIntention] = useState('');
   const [priorityText, setPriorityText] = useState('');
+  const [eveningNote, setEveningNote] = useState('');
+  const [eveningRating, setEveningRating] = useState(null);
 
   const [calCursor, setCalCursor] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
   const [calendarItems, setCalendarItems] = useState({ tasks: [], events: [] });
@@ -100,7 +95,6 @@ export default function PlannerScreen() {
   const [eventStart, setEventStart] = useState('');
   const [eventEnd, setEventEnd] = useState('');
   const [eventProjectId, setEventProjectId] = useState('default-project');
-  const dragStartYRef = useRef(0);
 
   useFocusEffect(useCallback(() => { loadBase(); }, []));
 
@@ -113,18 +107,22 @@ export default function PlannerScreen() {
   }, [calCursor.year, calCursor.month]);
 
   async function loadBase() {
-    const [nextProjects, nextLists, nextToday, entry] = await Promise.all([
+    const [nextProjects, nextLists, nextToday, entry, nextAllTasks] = await Promise.all([
       getProjects(),
       getTaskLists(),
       getTodayPlan(today),
       getPlannerEntry(today),
+      getPlanningTasks({ includeCompleted: true, orderByPosition: true }),
     ]);
     setProjects(nextProjects);
     setLists(nextLists);
     setTodayPlan(nextToday);
+    setAllTasks(nextAllTasks);
     setDailyEntry(entry);
     setIntention(entry?.intention || '');
     setPriorityText((entry?.priorities || []).join('\n'));
+    setEveningNote(entry?.evening_note || '');
+    setEveningRating(entry?.evening_rating || null);
     if (!selectedListId && nextLists[0]) setSelectedListId(nextLists[0].id);
     if (!listProjectId && nextProjects[0]) setListProjectId(nextProjects[0].id);
     if (!eventProjectId && nextProjects[0]) setEventProjectId(nextProjects[0].id);
@@ -133,7 +131,7 @@ export default function PlannerScreen() {
 
   async function loadTasks(listId = selectedListId) {
     if (!listId) return;
-    setTasks(await getPlanningTasks({ listId, includeCompleted: true }));
+    setTasks(await getPlanningTasks({ listId, includeCompleted: true, orderByPosition: true }));
   }
 
   async function loadCalendar() {
@@ -141,14 +139,16 @@ export default function PlannerScreen() {
   }
 
   async function refreshPlanning() {
-    const [nextProjects, nextLists, nextToday] = await Promise.all([
+    const [nextProjects, nextLists, nextToday, nextAllTasks] = await Promise.all([
       getProjects(),
       getTaskLists(),
       getTodayPlan(today),
+      getPlanningTasks({ includeCompleted: true, orderByPosition: true }),
     ]);
     setProjects(nextProjects);
     setLists(nextLists);
     setTodayPlan(nextToday);
+    setAllTasks(nextAllTasks);
     if (selectedListId) await loadTasks(selectedListId);
     await loadCalendar();
   }
@@ -210,8 +210,19 @@ export default function PlannerScreen() {
     await savePlannerEntry(today, {
       intention,
       priorities: priorityText.split('\n').map((p) => p.trim()).filter(Boolean),
-      eveningNote: dailyEntry?.evening_note || '',
-      eveningRating: dailyEntry?.evening_rating || null,
+      eveningNote,
+      eveningRating,
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setDailyEntry(await getPlannerEntry(today));
+  }
+
+  async function saveEveningReflection() {
+    await savePlannerEntry(today, {
+      intention: dailyEntry?.intention || intention,
+      priorities: (dailyEntry?.priorities || priorityText.split('\n').map((p) => p.trim()).filter(Boolean)),
+      eveningNote,
+      eveningRating,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setDailyEntry(await getPlannerEntry(today));
@@ -227,33 +238,18 @@ export default function PlannerScreen() {
     await refreshPlanning();
   }
 
-  function beginDrag(taskId, index, pageY) {
-    dragStartYRef.current = pageY || 0;
-    setDragState({ taskId, fromIndex: index, toIndex: index });
+  async function handleStatusChange(task, status) {
+    await updateTaskStatus(task.id, status);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }
-
-  function updateDrag(pageY) {
-    setDragState((state) => {
-      if (!state) return state;
-      const delta = Math.round(((pageY || dragStartYRef.current) - dragStartYRef.current) / 74);
-      const toIndex = Math.max(0, Math.min(tasks.length - 1, state.fromIndex + delta));
-      return toIndex === state.toIndex ? state : { ...state, toIndex };
-    });
-  }
-
-  async function finishDrag() {
-    const state = dragState;
-    setDragState(null);
-    if (!state || state.fromIndex === state.toIndex || !selectedListId) return;
-    const next = reorderItems(tasks, state.fromIndex, state.toIndex);
-    setTasks(next);
-    await setTaskOrder(selectedListId, next.map((task) => task.id));
     await refreshPlanning();
   }
 
   const selectedList = lists.find((list) => list.id === selectedListId);
-  const displayTasks = dragState ? reorderItems(tasks, dragState.fromIndex, dragState.toIndex) : tasks;
+  const todayBoardTasks = allTasks.filter((task) => {
+    if (task.status === 'doing') return true;
+    if (task.status === 'done') return task.due_date === today;
+    return task.due_date && task.due_date <= today;
+  });
   const days = useMemo(() => buildMonthDays(calCursor.year, calCursor.month), [calCursor]);
   const itemsByDate = useMemo(() => {
     const map = {};
@@ -325,16 +321,51 @@ export default function PlannerScreen() {
                 <ActionButton C={C} label="save note" onPress={saveDailyNote} />
               </Panel>
 
-              <Panel C={C} title="due now">
-                {todayPlan.tasks.length === 0 ? <Empty C={C} text="no due tasks" /> : todayPlan.tasks.map((task) => (
-                  <TaskRow key={task.id} C={C} task={task} onToggle={toggleTask} onDelete={removeTask} />
-                ))}
+              <Panel C={C} title="today board">
+                <TaskKanbanBoard
+                  tasks={todayBoardTasks}
+                  C={C}
+                  showList
+                  compact
+                  emptyText="clear"
+                  onToggle={(task) => toggleTask(task.id)}
+                  onDelete={(task) => removeTask(task.id)}
+                  onStatusChange={handleStatusChange}
+                />
               </Panel>
 
               <Panel C={C} title="events">
                 {todayPlan.events.length === 0 ? <Empty C={C} text="no events today" /> : todayPlan.events.map((event) => (
                   <EventRow key={event.id} C={C} event={event} onDelete={async () => { await deleteCalendarEvent(event.id); await refreshPlanning(); }} />
                 ))}
+              </Panel>
+
+              <Panel C={C} title="evening reflection">
+                <Text style={{ color: C.textSecondary, fontSize: 12, marginBottom: 10 }}>how did today go?</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <TouchableOpacity
+                      key={v}
+                      onPress={() => setEveningRating(eveningRating === v ? null : v)}
+                      style={{
+                        flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center',
+                        backgroundColor: eveningRating === v ? C.primary : C.background,
+                        borderWidth: 1.5, borderColor: eveningRating === v ? C.primary : C.border,
+                      }}
+                    >
+                      <Text style={{ fontSize: 16 }}>{['😞','😕','😐','😊','🤩'][v - 1]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={[s.textArea, { color: C.text, borderColor: C.border }]}
+                  placeholder="what went well? what to improve tomorrow..."
+                  placeholderTextColor={C.textSecondary}
+                  value={eveningNote}
+                  onChangeText={setEveningNote}
+                  multiline
+                />
+                <ActionButton C={C} label="save reflection" onPress={saveEveningReflection} />
               </Panel>
             </View>
           )}
@@ -366,21 +397,15 @@ export default function PlannerScreen() {
                 <ActionButton C={C} label="add task" onPress={addTask} />
               </Panel>
 
-              <Panel C={C} title="tasks">
-                {displayTasks.length === 0 ? <Empty C={C} text="no tasks in this list" /> : displayTasks.map((task, index) => (
-                  <TaskRow
-                    key={task.id}
-                    C={C}
-                    task={task}
-                    onToggle={toggleTask}
-                    onDelete={removeTask}
-                    draggable
-                    isDragging={dragState?.taskId === task.id}
-                    onDragStart={(pageY) => beginDrag(task.id, index, pageY)}
-                    onDragMove={updateDrag}
-                    onDragEnd={finishDrag}
-                  />
-                ))}
+              <Panel C={C} title="kanban">
+                <TaskKanbanBoard
+                  tasks={tasks}
+                  C={C}
+                  emptyText="drop work here"
+                  onToggle={(task) => toggleTask(task.id)}
+                  onDelete={(task) => removeTask(task.id)}
+                  onStatusChange={handleStatusChange}
+                />
               </Panel>
 
               <Panel C={C} title="new list">

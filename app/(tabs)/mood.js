@@ -51,18 +51,36 @@ export default function MoodScreen() {
   const [stats, setStats] = useState(null);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useFocusEffect(useCallback(() => {
-    loadEntries();
-    loadStreakAndStats();
+    loadAll();
   }, [year, month]));
+
+  async function loadAll() {
+    setLoadError(false);
+    setLoading(true);
+    try {
+      const [ents, s, m] = await Promise.all([
+        getEntriesForMonth(year, month),
+        getStreak(),
+        getMonthStats(year, month),
+      ]);
+      setEntries(ents);
+      setStreak(s);
+      setStats(m);
+    } catch (e) {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadEntries() {
     try {
       setEntries(await getEntriesForMonth(year, month));
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { /* handled by loadAll */ }
   }
 
   async function loadStreakAndStats() {
@@ -70,9 +88,7 @@ export default function MoodScreen() {
       const [s, m] = await Promise.all([getStreak(), getMonthStats(year, month)]);
       setStreak(s);
       setStats(m);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { /* handled by loadAll */ }
   }
 
   useEffect(() => {
@@ -127,6 +143,23 @@ export default function MoodScreen() {
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied', 'All journal entries for this month have been copied.');
   }
+
+  if (loading) return (
+    <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center' }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>loading...</Text>
+    </View>
+  );
+
+  if (loadError) return (
+    <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>couldn't load journal</Text>
+      <TouchableOpacity onPress={loadAll} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}>
+        <Text style={{ color: C.text, fontSize: 14 }}>try again</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>

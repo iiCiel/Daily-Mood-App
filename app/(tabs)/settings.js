@@ -6,23 +6,29 @@ import {
 import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initSupabase, syncEntries } from '../../src/lib/supabase';
-import { getUnsyncedEntries, markSynced, getEntries, importFromText, saveEntry } from '../../src/db/database';
+import { getUnsyncedEntries, markSynced, getEntries, importFromText } from '../../src/db/database';
 import { useTheme, useSetTheme, useThemePref } from '../../src/context/ThemeContext';
 import {
-  requestPermissions, getReminders, addReminder, removeReminder,
+  getReminders, addReminder, removeReminder,
   getHabitReminder, addHabitReminder, removeHabitReminder,
 } from '../../src/notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Clipboard from 'expo-clipboard';
 import { getGoals } from '../../src/db/goalsDatabase';
 import { getNotes } from '../../src/db/notesDatabase';
-import { getRecentSleep, saveSleep } from '../../src/db/sleepDatabase';
-import { getAllCalorieEntries, importCalorieEntry } from '../../src/db/calorieDatabase';
-import { getAllHabitCompletions, importHabitCompletion } from '../../src/db/habitDatabase';
-import { getWeightEntries, saveWeightEntry } from '../../src/db/weightDatabase';
-import { getAllPlannerEntries, getProjects, getTaskLists, getPlanningTasks } from '../../src/db/plannerDatabase';
+import { getRecentSleep } from '../../src/db/sleepDatabase';
+import { getAllCalorieEntries } from '../../src/db/calorieDatabase';
+import { getAllHabitCompletions } from '../../src/db/habitDatabase';
+import { getWeightEntries } from '../../src/db/weightDatabase';
+import {
+  getAllPlannerEntries,
+  getAllPlanningTasksForBackup,
+  getAllProjectsForBackup,
+  getAllTaskListsForBackup,
+} from '../../src/db/plannerDatabase';
 import { getAllFocusSessions } from '../../src/db/focusDatabase';
 import { getSavedMeals } from '../../src/db/savedMealsDatabase';
+import { importBackup } from '../../src/db/backupDatabase';
 import * as FileSystem from 'expo-file-system';
 
 const STORAGE_KEYS = { SUPABASE_URL: 'supabase_url', SUPABASE_KEY: 'supabase_anon_key' };
@@ -151,32 +157,6 @@ export default function SettingsScreen() {
     }
   }
 
-  function parseCSV(text) {
-    const rows = [];
-    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const row = [];
-      let inQuotes = false;
-      let field = '';
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (inQuotes) {
-          if (ch === '"' && line[i + 1] === '"') { field += '"'; i++; }
-          else if (ch === '"') inQuotes = false;
-          else field += ch;
-        } else {
-          if (ch === '"') inQuotes = true;
-          else if (ch === ',') { row.push(field); field = ''; }
-          else field += ch;
-        }
-      }
-      row.push(field);
-      rows.push(row);
-    }
-    return rows;
-  }
-
   async function handleExportEverything() {
     try {
       const [
@@ -192,15 +172,17 @@ export default function SettingsScreen() {
         getNotes(),
         getAllPlannerEntries(),
         getAllFocusSessions(),
-        getPlanningTasks({ includeCompleted: true }),
-        getProjects(),
-        getTaskLists(),
+        getAllPlanningTasksForBackup(),
+        getAllProjectsForBackup(),
+        getAllTaskListsForBackup(),
         getSavedMeals(),
       ]);
 
       const backup = {
+        app: 'Daily Mood',
         exported_at: new Date().toISOString(),
-        version: 2,
+        version: 3,
+        photo_note: 'Photos stay local to this device and are not embedded in this backup.',
         mood: moodEntries,
         sleep: sleepEntries,
         calories: calorieEntries,
@@ -216,8 +198,10 @@ export default function SettingsScreen() {
         saved_meals: savedMeals,
       };
 
+      const json = JSON.stringify(backup, null, 2);
+      await Clipboard.setStringAsync(json);
       await Share.share({
-        message: JSON.stringify(backup, null, 2),
+        message: json,
         title: `daily_app_backup_${new Date().toISOString().slice(0, 10)}.json`,
       });
     } catch (e) {
@@ -225,71 +209,29 @@ export default function SettingsScreen() {
     }
   }
 
-  async function handleImportCSV() {
+  async function handleImportBackup() {
     Alert.alert(
-      'import from backup',
-      'copy the backup JSON text to your clipboard first, then tap import.',
+      'restore from backup',
+      'copy the backup JSON text to your clipboard first, then tap restore. matching records will be updated.',
       [
         { text: 'cancel', style: 'cancel' },
         {
-          text: 'import',
+          text: 'restore',
           onPress: async () => {
             try {
               const text = await Clipboard.getStringAsync();
               if (!text?.trim()) { Alert.alert('nothing on clipboard', 'copy the backup JSON first.'); return; }
               let backup;
               try { backup = JSON.parse(text); } catch { Alert.alert('invalid backup', 'clipboard does not contain valid JSON.'); return; }
-              if (!backup || typeof backup !== 'object') { Alert.alert('invalid backup', 'not a valid backup file.'); return; }
-
-              const counts = {};
-
-              if (Array.isArray(backup.mood)) {
-                for (const e of backup.mood) {
-                  if (!e.date || !e.mood) continue;
-                  let tags = []; try { tags = JSON.parse(e.tags || '[]'); } catch {}
-                  let gratitude = []; try { gratitude = JSON.parse(e.gratitude || '[]'); } catch {}
-                  await saveEntry(e.date, Number(e.mood), e.note || '', [], tags, gratitude);
-                }
-                counts.mood = backup.mood.length;
-              }
-
-              if (Array.isArray(backup.sleep)) {
-                for (const e of backup.sleep) {
-                  if (!e.date) continue;
-                  await saveSleep(e.date, e.bedtime || null, e.wake_time || null, e.quality ? Number(e.quality) : null, e.note || '');
-                }
-                counts.sleep = backup.sleep.length;
-              }
-
-              if (Array.isArray(backup.calories)) {
-                for (const e of backup.calories) {
-                  if (!e.date || !e.name || !e.calories) continue;
-                  await importCalorieEntry({ date: e.date, meal: e.meal, name: e.name, calories: e.calories, protein: e.protein, carbs: e.carbs, fat: e.fat, note: e.note });
-                }
-                counts.calories = backup.calories.length;
-              }
-
-              if (Array.isArray(backup.habits)) {
-                for (const e of backup.habits) {
-                  if (!e.date || !e.title) continue;
-                  await importHabitCompletion(e.title, e.emoji, e.date);
-                }
-                counts.habits = backup.habits.length;
-              }
-
-              if (Array.isArray(backup.weight)) {
-                for (const e of backup.weight) {
-                  if (!e.date || !e.weight) continue;
-                  await saveWeightEntry({ date: e.date, weight: parseFloat(e.weight), unit: e.unit || 'kg', note: e.note || '' });
-                }
-                counts.weight = backup.weight.length;
-              }
-
-              const summary = Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ');
-              Alert.alert('import complete', summary || 'nothing was imported.');
+              const counts = await importBackup(backup);
+              const summary = Object.entries(counts)
+                .filter(([, v]) => v > 0)
+                .map(([k, v]) => `${v} ${k}`)
+                .join(', ');
+              Alert.alert('restore complete', summary || 'nothing was imported.');
             } catch (e) {
               console.error(e);
-              Alert.alert('error', `import failed: ${e?.message || e}`);
+              Alert.alert('error', `restore failed: ${e?.message || e}`);
             }
           },
         },
@@ -310,6 +252,10 @@ export default function SettingsScreen() {
 
   async function handleExportCSV() {
     try {
+      if (!FileSystem.StorageAccessFramework) {
+        Alert.alert('not available', 'csv folder export is available on Android.');
+        return;
+      }
       const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
       if (!permissions.granted) return;
       const dir = permissions.directoryUri;
@@ -374,28 +320,6 @@ export default function SettingsScreen() {
       Alert.alert('export complete', `${files.length} csv files saved to the selected folder.`);
     } catch (e) {
       Alert.alert('error', 'could not export csv files.');
-    }
-  }
-
-  async function handleExport() {
-    try {
-      const [entries, goals, notes, sleep] = await Promise.all([
-        getEntries(1000),
-        getGoals(),
-        getNotes(),
-        getRecentSleep(365),
-      ]);
-      const data = {
-        exported_at: new Date().toISOString(),
-        mood_entries: entries,
-        goals,
-        notes,
-        sleep,
-      };
-      const json = JSON.stringify(data, null, 2);
-      await Share.share({ message: json, title: 'mood journal export' });
-    } catch (e) {
-      Alert.alert('error', 'could not export data.');
     }
   }
 
@@ -506,7 +430,7 @@ export default function SettingsScreen() {
 
         {/* Cloud sync */}
         <SectionTitle label="Cloud Sync" />
-        <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>optional. connect supabase to back up your entries.</Text>
+        <Text style={[ss.sectionDesc, { color: C.textSecondary }]}>optional. connect supabase to back up mood entries.</Text>
         <View style={ss.inputGroup}>
           <TextInput style={[ss.input, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
             placeholder="supabase url" placeholderTextColor={C.textSecondary}
@@ -538,10 +462,14 @@ export default function SettingsScreen() {
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExportEverything}>
-            <Text style={[ss.aboutLabel, { color: C.text }]}>export everything (csv)</Text>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>export full backup (json)</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleImportCSV}>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExportCSV}>
+            <Text style={[ss.aboutLabel, { color: C.text }]}>export csv files</Text>
+            <Text style={{ color: C.textSecondary }}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleImportBackup}>
             <Text style={[ss.aboutLabel, { color: C.text }]}>restore from backup</Text>
             <Text style={{ color: C.textSecondary }}>›</Text>
           </TouchableOpacity>

@@ -222,21 +222,25 @@ export default function FocusScreen() {
   }, [running]);
 
   async function loadTasks() {
-    const t = await getPlanningTasks({ includeCompleted: false });
-    setTasks(t);
-    const countEntries = await Promise.all(
-      t.map(async (task) => [task.id, await getTaskPomodoroCount(task.id)])
-    );
-    setTaskCounts(Object.fromEntries(countEntries));
+    try {
+      const t = await getPlanningTasks({ includeCompleted: false });
+      setTasks(t);
+      const countEntries = await Promise.all(
+        t.map(async (task) => [task.id, await getTaskPomodoroCount(task.id)])
+      );
+      setTaskCounts(Object.fromEntries(countEntries));
+    } catch (e) { /* non-critical, timer still works */ }
   }
 
   async function loadStats() {
-    const [sessions, total] = await Promise.all([
-      getSessionsForDay(todayStr()),
-      getTotalFocusMinutes(),
-    ]);
-    setTodaySessions(sessions);
-    setTotalMinutes(total);
+    try {
+      const [sessions, total] = await Promise.all([
+        getSessionsForDay(todayStr()),
+        getTotalFocusMinutes(),
+      ]);
+      setTodaySessions(sessions);
+      setTotalMinutes(total);
+    } catch (e) { /* non-critical, timer still works */ }
   }
 
   async function handleTimerComplete() {
@@ -365,80 +369,83 @@ export default function FocusScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <AestheticBackground />
 
-      {/* ── TIMER HERO: dark background, animated blobs visible ── */}
-      <View style={styles.timerHero}>
-        <AestheticBackground dark={true} />
-
-        <MindfulHeader C={{ ...C, text: '#fff', textSecondary: 'rgba(255,255,255,0.6)', background: 'transparent' }} title="Focus" onRightPress={() => router.push('/focus-stats')} rightLabel="📊" />
-
-        {/* Mode selector */}
-        <View style={styles.modeRow}>
-          {Object.keys(DEFAULT_DURATIONS).map((m) => (
-            <TouchableOpacity
-              key={m}
-              style={[styles.modeBtn, mode === m && { backgroundColor: FOCUS_ORANGE }]}
-              onPress={() => switchMode(m)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.modeBtnText, { color: mode === m ? '#fff' : 'rgba(255,255,255,0.55)' }]}>
-                {MODE_LABELS[m]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Timer ring */}
-        <View style={styles.timerWrap}>
-          <View style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: RING / 2 }}>
-            <ProgressRing
-              progress={progress}
-              size={RING}
-              strokeWidth={STROKE}
-              color={FOCUS_ORANGE}
-              bgColor="rgba(255,255,255,0.18)"
-            />
-            <View style={styles.ringCenter}>
-              <TouchableOpacity onPress={running ? undefined : openEditDuration} activeOpacity={0.7}>
-                <Text style={[styles.timerText, { color: '#FFFFFF' }]}>{formatTime(secondsLeft)}</Text>
-              </TouchableOpacity>
-              <Text style={[styles.timerMode, { color: 'rgba(255,255,255,0.6)' }]}>
-                {MODE_LABELS[mode]} · {durations[mode]}m
-              </Text>
-              {selectedTask && (
-                <Text style={[styles.timerTask, { color: 'rgba(255,255,255,0.7)' }]} numberOfLines={1}>
-                  {selectedTask.title}
-                </Text>
-              )}
-              <Text style={[styles.sessionDots, { color: 'rgba(255,255,255,0.5)' }]}>
-                {sessionCount > 0 ? '◉ '.repeat(sessionCount).trim() : '○ ○ ○ ○'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Controls */}
-        <View style={styles.controls}>
-          <TouchableOpacity style={[styles.sideBtn, { backgroundColor: 'rgba(255,255,255,0.13)' }]} onPress={resetTimer} activeOpacity={0.7}>
-            <Text style={[styles.sideBtnText, { color: 'rgba(255,255,255,0.7)' }]}>reset</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.mainBtn, { backgroundColor: FOCUS_ORANGE }]} onPress={running ? pauseTimer : startTimer} activeOpacity={0.8}>
-            <Text style={[styles.mainBtnText, { color: '#fff' }]}>
-              {running ? 'pause' : secondsLeft === totalSecs ? 'start' : 'resume'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.sideBtn, { backgroundColor: 'rgba(255,255,255,0.13)' }]} onPress={() => setShowTaskPicker(true)} activeOpacity={0.7}>
-            <Text style={[styles.sideBtnText, { color: 'rgba(255,255,255,0.7)' }]}>task</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ── SCROLLABLE: stats / tasks / breathing ── */}
       <ScrollView
-        style={{ flex: 1, backgroundColor: 'transparent' }}
-        contentContainerStyle={styles.bottomContent}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* ── TIMER HERO: dark background, animated blobs visible ── */}
+        <View style={styles.timerHero}>
+          <AestheticBackground dark={true} />
+
+          <MindfulHeader C={{ ...C, text: '#fff', textSecondary: 'rgba(255,255,255,0.6)', background: 'transparent' }} title="Focus" onRightPress={() => router.push('/focus-stats')} rightLabel="📊" />
+
+          {/* Mode selector */}
+          <View style={styles.modeRow}>
+            {Object.keys(DEFAULT_DURATIONS).map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[styles.modeBtn, mode === m && { backgroundColor: FOCUS_ORANGE }]}
+                onPress={() => switchMode(m)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modeBtnText, { color: mode === m ? '#fff' : 'rgba(255,255,255,0.55)' }]}>
+                  {MODE_LABELS[m]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Timer ring */}
+          <View style={styles.timerWrap}>
+            <View style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: RING / 2 }}>
+              <ProgressRing
+                progress={progress}
+                size={RING}
+                strokeWidth={STROKE}
+                color={FOCUS_ORANGE}
+                bgColor="rgba(255,255,255,0.18)"
+              />
+              <View style={styles.ringCenter}>
+                <TouchableOpacity onPress={running ? undefined : openEditDuration} activeOpacity={0.7}>
+                  <Text style={[styles.timerText, { color: '#FFFFFF' }]}>{formatTime(secondsLeft)}</Text>
+                </TouchableOpacity>
+                <Text style={[styles.timerMode, { color: 'rgba(255,255,255,0.6)' }]}>
+                  {MODE_LABELS[mode]} · {durations[mode]}m
+                </Text>
+                {selectedTask && (
+                  <Text style={[styles.timerTask, { color: 'rgba(255,255,255,0.7)' }]} numberOfLines={1}>
+                    {selectedTask.title}
+                  </Text>
+                )}
+                {sessionCount > 0 && (
+                  <Text style={[styles.sessionDots, { color: 'rgba(255,255,255,0.5)' }]}>
+                    {'◉ '.repeat(Math.min(sessionCount, 8)).trim()}{sessionCount > 8 ? ` +${sessionCount - 8}` : ''}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Controls */}
+          <View style={styles.controls}>
+            <TouchableOpacity style={[styles.sideBtn, { backgroundColor: 'rgba(255,255,255,0.13)' }]} onPress={resetTimer} activeOpacity={0.7}>
+              <Text style={[styles.sideBtnText, { color: 'rgba(255,255,255,0.7)' }]}>reset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.mainBtn, { backgroundColor: FOCUS_ORANGE }]} onPress={running ? pauseTimer : startTimer} activeOpacity={0.8}>
+              <Text style={[styles.mainBtnText, { color: '#fff' }]}>
+                {running ? 'pause' : secondsLeft === totalSecs ? 'start' : 'resume'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.sideBtn, { backgroundColor: 'rgba(255,255,255,0.13)' }]} onPress={() => setShowTaskPicker(true)} activeOpacity={0.7}>
+              <Text style={[styles.sideBtnText, { color: 'rgba(255,255,255,0.7)' }]}>task</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── stats / tasks / breathing ── */}
+        <View style={styles.bottomContent}>
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
@@ -532,6 +539,7 @@ export default function FocusScreen() {
             )}
           </View>
         )}
+        </View>
       </ScrollView>
 
       {/* Task picker modal */}
@@ -574,6 +582,8 @@ export default function FocusScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scroll: { flex: 1, backgroundColor: 'transparent' },
+  scrollContent: { flexGrow: 1 },
   timerHero: {
     position: 'relative',
     minHeight: 520,
