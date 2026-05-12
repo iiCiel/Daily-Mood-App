@@ -146,14 +146,12 @@ export default function MoodScreen() {
 
   if (loading) return (
     <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center' }}>
-      <Stack.Screen options={{ headerShown: false }} />
       <Text style={{ color: C.textSecondary, fontSize: 14 }}>loading...</Text>
     </View>
   );
 
   if (loadError) return (
     <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <Stack.Screen options={{ headerShown: false }} />
       <Text style={{ color: C.textSecondary, fontSize: 14 }}>couldn't load journal</Text>
       <TouchableOpacity onPress={loadAll} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}>
         <Text style={{ color: C.text, fontSize: 14 }}>try again</Text>
