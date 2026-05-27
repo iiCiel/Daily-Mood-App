@@ -1,19 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
 
 function TabBar({ state, navigation }) {
   const C = useTheme();
   const tabs = [
-    { name: 'life',   icon: '◆', label: 'Today'   },
-    { name: 'tasks',  icon: '✓', label: 'Tasks'   },
-    { name: 'focus',  icon: '◎', label: 'Focus'   },
-    { name: 'habits', icon: '✦', label: 'Habits'  },
-    { name: 'mood',   icon: '◉', label: 'Journal' },
+    { name: 'life', icon: 'grid-outline', activeIcon: 'grid', label: 'Today' },
+    { name: 'tasks', icon: 'checkbox-outline', activeIcon: 'checkbox', label: 'Tasks' },
+    { name: 'focus', icon: 'timer-outline', activeIcon: 'timer', label: 'Focus' },
+    { name: 'habits', icon: 'repeat-outline', activeIcon: 'repeat', label: 'Habits' },
+    { name: 'mood', icon: 'book-outline', activeIcon: 'book', label: 'Journal' },
   ];
 
   return (
-    <View style={[styles.wrap, { backgroundColor: 'transparent' }]}>
+    <View style={styles.wrap}>
       <View style={[styles.bar, { backgroundColor: C.card, borderColor: C.border }]}>
         {tabs.map((tab) => {
           const routeIndex = state.routes.findIndex((route) => route.name === tab.name);
@@ -27,16 +28,17 @@ function TabBar({ state, navigation }) {
             >
               <View style={[
                 styles.iconWrap,
-                { backgroundColor: isFocused ? C.primaryLight : 'transparent' },
+                { backgroundColor: isFocused ? C.primary : 'transparent' },
               ]}>
-                <Text style={[styles.icon, { color: isFocused ? C.primary : C.textSecondary }]}>
-                  {tab.icon}
-                </Text>
+                <Ionicons
+                  name={isFocused ? tab.activeIcon : tab.icon}
+                  size={18}
+                  color={isFocused ? C.white : C.textSecondary}
+                />
               </View>
-              <Text style={[styles.label, { color: isFocused ? C.primary : C.textSecondary }]}>
+              <Text style={[styles.label, { color: isFocused ? C.text : C.textSecondary }]}>
                 {tab.label}
               </Text>
-              {isFocused && <View style={[styles.activeDot, { backgroundColor: C.primary }]} />}
             </TouchableOpacity>
           );
         })}
@@ -60,46 +62,38 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 18,
   },
   bar: {
     flexDirection: 'row',
-    borderRadius: 24,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingVertical: 7,
+    paddingVertical: 8,
     paddingHorizontal: 6,
-    shadowColor: '#1A0A00',
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    shadowColor: '#111827',
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   iconWrap: {
     width: 34,
     height: 30,
-    borderRadius: 15,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  icon: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
   label: {
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '800',
   },
 });

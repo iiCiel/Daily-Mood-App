@@ -39,13 +39,15 @@
       "expo-router",
       "expo-sqlite",
       "expo-notifications",
+      "./plugins/withAndroidWidgets",
       [
         "expo-image-picker",
         {
           "photosPermission": "Allow Daily Mood to access your photos.",
           "cameraPermission": "Allow Daily Mood to use your camera."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},

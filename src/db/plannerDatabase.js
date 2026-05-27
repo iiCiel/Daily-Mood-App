@@ -28,6 +28,10 @@ function normalizeTask(task) {
   };
 }
 
+function normalizeStatus(status) {
+  return ['todo', 'doing', 'waiting', 'done'].includes(status) ? status : 'todo';
+}
+
 async function getListProject(db, listId) {
   if (!listId) return DEFAULT_PROJECT_ID;
   const row = await db.getFirstAsync('SELECT project_id FROM task_lists WHERE id = ?', [listId]);
@@ -174,6 +178,13 @@ export async function archiveTaskList(id) {
   );
 }
 
+export async function deleteTaskList(id) {
+  if (id === DEFAULT_LIST_ID) return;
+  const db = await getDatabase();
+  await db.runAsync('DELETE FROM tasks WHERE list_id = ?', [id]);
+  await db.runAsync('DELETE FROM task_lists WHERE id = ?', [id]);
+}
+
 export async function getPlanningTasks({ listId = null, projectId = null, includeCompleted = true, orderByPosition = false } = {}) {
   const db = await getDatabase();
   const params = [];
@@ -236,7 +247,7 @@ export async function createPlanningTask({
       notes || null,
       dueDate || null,
       status === 'done' ? 1 : 0,
-      ['todo', 'doing', 'done'].includes(status) ? status : 'todo',
+      normalizeStatus(status),
       Math.max(1, parseInt(targetPomodoros, 10) || 1),
       pos?.next_position || 0,
       now,
@@ -252,6 +263,7 @@ export async function updatePlanningTask(id, fields) {
   if (!existing) return;
   const listId = fields.listId ?? existing.list_id ?? DEFAULT_LIST_ID;
   const projectId = fields.projectId ?? await getListProject(db, listId);
+  const nextStatus = normalizeStatus(fields.status ?? existing.status ?? 'todo');
   await db.runAsync(
     `UPDATE tasks
      SET title = ?, notes = ?, due_date = ?, list_id = ?, project_id = ?, target_pomodoros = ?, status = ?, completed = ?,
@@ -264,8 +276,8 @@ export async function updatePlanningTask(id, fields) {
       listId,
       projectId,
       Math.max(1, parseInt(fields.targetPomodoros ?? existing.target_pomodoros, 10) || 1),
-      fields.status ?? existing.status ?? 'todo',
-      (fields.status ?? existing.status) === 'done' ? 1 : 0,
+      nextStatus,
+      nextStatus === 'done' ? 1 : 0,
       nowIso(),
       id,
     ]
@@ -287,7 +299,7 @@ export async function togglePlanningTask(id) {
 
 export async function updateTaskStatus(id, status) {
   const db = await getDatabase();
-  const nextStatus = ['todo', 'doing', 'done'].includes(status) ? status : 'todo';
+  const nextStatus = normalizeStatus(status);
   await db.runAsync(
     `UPDATE tasks
      SET status = ?,
@@ -331,16 +343,25 @@ export async function moveTask(id, direction) {
 }
 
 export async function setTaskOrder(listId, orderedIds = []) {
-  if (!listId || !orderedIds.length) return;
+  if (!orderedIds.length) return;
   const db = await getDatabase();
   const now = nowIso();
   for (let i = 0; i < orderedIds.length; i++) {
-    await db.runAsync(
-      `UPDATE tasks
-       SET position = ?, sync_status = 'pending', updated_at = ?
-       WHERE id = ? AND list_id = ?`,
-      [i, now, orderedIds[i], listId]
-    );
+    if (listId) {
+      await db.runAsync(
+        `UPDATE tasks
+         SET position = ?, sync_status = 'pending', updated_at = ?
+         WHERE id = ? AND list_id = ?`,
+        [i, now, orderedIds[i], listId]
+      );
+    } else {
+      await db.runAsync(
+        `UPDATE tasks
+         SET position = ?, sync_status = 'pending', updated_at = ?
+         WHERE id = ?`,
+        [i, now, orderedIds[i]]
+      );
+    }
   }
 }
 

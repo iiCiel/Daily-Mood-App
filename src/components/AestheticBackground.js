@@ -1,102 +1,83 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, useColorScheme } from 'react-native';
+import { Animated, StyleSheet, useColorScheme, View } from 'react-native';
 
-const BLOBS = [
-  { color: '#B85B3A', size: 380, top: -90,  right: -100, opacityRange: [0.34, 0.58], floatY: 22,  floatX: -14, duration: 7000 },
-  { color: '#C5A8E8', size: 300, top: 150,  left: -90,   opacityRange: [0.30, 0.50], floatY: -18, floatX: 12,  duration: 9000 },
-  { color: '#F9C74F', size: 240, top: 390,  right: -60,  opacityRange: [0.28, 0.48], floatY: 16,  floatX: -10, duration: 8200 },
-  { color: '#F4A56A', size: 270, bottom: 180, left: -70, opacityRange: [0.30, 0.52], floatY: -20, floatX: 16,  duration: 10000 },
-  { color: '#89B4D4', size: 320, bottom: -70, right: -80, opacityRange: [0.28, 0.48], floatY: 12, floatX: -12, duration: 7600 },
-];
+const LIGHT = {
+  canvas: '#F6F7FB',
+  line: 'rgba(37, 99, 235, 0.10)',
+  bandA: 'rgba(37, 99, 235, 0.08)',
+  bandB: 'rgba(13, 148, 136, 0.08)',
+  bandC: 'rgba(249, 115, 22, 0.08)',
+};
 
-const DARK_BLOBS = [
-  { color: '#D9713E', size: 380, top: -100, right: -100, opacityRange: [0.46, 0.72], floatY: 22,  floatX: -14, duration: 7000 },
-  { color: '#9B7EC8', size: 300, top: 145,  left: -95,   opacityRange: [0.34, 0.58], floatY: -18, floatX: 12,  duration: 9000 },
-  { color: '#F9C74F', size: 230, top: 365,  right: -60,  opacityRange: [0.30, 0.50], floatY: 16,  floatX: -10, duration: 8200 },
-  { color: '#C4723A', size: 270, bottom: 145, left: -70, opacityRange: [0.34, 0.58], floatY: -20, floatX: 16,  duration: 10000 },
-  { color: '#5A7EA8', size: 320, bottom: -70, right: -80, opacityRange: [0.32, 0.52], floatY: 12, floatX: -12, duration: 7600 },
-];
+const DARK = {
+  canvas: '#0B1020',
+  line: 'rgba(96, 165, 250, 0.12)',
+  bandA: 'rgba(96, 165, 250, 0.11)',
+  bandB: 'rgba(45, 212, 191, 0.09)',
+  bandC: 'rgba(251, 146, 60, 0.09)',
+};
 
-function AnimatedBlob({ blob, index }) {
-  const opacity = useRef(new Animated.Value(blob.opacityRange[0])).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
+function FloatingBand({ style, delay = 0 }) {
+  const y = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0.72)).current;
 
   useEffect(() => {
-    const delay = index * 1100;
-
-    const opacityAnim = Animated.loop(
+    const drift = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: blob.opacityRange[1], duration: blob.duration, delay, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: blob.opacityRange[0], duration: blob.duration, useNativeDriver: true }),
+        Animated.timing(y, { toValue: 10, duration: 7200, delay, useNativeDriver: true }),
+        Animated.timing(y, { toValue: 0, duration: 7200, useNativeDriver: true }),
       ])
     );
-
-    const floatYAnim = Animated.loop(
+    const fade = Animated.loop(
       Animated.sequence([
-        Animated.timing(translateY, { toValue: blob.floatY, duration: blob.duration * 1.1, delay, useNativeDriver: true, easing: t => Math.sin(t * Math.PI) }),
-        Animated.timing(translateY, { toValue: 0, duration: blob.duration * 1.1, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 7200, delay, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.72, duration: 7200, useNativeDriver: true }),
       ])
     );
-
-    const floatXAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(translateX, { toValue: blob.floatX, duration: blob.duration * 0.9, delay, useNativeDriver: true }),
-        Animated.timing(translateX, { toValue: 0, duration: blob.duration * 0.9, useNativeDriver: true }),
-      ])
-    );
-
-    opacityAnim.start();
-    floatYAnim.start();
-    floatXAnim.start();
-
+    drift.start();
+    fade.start();
     return () => {
-      opacityAnim.stop();
-      floatYAnim.stop();
-      floatXAnim.stop();
+      drift.stop();
+      fade.stop();
     };
-  }, []);
+  }, [delay, opacity, y]);
 
-  const pos = {};
-  if (blob.top !== undefined) pos.top = blob.top;
-  if (blob.bottom !== undefined) pos.bottom = blob.bottom;
-  if (blob.left !== undefined) pos.left = blob.left;
-  if (blob.right !== undefined) pos.right = blob.right;
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.blob,
-        {
-          width: blob.size,
-          height: blob.size,
-          borderRadius: blob.size / 2,
-          backgroundColor: blob.color,
-          opacity,
-          transform: [{ translateY }, { translateX }],
-          ...pos,
-        },
-      ]}
-    />
-  );
+  return <Animated.View pointerEvents="none" style={[style, { opacity, transform: [{ translateY: y }, { rotate: '-10deg' }] }]} />;
 }
 
 export default function AestheticBackground({ dark }) {
   const scheme = useColorScheme();
   const isDark = dark ?? scheme === 'dark';
-  const blobs = isDark ? DARK_BLOBS : BLOBS;
+  const C = isDark ? DARK : LIGHT;
 
   return (
-    <Animated.View style={styles.fill} pointerEvents="none">
-      {blobs.map((blob, i) => (
-        <AnimatedBlob key={i} blob={blob} index={i} />
-      ))}
-    </Animated.View>
+    <View style={[styles.fill, { backgroundColor: C.canvas }]} pointerEvents="none">
+      <View style={styles.grid}>
+        {Array.from({ length: 9 }).map((_, i) => (
+          <View key={`h-${i}`} style={[styles.hLine, { top: `${i * 12.5}%`, backgroundColor: C.line }]} />
+        ))}
+        {Array.from({ length: 6 }).map((_, i) => (
+          <View key={`v-${i}`} style={[styles.vLine, { left: `${i * 20}%`, backgroundColor: C.line }]} />
+        ))}
+      </View>
+      <FloatingBand delay={0} style={[styles.band, styles.bandOne, { backgroundColor: C.bandA }]} />
+      <FloatingBand delay={900} style={[styles.band, styles.bandTwo, { backgroundColor: C.bandB }]} />
+      <FloatingBand delay={1800} style={[styles.band, styles.bandThree, { backgroundColor: C.bandC }]} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
-  blob: { position: 'absolute' },
+  fill: { ...StyleSheet.absoluteFillObject, zIndex: 0, overflow: 'hidden' },
+  grid: { ...StyleSheet.absoluteFillObject, opacity: 0.7 },
+  hLine: { position: 'absolute', left: 0, right: 0, height: 1 },
+  vLine: { position: 'absolute', top: 0, bottom: 0, width: 1 },
+  band: {
+    position: 'absolute',
+    height: 110,
+    borderRadius: 18,
+  },
+  bandOne: { width: 520, top: 72, right: -220 },
+  bandTwo: { width: 460, top: 360, left: -230 },
+  bandThree: { width: 420, bottom: 80, right: -210 },
 });
