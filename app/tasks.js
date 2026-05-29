@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  Animated, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, Modal,
+  Animated, PanResponder, View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useFocusEffect } from 'expo-router';
@@ -9,9 +9,9 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
 import AestheticBackground from '../src/components/AestheticBackground';
 import {
-  getTaskLists, createTaskList, archiveTaskList,
+  getTaskLists, createTaskList, deleteTaskList,
   getPlanningTasks, createPlanningTask, togglePlanningTask,
-  deletePlanningTask, updatePlanningTask, updateTaskStatus,
+  deletePlanningTask, updatePlanningTask, updateTaskStatus, setTaskOrder,
 } from '../src/db/plannerDatabase';
 
 const LIST_COLORS = ['#4A7856', '#89B4D4', '#C5A8E8', '#F4A56A', '#F9C74F', '#6CC97C', '#D9713E'];
@@ -30,15 +30,34 @@ function shiftDate(s, days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function fmtDue(dateStr) {
+function fmtTime(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return '';
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function fmtDue(dateStr, timeStr) {
   if (!dateStr) return '';
   const today = todayStr();
-  if (dateStr === today) return 'today';
-  if (dateStr === shiftDate(today, 1)) return 'tomorrow';
-  if (dateStr < today) return 'overdue';
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const timePart = fmtTime(timeStr);
+  const label = dateStr === today ? 'today'
+    : dateStr === shiftDate(today, 1) ? 'tomorrow'
+    : dateStr < today ? 'overdue'
+    : new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return timePart ? `${label} · ${timePart}` : label;
 }
+
+const TIME_PRESETS = [
+  { label: 'No time', value: '' },
+  { label: '9 AM',   value: '09:00' },
+  { label: '12 PM',  value: '12:00' },
+  { label: '3 PM',   value: '15:00' },
+  { label: '6 PM',   value: '18:00' },
+  { label: '9 PM',   value: '21:00' },
+];
 
 // Mutually exclusive groups — each task appears in exactly one section.
 function groupTasksToday(tasks, today) {
@@ -91,6 +110,7 @@ export default function TasksScreen({ isTab = false }) {
   const [addTitle,  setAddTitle]  = useState('');
   const [addListId, setAddListId] = useState('focus-list');
   const [addDue,    setAddDue]    = useState('');
+  const [addTime,   setAddTime]   = useState('');
   const [addNotes,  setAddNotes]  = useState('');
   const [addPoms,   setAddPoms]   = useState('1');
   const [saving,    setSaving]    = useState(false);
@@ -99,8 +119,12 @@ export default function TasksScreen({ isTab = false }) {
   const [editTitle,   setEditTitle]   = useState('');
   const [editListId,  setEditListId]  = useState('');
   const [editDue,     setEditDue]     = useState('');
+  const [editTime,    setEditTime]    = useState('');
   const [editNotes,   setEditNotes]   = useState('');
   const [editPoms,    setEditPoms]    = useState('1');
+
+  // Custom confirm dialog (replaces ugly native Alert)
+  const [confirm, setConfirm] = useState(null); // { title, message, label, onConfirm }
 
   const [showManage,    setShowManage]    = useState(false);
   const [newListName,   setNewListName]   = useState('');
@@ -133,25 +157,28 @@ export default function TasksScreen({ isTab = false }) {
   }
 
   function confirmDelete(task) {
-    Alert.alert('Delete task', `"${task.title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deletePlanningTask(task.id); await load(); } },
-    ]);
+    setConfirm({
+      title: 'Delete task',
+      message: `"${task.title}" will be permanently deleted.`,
+      label: 'Delete',
+      onConfirm: async () => { setConfirm(null); await deletePlanningTask(task.id); await load(); },
+    });
   }
 
   async function handleAddTask() {
-    if (!addTitle.trim()) { Alert.alert('Title required', ''); return; }
+    if (!addTitle.trim()) return;
     setSaving(true);
     try {
       await createPlanningTask({
         title: addTitle.trim(),
         listId: addListId,
         dueDate: addDue || null,
+        dueTime: addTime || null,
         notes: addNotes || '',
         targetPomodoros: parseInt(addPoms) || 1,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setAddTitle(''); setAddDue(''); setAddNotes(''); setAddPoms('1');
+      setAddTitle(''); setAddDue(''); setAddTime(''); setAddNotes(''); setAddPoms('1');
       setShowAdd(false);
       await load();
     } finally { setSaving(false); }
@@ -162,6 +189,7 @@ export default function TasksScreen({ isTab = false }) {
     setEditTitle(task.title || '');
     setEditListId(task.list_id || addListId || lists[0]?.id || 'focus-list');
     setEditDue(task.due_date || '');
+    setEditTime(task.due_time || '');
     setEditNotes(task.notes || '');
     setEditPoms(String(task.target_pomodoros || 1));
   }
@@ -174,6 +202,7 @@ export default function TasksScreen({ isTab = false }) {
         title: editTitle.trim(),
         listId: editListId,
         dueDate: editDue || null,
+        dueTime: editTime || null,
         notes: editNotes || '',
         targetPomodoros: parseInt(editPoms) || 1,
       });
@@ -217,6 +246,7 @@ export default function TasksScreen({ isTab = false }) {
     onDelete:            confirmDelete,
     onStatusChange:      handleStatusChange,
     onOpenStatusPicker:  setStatusPickerTask,
+    onReorder:           load,
   };
 
   return (
@@ -402,7 +432,7 @@ export default function TasksScreen({ isTab = false }) {
         {/* ── Add Task Modal ── */}
         <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
           <View style={s.modalOverlay}>
-            <View style={[s.modalSheet, { backgroundColor: C.card }]}>
+            <DraggableSheet C={C} onClose={() => setShowAdd(false)} style={[s.modalSheet, { backgroundColor: C.card }]}>
               <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
                 <Text style={[s.modalTitle, { color: C.text }]}>New task</Text>
                 <TouchableOpacity onPress={() => setShowAdd(false)}>
@@ -451,6 +481,18 @@ export default function TasksScreen({ isTab = false }) {
                   value={addDue}
                   onChangeText={setAddDue}
                 />
+                <Text style={[s.fieldLabel, { color: C.textSecondary }]}>Time (optional)</Text>
+                <View style={s.dueRow}>
+                  {TIME_PRESETS.map(({ label, value }) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={[s.dueChip, { borderColor: C.border, backgroundColor: addTime === value ? C.primary : C.background }]}
+                      onPress={() => setAddTime(value)}
+                    >
+                      <Text style={[s.dueChipText, { color: addTime === value ? '#FFF' : C.textSecondary }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
                 <TextInput
                   style={[s.input, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
                   placeholder="Notes (optional)"
@@ -478,14 +520,14 @@ export default function TasksScreen({ isTab = false }) {
                   <Text style={[s.saveBtnText, { color: C.background }]}>{saving ? 'Saving…' : 'Add task'}</Text>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
+            </DraggableSheet>
           </View>
         </Modal>
 
         {/* ── Edit Task Modal ── */}
         <Modal visible={!!editingTask} transparent animationType="slide" onRequestClose={() => setEditingTask(null)}>
           <View style={s.modalOverlay}>
-            <View style={[s.modalSheet, { backgroundColor: C.card }]}>
+            <DraggableSheet C={C} onClose={() => setEditingTask(null)} style={[s.modalSheet, { backgroundColor: C.card }]}>
               <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
                 <Text style={[s.modalTitle, { color: C.text }]}>Edit task</Text>
                 <TouchableOpacity onPress={() => setEditingTask(null)}>
@@ -531,6 +573,18 @@ export default function TasksScreen({ isTab = false }) {
                   value={editDue}
                   onChangeText={setEditDue}
                 />
+                <Text style={[s.fieldLabel, { color: C.textSecondary }]}>Time (optional)</Text>
+                <View style={s.dueRow}>
+                  {TIME_PRESETS.map(({ label, value }) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={[s.dueChip, { borderColor: C.border, backgroundColor: editTime === value ? C.primary : C.background }]}
+                      onPress={() => setEditTime(value)}
+                    >
+                      <Text style={[s.dueChipText, { color: editTime === value ? '#FFF' : C.textSecondary }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
                 <TextInput
                   style={[s.input, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
                   placeholder="Notes (optional)"
@@ -566,14 +620,14 @@ export default function TasksScreen({ isTab = false }) {
                   <Text style={[s.deleteTaskBtnText, { color: C.danger }]}>Delete task</Text>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
+            </DraggableSheet>
           </View>
         </Modal>
 
         {/* ── Manage Lists Modal ── */}
         <Modal visible={showManage} transparent animationType="slide" onRequestClose={() => setShowManage(false)}>
           <View style={s.modalOverlay}>
-            <View style={[s.modalSheet, { backgroundColor: C.card }]}>
+            <DraggableSheet C={C} onClose={() => setShowManage(false)} style={[s.modalSheet, { backgroundColor: C.card }]}>
               <View style={[s.modalHeader, { borderBottomColor: C.border }]}>
                 <Text style={[s.modalTitle, { color: C.text }]}>Manage lists</Text>
                 <TouchableOpacity onPress={() => setShowManage(false)}>
@@ -584,15 +638,24 @@ export default function TasksScreen({ isTab = false }) {
                 {lists.map(list => (
                   <View key={list.id} style={[s.listManageRow, { borderBottomColor: C.border }]}>
                     <View style={[s.listDot, { backgroundColor: list.color || C.primary }]} />
-                    <Text style={[s.listManageName, { color: C.text }]}>{list.title}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.listManageName, { color: C.text }]}>{list.title}</Text>
+                      {list.id === 'focus-list' && (
+                        <Text style={[s.listManageHint, { color: C.textSecondary }]}>Default list — used by Focus tab</Text>
+                      )}
+                    </View>
                     <Text style={[s.listManageCount, { color: C.textSecondary }]}>{list.task_count || 0}</Text>
-                    {list.id !== 'focus-list' && (
-                      <TouchableOpacity onPress={() => Alert.alert('Archive list', `Archive "${list.title}"? Tasks will be kept.`, [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Archive', style: 'destructive', onPress: async () => { await archiveTaskList(list.id); await load(); } },
-                      ])}>
-                        <Text style={[s.listManageArchive, { color: C.danger }]}>Archive</Text>
+                    {list.id !== 'focus-list' ? (
+                      <TouchableOpacity onPress={() => setConfirm({
+                        title: 'Delete list',
+                        message: `"${list.title}" and all its tasks will be permanently deleted.`,
+                        label: 'Delete',
+                        onConfirm: async () => { setConfirm(null); await deleteTaskList(list.id); await load(); },
+                      })}>
+                        <Text style={[s.listManageArchive, { color: C.danger }]}>Delete</Text>
                       </TouchableOpacity>
+                    ) : (
+                      <Ionicons name="lock-closed-outline" size={14} color={C.textSecondary} style={{ marginLeft: 8 }} />
                     )}
                   </View>
                 ))}
@@ -613,24 +676,145 @@ export default function TasksScreen({ isTab = false }) {
                   <Text style={[s.saveBtnText, { color: C.background }]}>Create list</Text>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
+            </DraggableSheet>
           </View>
         </Modal>
+
+        {/* ── Confirm Dialog (replaces native Alert) ── */}
+        <ConfirmDialog
+          confirm={confirm}
+          C={C}
+          onCancel={() => setConfirm(null)}
+        />
       </View>
     </>
   );
 }
 
 // ─────────────────────────────────────────────
-// CollapsibleSection
+// ConfirmDialog — styled in-app confirmation (replaces native Alert)
 // ─────────────────────────────────────────────
+function ConfirmDialog({ confirm, C, onCancel }) {
+  if (!confirm) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <TouchableOpacity style={s.confirmOverlay} activeOpacity={1} onPress={onCancel}>
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <View style={[s.confirmCard, { backgroundColor: C.card }]}>
+            <View style={[s.confirmIconWrap, { backgroundColor: `${C.danger}18` }]}>
+              <Ionicons name="trash-outline" size={22} color={C.danger} />
+            </View>
+            <Text style={[s.confirmTitle, { color: C.text }]}>{confirm.title}</Text>
+            {!!confirm.message && (
+              <Text style={[s.confirmMsg, { color: C.textSecondary }]}>{confirm.message}</Text>
+            )}
+            <View style={s.confirmBtns}>
+              <TouchableOpacity
+                style={[s.confirmBtn, { backgroundColor: C.panel || C.background, borderWidth: 1, borderColor: C.border }]}
+                onPress={onCancel}
+                activeOpacity={0.75}
+              >
+                <Text style={[s.confirmBtnText, { color: C.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.confirmBtn, { backgroundColor: C.danger }]}
+                onPress={confirm.onConfirm}
+                activeOpacity={0.75}
+              >
+                <Text style={[s.confirmBtnText, { color: '#FFF' }]}>{confirm.label || 'Delete'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────
+// DraggableSheet — wraps any bottom sheet with drag-down-to-dismiss
+// ─────────────────────────────────────────────
+function DraggableSheet({ C, children, onClose, style }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 3 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderMove: (_, g) => {
+      if (g.dy > 0) translateY.setValue(g.dy);
+    },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 80 || g.vy > 0.5) {
+        Animated.timing(translateY, { toValue: 700, duration: 200, useNativeDriver: true }).start(() => {
+          translateY.setValue(0);
+          onClose();
+        });
+      } else {
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }).start();
+      }
+    },
+  })).current;
+
+  return (
+    <Animated.View style={[style, { transform: [{ translateY }] }]}>
+      <View style={s.sheetHandle} {...pan.panHandlers}>
+        <View style={[s.sheetHandleBar, { backgroundColor: C.border }]} />
+      </View>
+      {children}
+    </Animated.View>
+  );
+}
+
+// ─────────────────────────────────────────────
+// CollapsibleSection — with drag-to-reorder support
+// ─────────────────────────────────────────────
+const CARD_H = 80; // approximate card height + gap for reorder snapping
+
 function CollapsibleSection({
   C, title, iconName, color, tasks, expanded, alwaysExpanded,
   empty, onToggleExpand, selectedListId, muted,
-  onPress, onToggle, onDelete, onStatusChange, onOpenStatusPicker,
+  onPress, onToggle, onDelete, onStatusChange, onOpenStatusPicker, onReorder,
 }) {
-  // Animate maxHeight + opacity (no reanimated — useNativeDriver: false required for layout props)
   const anim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+
+  // Drag-to-reorder state
+  const [dragId, setDragId] = useState(null);
+  const [dragDy, setDragDy] = useState(0);
+  const dragIdRef = useRef(null);
+  const tasksRef  = useRef(tasks);
+  tasksRef.current = tasks;
+
+  const fromIndex = dragId ? tasks.findIndex(t => t.id === dragId) : -1;
+  const dropIndex = fromIndex >= 0
+    ? Math.max(0, Math.min(tasks.length - 1, fromIndex + Math.round(dragDy / CARD_H)))
+    : -1;
+
+  const dragCallbacks = {
+    onStart: (id) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      dragIdRef.current = id;
+      setDragId(id);
+      setDragDy(0);
+    },
+    onMove: (dy) => setDragDy(dy),
+    onEnd: async (dy) => {
+      const id = dragIdRef.current;
+      dragIdRef.current = null;
+      const currentTasks = tasksRef.current;
+      const from = currentTasks.findIndex(t => t.id === id);
+      const drop = from >= 0
+        ? Math.max(0, Math.min(currentTasks.length - 1, from + Math.round(dy / CARD_H)))
+        : -1;
+      setDragId(null);
+      setDragDy(0);
+      if (from >= 0 && drop >= 0 && drop !== from) {
+        const newOrder = currentTasks.map(t => t.id);
+        const [moved] = newOrder.splice(from, 1);
+        newOrder.splice(drop, 0, moved);
+        await setTaskOrder(null, newOrder);
+        onReorder?.();
+      }
+    },
+  };
 
   React.useEffect(() => {
     Animated.timing(anim, {
@@ -642,7 +826,6 @@ function CollapsibleSection({
 
   return (
     <View style={s.sectionBlock}>
-      {/* Header row */}
       <TouchableOpacity
         style={[s.sectionHeader, { backgroundColor: `${color}10` }]}
         onPress={alwaysExpanded ? undefined : onToggleExpand}
@@ -665,7 +848,6 @@ function CollapsibleSection({
         )}
       </TouchableOpacity>
 
-      {/* Body — collapses via maxHeight + opacity */}
       <Animated.View style={{
         maxHeight: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 2000] }),
         opacity:   anim,
@@ -675,19 +857,39 @@ function CollapsibleSection({
           {tasks.length === 0 ? (
             <Text style={[s.emptyText, { color: C.textSecondary }]}>{empty}</Text>
           ) : (
-            tasks.map(task => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                C={C}
-                selectedListId={selectedListId}
-                muted={muted}
-                onPress={() => onPress(task)}
-                onToggle={() => onToggle(task)}
-                onLongPress={() => onDelete(task)}
-                onStatusPillPress={() => onOpenStatusPicker?.(task)}
-              />
-            ))
+            tasks.map((task, i) => {
+              const isDragging = task.id === dragId;
+              // Shift adjacent cards to show drop slot
+              let shift = 0;
+              if (dragId && fromIndex >= 0 && !isDragging) {
+                if (fromIndex < dropIndex && i > fromIndex && i <= dropIndex) shift = -CARD_H;
+                else if (fromIndex > dropIndex && i >= dropIndex && i < fromIndex) shift = CARD_H;
+              }
+              return (
+                <View
+                  key={task.id}
+                  style={{
+                    transform: [{ translateY: isDragging ? dragDy : shift }],
+                    zIndex: isDragging ? 99 : 1,
+                    elevation: isDragging ? 12 : 0,
+                    opacity: isDragging ? 0.94 : 1,
+                  }}
+                >
+                  <TaskRow
+                    task={task}
+                    C={C}
+                    selectedListId={selectedListId}
+                    muted={muted}
+                    isDragging={isDragging}
+                    dragCallbacks={dragCallbacks}
+                    onPress={() => onPress(task)}
+                    onToggle={() => onToggle(task)}
+                    onLongPress={() => onDelete(task)}
+                    onStatusPillPress={() => onOpenStatusPicker?.(task)}
+                  />
+                </View>
+              );
+            })
           )}
         </View>
       </Animated.View>
@@ -696,26 +898,37 @@ function CollapsibleSection({
 }
 
 // ─────────────────────────────────────────────
-// TaskRow
+// TaskRow — with drag handle for reordering
 // ─────────────────────────────────────────────
-function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, muted, onStatusPillPress }) {
-  const due        = fmtDue(task.due_date);
+function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, muted, onStatusPillPress, dragCallbacks, isDragging }) {
+  const due        = fmtDue(task.due_date, task.due_time);
   const isOverdue  = task.due_date && task.due_date < todayStr() && !task.completed;
   const accentColor = task.list_color || C.primary;
-  const dueColor   = isOverdue ? C.danger : due === 'today' ? C.success : C.textSecondary;
-  const dueBg      = isOverdue ? `${C.danger}18` : due === 'today' ? `${C.success}18` : `${C.border}80`;
+  const dueColor   = isOverdue ? C.danger : (due.startsWith('today') ? C.success : C.textSecondary);
+  const dueBg      = isOverdue ? `${C.danger}18` : (due.startsWith('today') ? `${C.success}18` : `${C.border}80`);
   const status     = task.completed ? 'done' : (task.status || 'todo');
-
   const pillColors = { todo: C.textSecondary, doing: C.accent, waiting: C.primary, done: C.success };
   const pillColor  = pillColors[status] || C.textSecondary;
 
+  // Drag handle PanResponder — created once, reads latest callbacks via cbRef
+  const cbRef = useRef(dragCallbacks);
+  cbRef.current = dragCallbacks;
+  const dragPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 3,
+    onPanResponderGrant: () => cbRef.current?.onStart?.(task.id),
+    onPanResponderMove: (_, g) => cbRef.current?.onMove?.(g.dy),
+    onPanResponderRelease: (_, g) => cbRef.current?.onEnd?.(g.dy),
+    onPanResponderTerminate: () => cbRef.current?.onEnd?.(0),
+  })).current;
+
   return (
-    <TouchableOpacity
-      style={[s.taskCard, { backgroundColor: C.card, borderColor: C.border }, muted && { opacity: 0.68 }]}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      activeOpacity={0.72}
-    >
+    <View style={[
+      s.taskCard,
+      { backgroundColor: C.card, borderColor: C.border },
+      muted && { opacity: 0.68 },
+      isDragging && { shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } },
+    ]}>
       <View style={[s.taskAccent, { backgroundColor: task.completed ? C.border : accentColor }]} />
 
       <TouchableOpacity onPress={onToggle} hitSlop={12} style={s.circleWrap}>
@@ -728,7 +941,7 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
         </View>
       </TouchableOpacity>
 
-      <View style={s.taskBody}>
+      <TouchableOpacity style={s.taskBody} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.72}>
         <Text
           style={[
             s.taskTitle,
@@ -744,7 +957,6 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
           <Text style={[s.taskNotes, { color: C.textSecondary }]} numberOfLines={1}>{task.notes}</Text>
         )}
 
-        {/* Due + list badges */}
         {(!task.completed && (!!due || (selectedListId === 'all' && !!task.list_title))) && (
           <View style={s.taskMetaRow}>
             {!!due && (
@@ -760,7 +972,6 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
           </View>
         )}
 
-        {/* Status pill — tap to open status picker */}
         {!task.completed && (
           <TouchableOpacity
             style={[s.statusPill, { backgroundColor: `${pillColor}14` }]}
@@ -772,8 +983,15 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
             <Text style={[s.statusPillText, { color: pillColor }]}>{STATUS_LABEL[status] || status}</Text>
           </TouchableOpacity>
         )}
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      {/* Drag handle — hold and drag to reorder */}
+      {!task.completed && (
+        <View {...dragPan.panHandlers} style={s.dragHandle} hitSlop={8}>
+          <Ionicons name="reorder-three-outline" size={20} color={`${C.textSecondary}70`} />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -795,8 +1013,7 @@ function StatusPickerSheet({ visible, C, task, onClose, onStatusChange }) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.modalOverlay}>
         <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
-        <View style={[s.statusSheet, { backgroundColor: C.card }]}>
-          <View style={s.statusSheetHandle} />
+        <DraggableSheet C={C} onClose={onClose} style={[s.statusSheet, { backgroundColor: C.card }]}>
           <Text style={[s.statusSheetTitle, { color: C.text }]} numberOfLines={2}>{task.title}</Text>
           <View style={s.statusTileGrid}>
             {tiles.map(tile => {
@@ -823,7 +1040,7 @@ function StatusPickerSheet({ visible, C, task, onClose, onStatusChange }) {
               );
             })}
           </View>
-        </View>
+        </DraggableSheet>
       </View>
     </Modal>
   );
@@ -890,7 +1107,7 @@ const s = StyleSheet.create({
   taskAccent:  { width: 4, alignSelf: 'stretch' },
   circleWrap:  { paddingHorizontal: 14 },
   circle:      { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  taskBody:    { flex: 1, paddingVertical: 12, paddingRight: 14 },
+  taskBody:    { flex: 1, paddingVertical: 12, paddingRight: 4 },
   taskTitle:   { fontSize: 15, fontWeight: '700', lineHeight: 21 },
   taskNotes:   { fontSize: 12, fontWeight: '400', marginTop: 2, opacity: 0.7 },
   taskMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'wrap' },
@@ -903,10 +1120,13 @@ const s = StyleSheet.create({
   statusPill:     { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginTop: 6 },
   statusPillText: { fontSize: 10, fontWeight: '900' },
 
+  // Drag handle shared by all DraggableSheet instances
+  sheetHandle:    { alignItems: 'center', paddingVertical: 12 },
+  sheetHandleBar: { width: 38, height: 4, borderRadius: 2 },
+
   // Status picker sheet
-  statusSheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 32 },
-  statusSheetHandle: { width: 38, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginTop: 10, marginBottom: 16 },
-  statusSheetTitle:  { fontSize: 16, fontWeight: '800', marginBottom: 16 },
+  statusSheet:      { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 32 },
+  statusSheetTitle: { fontSize: 16, fontWeight: '800', marginBottom: 16 },
   statusTileGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statusTile:        { width: '47%', borderRadius: 16, borderWidth: 1.5, padding: 16, alignItems: 'center', gap: 8 },
   statusTileLabel:   { fontSize: 13, fontWeight: '900' },
@@ -932,10 +1152,24 @@ const s = StyleSheet.create({
   deleteTaskBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 999, borderWidth: 1, paddingVertical: 13, marginTop: 10 },
   deleteTaskBtnText: { fontSize: 14, fontWeight: '800' },
   listManageRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1 },
-  listDot:          { width: 12, height: 12, borderRadius: 6 },
-  listManageName:   { flex: 1, fontSize: 15, fontWeight: '700' },
+  listDot:          { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  listManageName:   { fontSize: 15, fontWeight: '700' },
+  listManageHint:   { fontSize: 11, fontWeight: '500', marginTop: 2 },
   listManageCount:  { fontSize: 13, fontWeight: '700' },
   listManageArchive: { fontSize: 12, fontWeight: '800' },
+
+  // Drag handle on task cards
+  dragHandle: { paddingHorizontal: 10, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+
+  // Custom confirm dialog
+  confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  confirmCard:    { width: '100%', borderRadius: 24, padding: 24, alignItems: 'center' },
+  confirmIconWrap: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  confirmTitle:   { fontSize: 18, fontWeight: '900', textAlign: 'center', marginBottom: 8 },
+  confirmMsg:     { fontSize: 14, fontWeight: '500', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  confirmBtns:    { flexDirection: 'row', gap: 10, width: '100%' },
+  confirmBtn:     { flex: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
+  confirmBtnText: { fontSize: 14, fontWeight: '900' },
   colorRow:         { flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap' },
   colorDot:         { width: 28, height: 28, borderRadius: 14 },
   colorDotSelected: { borderWidth: 3, borderColor: '#FFF', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 },

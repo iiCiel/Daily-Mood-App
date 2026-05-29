@@ -224,6 +224,7 @@ export async function createPlanningTask({
   projectId = null,
   notes = '',
   dueDate = null,
+  dueTime = null,
   targetPomodoros = 1,
   status = 'todo',
 }) {
@@ -237,8 +238,8 @@ export async function createPlanningTask({
   const now = nowIso();
   await db.runAsync(
     `INSERT INTO tasks
-      (id, project_id, list_id, title, notes, due_date, completed, status, target_pomodoros, position, sync_status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
+      (id, project_id, list_id, title, notes, due_date, due_time, completed, status, target_pomodoros, position, sync_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', ?, ?)`,
     [
       id,
       finalProjectId,
@@ -246,6 +247,7 @@ export async function createPlanningTask({
       title.trim(),
       notes || null,
       dueDate || null,
+      dueTime || null,
       status === 'done' ? 1 : 0,
       normalizeStatus(status),
       Math.max(1, parseInt(targetPomodoros, 10) || 1),
@@ -266,13 +268,14 @@ export async function updatePlanningTask(id, fields) {
   const nextStatus = normalizeStatus(fields.status ?? existing.status ?? 'todo');
   await db.runAsync(
     `UPDATE tasks
-     SET title = ?, notes = ?, due_date = ?, list_id = ?, project_id = ?, target_pomodoros = ?, status = ?, completed = ?,
+     SET title = ?, notes = ?, due_date = ?, due_time = ?, list_id = ?, project_id = ?, target_pomodoros = ?, status = ?, completed = ?,
          sync_status = 'pending', updated_at = ?
      WHERE id = ?`,
     [
       (fields.title ?? existing.title).trim(),
       fields.notes ?? existing.notes ?? null,
       fields.dueDate ?? existing.due_date ?? null,
+      fields.dueTime !== undefined ? (fields.dueTime || null) : (existing.due_time ?? null),
       listId,
       projectId,
       Math.max(1, parseInt(fields.targetPomodoros ?? existing.target_pomodoros, 10) || 1),

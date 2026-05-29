@@ -202,6 +202,7 @@ async function _initDatabase() {
   try { await database.runAsync("ALTER TABLE tasks ADD COLUMN sync_status TEXT DEFAULT 'local'"); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN last_synced_at TEXT'); } catch {}
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN updated_at TEXT'); } catch {}
+  try { await database.runAsync('ALTER TABLE tasks ADD COLUMN due_time TEXT'); } catch {}
   try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_list ON tasks(list_id)'); } catch {}
   try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)'); } catch {}
   try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)'); } catch {}

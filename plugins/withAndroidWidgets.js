@@ -91,8 +91,9 @@ class DailyMoodWidgetUtils {
   static class TaskSummary {
     int open = 0;
     int due = 0;
-    String nextTitle = "Open Daily Mood";
-    String detail = "Capture what needs attention.";
+    String[] tasks = new String[4];
+    boolean[] overdue = new boolean[4];
+    int taskCount = 0;
   }
 
   static class MoodSummary {
@@ -126,6 +127,7 @@ class DailyMoodWidgetUtils {
     if (db == null) return summary;
     Cursor cursor = null;
     try {
+      // Total open task count
       cursor = db.rawQuery(
         "SELECT COUNT(*) FROM tasks t " +
           "LEFT JOIN task_lists l ON l.id = t.list_id " +
@@ -136,6 +138,7 @@ class DailyMoodWidgetUtils {
       if (cursor.moveToFirst()) summary.open = cursor.getInt(0);
       close(cursor);
 
+      // Due today / overdue count
       cursor = db.rawQuery(
         "SELECT COUNT(*) FROM tasks t " +
           "LEFT JOIN task_lists l ON l.id = t.list_id " +
@@ -147,21 +150,26 @@ class DailyMoodWidgetUtils {
       if (cursor.moveToFirst()) summary.due = cursor.getInt(0);
       close(cursor);
 
+      // Top 4 tasks: overdue first, then in-progress, then by due date, then position
       cursor = db.rawQuery(
-        "SELECT t.title, COALESCE(l.title, '') FROM tasks t " +
+        "SELECT t.title, " +
+          "CASE WHEN t.due_date IS NOT NULL AND t.due_date <= ? THEN 1 ELSE 0 END AS is_overdue " +
+          "FROM tasks t " +
           "LEFT JOIN task_lists l ON l.id = t.list_id " +
           "LEFT JOIN projects p ON p.id = t.project_id " +
           "WHERE t.completed = 0 AND (l.archived = 0 OR l.id IS NULL) AND (p.archived = 0 OR p.id IS NULL) " +
-          "ORDER BY CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date ASC, t.position ASC, t.created_at DESC LIMIT 1",
-        null
+          "ORDER BY " +
+          "  CASE WHEN t.due_date IS NOT NULL AND t.due_date <= ? THEN 0 ELSE 1 END, " +
+          "  CASE WHEN t.status = 'doing' THEN 0 ELSE 1 END, " +
+          "  CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, " +
+          "  t.due_date ASC, t.position ASC " +
+          "LIMIT 4",
+        new String[] { today(), today() }
       );
-      if (cursor.moveToFirst()) {
-        summary.nextTitle = cursor.getString(0);
-        String list = cursor.getString(1);
-        summary.detail = list == null || list.length() == 0 ? "Next task" : list;
-      } else if (summary.open == 0) {
-        summary.nextTitle = "No open tasks";
-        summary.detail = "You are clear.";
+      while (cursor.moveToNext() && summary.taskCount < 4) {
+        summary.tasks[summary.taskCount] = cursor.getString(0);
+        summary.overdue[summary.taskCount] = cursor.getInt(1) == 1;
+        summary.taskCount++;
       }
     } catch (Exception ignored) {
     } finally {
@@ -306,11 +314,40 @@ public class DailyMoodTasksWidgetProvider extends AppWidgetProvider {
   static void update(Context context, AppWidgetManager manager, int id) {
     DailyMoodWidgetUtils.TaskSummary summary = DailyMoodWidgetUtils.loadTaskSummary(context);
     RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_tasks);
-    views.setTextViewText(R.id.widgetTitle, summary.due > 0 ? summary.due + " due now" : summary.open + " open");
-    views.setTextViewText(R.id.widgetValue, summary.nextTitle);
-    views.setTextViewText(R.id.widgetDetail, summary.detail);
-    views.setOnClickPendingIntent(R.id.widgetRoot, DailyMoodWidgetUtils.openApp(context, "tasks", 301));
+
+    // Header count badge
+    String countText = summary.due > 0
+      ? summary.due + (summary.due == 1 ? " due" : " due")
+      : summary.open + (summary.open == 1 ? " open" : " open");
+    views.setTextViewText(R.id.widgetCount, countText);
+
+    // Task rows: show up to 4 tasks, hide the rest
+    int[] rowIds = { R.id.widgetTask1Row, R.id.widgetTask2Row, R.id.widgetTask3Row, R.id.widgetTask4Row };
+    int[] textIds = { R.id.widgetTask1, R.id.widgetTask2, R.id.widgetTask3, R.id.widgetTask4 };
+    int[] dotIds  = { R.id.widgetTask1Dot, R.id.widgetTask2Dot, R.id.widgetTask3Dot, R.id.widgetTask4Dot };
+
+    for (int i = 0; i < 4; i++) {
+      if (i < summary.taskCount) {
+        views.setViewVisibility(rowIds[i], android.view.View.VISIBLE);
+        views.setTextViewText(textIds[i], summary.tasks[i]);
+        // Overdue = red dot, in-progress/normal = primary blue
+        int dotColor = summary.overdue[i] ? 0xFFEF4444 : 0xFF2563EB;
+        views.setTextColor(dotIds[i], dotColor);
+      } else {
+        views.setViewVisibility(rowIds[i], android.view.View.GONE);
+      }
+    }
+
+    // Empty state
+    views.setViewVisibility(
+      R.id.widgetEmpty,
+      summary.taskCount == 0 ? android.view.View.VISIBLE : android.view.View.GONE
+    );
+
+    // Tap anywhere → open tasks tab
+    views.setOnClickPendingIntent(R.id.widgetRoot,   DailyMoodWidgetUtils.openApp(context, "tasks", 301));
     views.setOnClickPendingIntent(R.id.widgetAction, DailyMoodWidgetUtils.openApp(context, "tasks", 302));
+
     manager.updateAppWidget(id, views);
   }
 }
@@ -377,7 +414,130 @@ public class DailyMoodPomodoroWidgetProvider extends AppWidgetProvider {
 `;
 }
 
-function widgetLayout({ eyebrow, action, accent }) {
+// ── Tasks widget: list layout ────────────────────────────────────────────────
+function widgetTasksLayout() {
+  // One reusable task-row snippet (repeated for rows 1–4)
+  function taskRow(n) {
+    return `
+  <LinearLayout
+    android:id="@+id/widgetTask${n}Row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:layout_marginTop="5dp"
+    android:visibility="gone">
+    <TextView
+      android:id="@+id/widgetTask${n}Dot"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="●"
+      android:textSize="7sp"
+      android:paddingRight="8dp" />
+    <TextView
+      android:id="@+id/widgetTask${n}"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:textColor="#1F2937"
+      android:textSize="13sp"
+      android:maxLines="1"
+      android:ellipsize="end" />
+  </LinearLayout>`;
+  }
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/widgetRoot"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:padding="14dp"
+  android:background="@drawable/widget_card_bg">
+
+  <!-- Header row: eyebrow + count badge -->
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:text="TASKS"
+      android:textColor="#2563EB"
+      android:textSize="10sp"
+      android:textStyle="bold"
+      android:includeFontPadding="false" />
+
+    <TextView
+      android:id="@+id/widgetCount"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:background="@drawable/widget_badge_bg"
+      android:textColor="#2563EB"
+      android:textSize="11sp"
+      android:textStyle="bold"
+      android:paddingLeft="8dp"
+      android:paddingRight="8dp"
+      android:paddingTop="2dp"
+      android:paddingBottom="2dp" />
+  </LinearLayout>
+
+  <!-- Divider -->
+  <View
+    android:layout_width="match_parent"
+    android:layout_height="1dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="2dp"
+    android:background="#DDE3EC" />
+
+  <!-- Task rows (shown/hidden at runtime) -->
+${taskRow(1)}
+${taskRow(2)}
+${taskRow(3)}
+${taskRow(4)}
+
+  <!-- Empty state (shown when taskCount == 0) -->
+  <TextView
+    android:id="@+id/widgetEmpty"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:gravity="center"
+    android:text="All clear! 🎉"
+    android:textColor="#6B7280"
+    android:textSize="13sp"
+    android:visibility="gone" />
+
+  <!-- Spacer pushes button to bottom -->
+  <View
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1" />
+
+  <!-- Action button -->
+  <TextView
+    android:id="@+id/widgetAction"
+    android:layout_width="wrap_content"
+    android:layout_height="28dp"
+    android:minWidth="88dp"
+    android:gravity="center"
+    android:paddingLeft="14dp"
+    android:paddingRight="14dp"
+    android:background="@drawable/widget_button_bg"
+    android:text="Open tasks"
+    android:textColor="#FFFFFF"
+    android:textSize="11sp"
+    android:textStyle="bold" />
+</LinearLayout>
+`;
+}
+
+// ── Mood / Focus widgets: simple single-card layout ──────────────────────────
+function widgetSimpleLayout({ eyebrow, action, accent }) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@+id/widgetRoot"
@@ -448,11 +608,11 @@ function widgetLayout({ eyebrow, action, accent }) {
 `;
 }
 
-function widgetInfo(layoutName) {
+function widgetInfo(layoutName, minHeight = '110dp') {
   return `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
   android:minWidth="180dp"
-  android:minHeight="110dp"
+  android:minHeight="${minHeight}"
   android:updatePeriodMillis="1800000"
   android:initialLayout="@layout/${layoutName}"
   android:resizeMode="horizontal|vertical"
@@ -474,6 +634,12 @@ const drawables = {
   <corners android:radius="14dp" />
 </shape>
 `,
+  'widget_badge_bg.xml': `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+  <solid android:color="#EAF1FF" />
+  <corners android:radius="8dp" />
+</shape>
+`,
 };
 
 function withWidgetFiles(config) {
@@ -490,14 +656,18 @@ function withWidgetFiles(config) {
       writeFile(path.join(javaDir, 'DailyMoodMoodWidgetProvider.java'), javaMoodProvider(packageName));
       writeFile(path.join(javaDir, 'DailyMoodPomodoroWidgetProvider.java'), javaPomodoroProvider(packageName));
 
-      writeFile(path.join(resDir, 'layout', 'widget_tasks.xml'), widgetLayout({ eyebrow: 'TASKS', action: 'Open tasks', accent: '#2563EB' }));
-      writeFile(path.join(resDir, 'layout', 'widget_mood.xml'), widgetLayout({ eyebrow: 'MOOD', action: 'Log mood', accent: '#7C3AED' }));
-      writeFile(path.join(resDir, 'layout', 'widget_pomodoro.xml'), widgetLayout({ eyebrow: 'FOCUS', action: 'Start timer', accent: '#0D9488' }));
+      // Tasks widget: new list layout (taller minimum)
+      writeFile(path.join(resDir, 'layout', 'widget_tasks.xml'), widgetTasksLayout());
+      // Mood + Focus: existing simple layout
+      writeFile(path.join(resDir, 'layout', 'widget_mood.xml'), widgetSimpleLayout({ eyebrow: 'MOOD', action: 'Log mood', accent: '#7C3AED' }));
+      writeFile(path.join(resDir, 'layout', 'widget_pomodoro.xml'), widgetSimpleLayout({ eyebrow: 'FOCUS', action: 'Start timer', accent: '#0D9488' }));
 
-      writeFile(path.join(resDir, 'xml', 'widget_tasks_info.xml'), widgetInfo('widget_tasks'));
-      writeFile(path.join(resDir, 'xml', 'widget_mood_info.xml'), widgetInfo('widget_mood'));
+      // Widget provider metadata
+      writeFile(path.join(resDir, 'xml', 'widget_tasks_info.xml'),    widgetInfo('widget_tasks', '200dp'));
+      writeFile(path.join(resDir, 'xml', 'widget_mood_info.xml'),     widgetInfo('widget_mood'));
       writeFile(path.join(resDir, 'xml', 'widget_pomodoro_info.xml'), widgetInfo('widget_pomodoro'));
 
+      // Drawables (card background, button, badge)
       for (const [name, contents] of Object.entries(drawables)) {
         writeFile(path.join(resDir, 'drawable', name), contents);
       }
