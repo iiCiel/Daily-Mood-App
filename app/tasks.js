@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  Animated, PanResponder, View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Animated, View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Modal,
 } from 'react-native';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -250,7 +252,7 @@ export default function TasksScreen({ isTab = false }) {
   };
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[s.container, { backgroundColor: C.background }]}>
         <AestheticBackground />
@@ -687,7 +689,7 @@ export default function TasksScreen({ isTab = false }) {
           onCancel={() => setConfirm(null)}
         />
       </View>
-    </>
+    </GestureHandlerRootView>
   );
 }
 
@@ -765,56 +767,14 @@ function DraggableSheet({ C, children, onClose, style }) {
 }
 
 // ─────────────────────────────────────────────
-// CollapsibleSection — with drag-to-reorder support
+// CollapsibleSection — DraggableFlatList for reordering
 // ─────────────────────────────────────────────
-const CARD_H = 80; // approximate card height + gap for reorder snapping
-
 function CollapsibleSection({
   C, title, iconName, color, tasks, expanded, alwaysExpanded,
   empty, onToggleExpand, selectedListId, muted,
   onPress, onToggle, onDelete, onStatusChange, onOpenStatusPicker, onReorder,
 }) {
   const anim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
-
-  // Drag-to-reorder state
-  const [dragId, setDragId] = useState(null);
-  const [dragDy, setDragDy] = useState(0);
-  const dragIdRef = useRef(null);
-  const tasksRef  = useRef(tasks);
-  tasksRef.current = tasks;
-
-  const fromIndex = dragId ? tasks.findIndex(t => t.id === dragId) : -1;
-  const dropIndex = fromIndex >= 0
-    ? Math.max(0, Math.min(tasks.length - 1, fromIndex + Math.round(dragDy / CARD_H)))
-    : -1;
-
-  const dragCallbacks = {
-    onStart: (id) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      dragIdRef.current = id;
-      setDragId(id);
-      setDragDy(0);
-    },
-    onMove: (dy) => setDragDy(dy),
-    onEnd: async (dy) => {
-      const id = dragIdRef.current;
-      dragIdRef.current = null;
-      const currentTasks = tasksRef.current;
-      const from = currentTasks.findIndex(t => t.id === id);
-      const drop = from >= 0
-        ? Math.max(0, Math.min(currentTasks.length - 1, from + Math.round(dy / CARD_H)))
-        : -1;
-      setDragId(null);
-      setDragDy(0);
-      if (from >= 0 && drop >= 0 && drop !== from) {
-        const newOrder = currentTasks.map(t => t.id);
-        const [moved] = newOrder.splice(from, 1);
-        newOrder.splice(drop, 0, moved);
-        await setTaskOrder(null, newOrder);
-        onReorder?.();
-      }
-    },
-  };
 
   React.useEffect(() => {
     Animated.timing(anim, {
@@ -823,6 +783,12 @@ function CollapsibleSection({
       useNativeDriver: false,
     }).start();
   }, [expanded]);
+
+  async function handleDragEnd({ data }) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await setTaskOrder(null, data.map(t => t.id));
+    onReorder?.();
+  }
 
   return (
     <View style={s.sectionBlock}>
@@ -853,54 +819,42 @@ function CollapsibleSection({
         opacity:   anim,
         overflow: 'hidden',
       }}>
-        <View style={s.sectionBody}>
-          {tasks.length === 0 ? (
-            <Text style={[s.emptyText, { color: C.textSecondary }]}>{empty}</Text>
-          ) : (
-            tasks.map((task, i) => {
-              const isDragging = task.id === dragId;
-              // Shift adjacent cards to show drop slot
-              let shift = 0;
-              if (dragId && fromIndex >= 0 && !isDragging) {
-                if (fromIndex < dropIndex && i > fromIndex && i <= dropIndex) shift = -CARD_H;
-                else if (fromIndex > dropIndex && i >= dropIndex && i < fromIndex) shift = CARD_H;
-              }
-              return (
-                <View
-                  key={task.id}
-                  style={{
-                    transform: [{ translateY: isDragging ? dragDy : shift }],
-                    zIndex: isDragging ? 99 : 1,
-                    elevation: isDragging ? 12 : 0,
-                    opacity: isDragging ? 0.94 : 1,
-                  }}
-                >
-                  <TaskRow
-                    task={task}
-                    C={C}
-                    selectedListId={selectedListId}
-                    muted={muted}
-                    isDragging={isDragging}
-                    dragCallbacks={dragCallbacks}
-                    onPress={() => onPress(task)}
-                    onToggle={() => onToggle(task)}
-                    onLongPress={() => onDelete(task)}
-                    onStatusPillPress={() => onOpenStatusPicker?.(task)}
-                  />
-                </View>
-              );
-            })
-          )}
-        </View>
+        {tasks.length === 0 ? (
+          <Text style={[s.emptyText, { color: C.textSecondary }]}>{empty}</Text>
+        ) : (
+          <DraggableFlatList
+            data={tasks}
+            keyExtractor={item => item.id}
+            scrollEnabled={false}
+            onDragEnd={handleDragEnd}
+            containerStyle={s.sectionBody}
+            renderItem={({ item, drag, isActive }) => (
+              <ScaleDecorator activeScale={1.02}>
+                <TaskRow
+                  task={item}
+                  C={C}
+                  selectedListId={selectedListId}
+                  muted={muted}
+                  isDragging={isActive}
+                  onDragStart={drag}
+                  onPress={() => onPress(item)}
+                  onToggle={() => onToggle(item)}
+                  onLongPress={() => onDelete(item)}
+                  onStatusPillPress={() => onOpenStatusPicker?.(item)}
+                />
+              </ScaleDecorator>
+            )}
+          />
+        )}
       </Animated.View>
     </View>
   );
 }
 
 // ─────────────────────────────────────────────
-// TaskRow — with drag handle for reordering
+// TaskRow
 // ─────────────────────────────────────────────
-function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, muted, onStatusPillPress, dragCallbacks, isDragging }) {
+function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, muted, onStatusPillPress, onDragStart, isDragging }) {
   const due        = fmtDue(task.due_date, task.due_time);
   const isOverdue  = task.due_date && task.due_date < todayStr() && !task.completed;
   const accentColor = task.list_color || C.primary;
@@ -909,18 +863,6 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
   const status     = task.completed ? 'done' : (task.status || 'todo');
   const pillColors = { todo: C.textSecondary, doing: C.accent, waiting: C.primary, done: C.success };
   const pillColor  = pillColors[status] || C.textSecondary;
-
-  // Drag handle PanResponder — created once, reads latest callbacks via cbRef
-  const cbRef = useRef(dragCallbacks);
-  cbRef.current = dragCallbacks;
-  const dragPan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 3,
-    onPanResponderGrant: () => cbRef.current?.onStart?.(task.id),
-    onPanResponderMove: (_, g) => cbRef.current?.onMove?.(g.dy),
-    onPanResponderRelease: (_, g) => cbRef.current?.onEnd?.(g.dy),
-    onPanResponderTerminate: () => cbRef.current?.onEnd?.(0),
-  })).current;
 
   return (
     <View style={[
@@ -987,9 +929,9 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
 
       {/* Drag handle — hold and drag to reorder */}
       {!task.completed && (
-        <View {...dragPan.panHandlers} style={s.dragHandle} hitSlop={8}>
+        <TouchableOpacity onPressIn={onDragStart} style={s.dragHandle} activeOpacity={1} hitSlop={8}>
           <Ionicons name="reorder-three-outline" size={20} color={`${C.textSecondary}70`} />
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );
