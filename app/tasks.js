@@ -3,8 +3,7 @@ import {
   Animated, View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Modal,
 } from 'react-native';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +12,7 @@ import AestheticBackground from '../src/components/AestheticBackground';
 import {
   getTaskLists, createTaskList, deleteTaskList,
   getPlanningTasks, createPlanningTask, togglePlanningTask,
-  deletePlanningTask, updatePlanningTask, updateTaskStatus, setTaskOrder,
+  deletePlanningTask, updatePlanningTask, updateTaskStatus,
 } from '../src/db/plannerDatabase';
 
 const LIST_COLORS = ['#4A7856', '#89B4D4', '#C5A8E8', '#F4A56A', '#F9C74F', '#6CC97C', '#D9713E'];
@@ -248,11 +247,10 @@ export default function TasksScreen({ isTab = false }) {
     onDelete:            confirmDelete,
     onStatusChange:      handleStatusChange,
     onOpenStatusPicker:  setStatusPickerTask,
-    onReorder:           load,
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[s.container, { backgroundColor: C.background }]}>
         <AestheticBackground />
@@ -689,7 +687,7 @@ export default function TasksScreen({ isTab = false }) {
           onCancel={() => setConfirm(null)}
         />
       </View>
-    </GestureHandlerRootView>
+    </View>
   );
 }
 
@@ -772,7 +770,7 @@ function DraggableSheet({ C, children, onClose, style }) {
 function CollapsibleSection({
   C, title, iconName, color, tasks, expanded, alwaysExpanded,
   empty, onToggleExpand, selectedListId, muted,
-  onPress, onToggle, onDelete, onStatusChange, onOpenStatusPicker, onReorder,
+  onPress, onToggle, onDelete, onStatusChange, onOpenStatusPicker,
 }) {
   const anim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
@@ -783,12 +781,6 @@ function CollapsibleSection({
       useNativeDriver: false,
     }).start();
   }, [expanded]);
-
-  async function handleDragEnd({ data }) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await setTaskOrder(null, data.map(t => t.id));
-    onReorder?.();
-  }
 
   return (
     <View style={s.sectionBlock}>
@@ -822,27 +814,22 @@ function CollapsibleSection({
         {tasks.length === 0 ? (
           <Text style={[s.emptyText, { color: C.textSecondary }]}>{empty}</Text>
         ) : (
-          <DraggableFlatList
+          <FlatList
             data={tasks}
             keyExtractor={item => item.id}
             scrollEnabled={false}
-            onDragEnd={handleDragEnd}
-            containerStyle={s.sectionBody}
-            renderItem={({ item, drag, isActive }) => (
-              <ScaleDecorator activeScale={1.02}>
-                <TaskRow
-                  task={item}
-                  C={C}
-                  selectedListId={selectedListId}
-                  muted={muted}
-                  isDragging={isActive}
-                  onDragStart={drag}
-                  onPress={() => onPress(item)}
-                  onToggle={() => onToggle(item)}
-                  onLongPress={() => onDelete(item)}
-                  onStatusPillPress={() => onOpenStatusPicker?.(item)}
-                />
-              </ScaleDecorator>
+            style={s.sectionBody}
+            renderItem={({ item }) => (
+              <TaskRow
+                task={item}
+                C={C}
+                selectedListId={selectedListId}
+                muted={muted}
+                onPress={() => onPress(item)}
+                onToggle={() => onToggle(item)}
+                onLongPress={() => onDelete(item)}
+                onStatusPillPress={() => onOpenStatusPicker?.(item)}
+              />
             )}
           />
         )}
@@ -854,7 +841,7 @@ function CollapsibleSection({
 // ─────────────────────────────────────────────
 // TaskRow
 // ─────────────────────────────────────────────
-function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, muted, onStatusPillPress, onDragStart, isDragging }) {
+function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, muted, onStatusPillPress }) {
   const due        = fmtDue(task.due_date, task.due_time);
   const isOverdue  = task.due_date && task.due_date < todayStr() && !task.completed;
   const accentColor = task.list_color || C.primary;
@@ -869,7 +856,6 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
       s.taskCard,
       { backgroundColor: C.card, borderColor: C.border },
       muted && { opacity: 0.68 },
-      isDragging && { shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } },
     ]}>
       <View style={[s.taskAccent, { backgroundColor: task.completed ? C.border : accentColor }]} />
 
@@ -927,12 +913,6 @@ function TaskRow({ task, C, selectedListId, onPress, onToggle, onLongPress, mute
         )}
       </TouchableOpacity>
 
-      {/* Drag handle — hold and drag to reorder */}
-      {!task.completed && (
-        <TouchableOpacity onPressIn={onDragStart} style={s.dragHandle} activeOpacity={1} hitSlop={8}>
-          <Ionicons name="reorder-three-outline" size={20} color={`${C.textSecondary}70`} />
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -1101,7 +1081,6 @@ const s = StyleSheet.create({
   listManageArchive: { fontSize: 12, fontWeight: '800' },
 
   // Drag handle on task cards
-  dragHandle: { paddingHorizontal: 10, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
 
   // Custom confirm dialog
   confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },

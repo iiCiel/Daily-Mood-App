@@ -7,7 +7,7 @@ function TabBar({ state, navigation }) {
   const C = useTheme();
   const tabs = [
     { name: 'life', icon: 'grid-outline', activeIcon: 'grid', label: 'Today' },
-    { name: 'tasks', icon: 'checkbox-outline', activeIcon: 'checkbox', label: 'Tasks' },
+    // { name: 'tasks', icon: 'checkbox-outline', activeIcon: 'checkbox', label: 'Tasks' },
     { name: 'focus', icon: 'timer-outline', activeIcon: 'timer', label: 'Focus' },
     { name: 'habits', icon: 'repeat-outline', activeIcon: 'repeat', label: 'Habits' },
     { name: 'mood', icon: 'book-outline', activeIcon: 'book', label: 'Journal' },
@@ -51,7 +51,7 @@ export default function TabsLayout() {
   return (
     <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="life" />
-      <Tabs.Screen name="tasks" />
+      <Tabs.Screen name="tasks" options={{ href: null }} />
       <Tabs.Screen name="focus" />
       <Tabs.Screen name="habits" />
       <Tabs.Screen name="mood" />

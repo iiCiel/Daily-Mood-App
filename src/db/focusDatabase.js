@@ -49,14 +49,25 @@ export async function deleteTask(id) {
 
 // ── Sessions ───────────────────────────────────────────
 
-export async function saveSession({ taskId, duration, completed, date, startedAt, endedAt }) {
+export async function saveSession({ taskId, label, duration, completed, date, startedAt, endedAt }) {
   const database = await getDatabase();
   const id = genId();
   await database.runAsync(
-    'INSERT INTO pomodoro_sessions (id, task_id, duration, completed, date, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, taskId || null, duration, completed ? 1 : 0, date, startedAt, endedAt || null]
+    'INSERT INTO pomodoro_sessions (id, task_id, label, duration, completed, date, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, taskId || null, label || null, duration, completed ? 1 : 0, date, startedAt, endedAt || null]
   );
   return id;
+}
+
+export async function getRecentFocusLabels(limit = 8) {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    `SELECT label FROM pomodoro_sessions
+     WHERE label IS NOT NULL AND label != ''
+     GROUP BY label ORDER BY MAX(started_at) DESC LIMIT ?`,
+    [limit]
+  );
+  return rows.map(r => r.label);
 }
 
 export async function getSessionsForMonth(year, month) {
@@ -71,7 +82,9 @@ export async function getSessionsForMonth(year, month) {
 export async function getSessionsForDay(date) {
   const database = await getDatabase();
   return database.getAllAsync(
-    'SELECT s.*, t.title as task_title FROM pomodoro_sessions s LEFT JOIN tasks t ON s.task_id = t.id WHERE s.date = ? ORDER BY s.started_at DESC',
+    `SELECT s.*, COALESCE(s.label, t.title, '') as task_title
+     FROM pomodoro_sessions s LEFT JOIN tasks t ON s.task_id = t.id
+     WHERE s.date = ? ORDER BY s.started_at DESC`,
     [date]
   );
 }

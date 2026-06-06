@@ -208,6 +208,7 @@ async function _initDatabase() {
   try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN gratitude TEXT DEFAULT '[]'"); } catch {}
+  try { await database.runAsync('ALTER TABLE pomodoro_sessions ADD COLUMN label TEXT'); } catch {}
   await database.runAsync(
     `INSERT OR IGNORE INTO projects (id, name, color, status, notes, archived, created_at, updated_at)
      VALUES ('default-project', 'Personal', '#4A7856', 'active', NULL, 0, datetime('now'), datetime('now'))`

@@ -21,12 +21,11 @@ import AestheticBackground from '../../src/components/AestheticBackground';
 import MindfulHeader from '../../src/components/MindfulHeader';
 import { cancelTimerNotification, showTimerNotification } from '../../src/notifications';
 import {
+  getRecentFocusLabels,
   getSessionsForDay,
-  getTaskPomodoroCount,
   getTotalFocusMinutes,
   saveSession,
 } from '../../src/db/focusDatabase';
-import { getPlanningTasks, togglePlanningTask } from '../../src/db/plannerDatabase';
 
 const DEFAULT_DURATIONS = { focus: 25, short: 5, long: 15 };
 const TIMER_KEY = 'focus_timer_state';
@@ -63,10 +62,9 @@ export default function FocusScreen() {
   const [editingDuration, setEditingDuration] = useState(false);
   const [draftDuration, setDraftDuration] = useState('');
 
-  const [tasks, setTasks] = useState([]);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [showTaskPicker, setShowTaskPicker] = useState(false);
-  const [taskCounts, setTaskCounts] = useState({});
+  const [focusLabel, setFocusLabel] = useState('');
+  const [recentLabels, setRecentLabels] = useState([]);
+  const [labelInputFocused, setLabelInputFocused] = useState(false);
 
   const [todaySessions, setTodaySessions] = useState([]);
   const [totalMinutes, setTotalMinutes] = useState(0);
@@ -86,7 +84,7 @@ export default function FocusScreen() {
   const modeRef = useRef('focus');
   const durationsRef = useRef({ ...DEFAULT_DURATIONS });
   const sessionCountRef = useRef(0);
-  const selectedTaskRef = useRef(null);
+  const focusLabelRef = useRef('');
   const breathIntervalRef = useRef(null);
 
   runningRef.current = running;
@@ -94,10 +92,9 @@ export default function FocusScreen() {
   modeRef.current = mode;
   durationsRef.current = durations;
   sessionCountRef.current = sessionCount;
-  selectedTaskRef.current = selectedTask;
+  focusLabelRef.current = focusLabel;
 
   useFocusEffect(useCallback(() => {
-    loadTasks();
     loadStats();
   }, []));
 
@@ -113,25 +110,31 @@ export default function FocusScreen() {
   async function restoreTimerState() {
     try {
       const raw = await AsyncStorage.getItem(TIMER_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      const newMode = saved.mode || 'focus';
-      const newDurations = saved.durations || { ...DEFAULT_DURATIONS };
-      setMode(newMode);
-      setDurations(newDurations);
-      setSessionCount(saved.sessionCount || 0);
-      if (saved.running && saved.savedAt) {
-        const elapsed = Math.floor((Date.now() - saved.savedAt) / 1000);
-        const remaining = Math.max(0, (saved.secondsLeft || 0) - elapsed);
-        if (remaining > 0) {
-          setSecondsLeft(remaining);
-          setRunning(true);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        const newMode = saved.mode || 'focus';
+        const newDurations = saved.durations || { ...DEFAULT_DURATIONS };
+        setMode(newMode);
+        setDurations(newDurations);
+        setSessionCount(saved.sessionCount || 0);
+        if (saved.focusLabel) setFocusLabel(saved.focusLabel);
+        if (saved.running && saved.savedAt) {
+          const elapsed = Math.floor((Date.now() - saved.savedAt) / 1000);
+          const remaining = Math.max(0, (saved.secondsLeft || 0) - elapsed);
+          if (remaining > 0) {
+            setSecondsLeft(remaining);
+            setRunning(true);
+          } else {
+            setSecondsLeft(newDurations[newMode] * 60);
+          }
         } else {
-          setSecondsLeft(newDurations[newMode] * 60);
+          setSecondsLeft(saved.secondsLeft != null ? saved.secondsLeft : newDurations[newMode] * 60);
         }
-      } else {
-        setSecondsLeft(saved.secondsLeft != null ? saved.secondsLeft : newDurations[newMode] * 60);
       }
+    } catch {}
+    try {
+      const labels = await getRecentFocusLabels(8);
+      setRecentLabels(labels);
     } catch {}
   }
 
@@ -145,6 +148,7 @@ export default function FocusScreen() {
           mode: modeRef.current,
           durations: durationsRef.current,
           sessionCount: sessionCountRef.current,
+          focusLabel: focusLabelRef.current,
           savedAt: Date.now(),
         })).catch(() => {});
       } else if (next === 'active' && bgTimeRef.current && runningRef.current) {
@@ -175,25 +179,16 @@ export default function FocusScreen() {
     return () => clearInterval(intervalRef.current);
   }, [running]);
 
-  async function loadTasks() {
-    try {
-      const t = await getPlanningTasks({ includeCompleted: false });
-      setTasks(t);
-      const countEntries = await Promise.all(
-        t.map(async (task) => [task.id, await getTaskPomodoroCount(task.id)])
-      );
-      setTaskCounts(Object.fromEntries(countEntries));
-    } catch {}
-  }
-
   async function loadStats() {
     try {
-      const [sessions, total] = await Promise.all([
+      const [sessions, total, labels] = await Promise.all([
         getSessionsForDay(todayStr()),
         getTotalFocusMinutes(),
+        getRecentFocusLabels(8),
       ]);
       setTodaySessions(sessions);
       setTotalMinutes(total);
+      setRecentLabels(labels);
     } catch {}
   }
 
@@ -202,8 +197,10 @@ export default function FocusScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const isFocus = mode === 'focus';
     if (isFocus) {
+      const label = focusLabelRef.current.trim();
       await saveSession({
-        taskId: selectedTask?.id || null,
+        taskId: null,
+        label: label || null,
         duration: durations[mode],
         completed: true,
         date: todayStr(),
@@ -211,14 +208,13 @@ export default function FocusScreen() {
         endedAt: new Date().toISOString(),
       });
       setSessionCount((c) => c + 1);
-      await loadTasks();
       await loadStats();
     }
     setRunning(false);
     Alert.alert(
       isFocus ? 'Session complete' : 'Break over',
       isFocus
-        ? `Nice work${selectedTask ? ` on "${selectedTask.title}"` : ''}. Take a real break.`
+        ? `Nice work${focusLabelRef.current.trim() ? ` on "${focusLabelRef.current.trim()}"` : ''}. Take a real break.`
         : 'Ready to focus again?'
     );
   }
@@ -227,7 +223,7 @@ export default function FocusScreen() {
     sessionStartRef.current = new Date().toISOString();
     setRunning(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showTimerNotification(secondsLeftRef.current, selectedTaskRef.current?.title).catch(() => {});
+    showTimerNotification(secondsLeftRef.current, focusLabelRef.current.trim() || null).catch(() => {});
   }
 
   function pauseTimer() {
@@ -265,16 +261,10 @@ export default function FocusScreen() {
     setEditingDuration(false);
   }
 
-  async function handleToggleTask(id) {
-    await togglePlanningTask(id);
-    if (selectedTask?.id === id) setSelectedTask(null);
-    loadTasks();
-  }
-
   const BREATH_PATTERNS = {
-    box: { label: 'Box', phases: ['inhale', 'hold', 'exhale', 'hold2'], durations: [4, 4, 4, 4], phaseLabels: ['Inhale', 'Hold', 'Exhale', 'Hold'] },
-    calm: { label: 'Calm', phases: ['inhale', 'exhale'], durations: [5, 6], phaseLabels: ['Inhale', 'Exhale'] },
-    reset: { label: 'Reset', phases: ['inhale', 'hold', 'exhale'], durations: [4, 2, 6], phaseLabels: ['Inhale', 'Hold', 'Exhale'] },
+    box:   { label: 'Box',   phases: ['inhale','hold','exhale','hold2'], durations: [4,4,4,4], phaseLabels: ['Inhale','Hold','Exhale','Hold'] },
+    calm:  { label: 'Calm',  phases: ['inhale','exhale'],                durations: [5,6],     phaseLabels: ['Inhale','Exhale'] },
+    reset: { label: 'Reset', phases: ['inhale','hold','exhale'],         durations: [4,2,6],   phaseLabels: ['Inhale','Hold','Exhale'] },
   };
 
   function startBreathing() {
@@ -311,7 +301,19 @@ export default function FocusScreen() {
   const todayMins = todayCompleteSessions.reduce((sum, s) => sum + s.duration, 0);
   const todayCount = todayCompleteSessions.length;
   const allHours = Math.floor(totalMinutes / 60);
-  const activeTasks = tasks.filter((task) => !task.completed);
+
+  // Group today's sessions by label for the breakdown
+  const labelBreakdown = todayCompleteSessions.reduce((acc, s) => {
+    const key = s.task_title || 'Unlabeled';
+    acc[key] = (acc[key] || 0) + s.duration;
+    return acc;
+  }, {});
+  const breakdownEntries = Object.entries(labelBreakdown).sort((a, b) => b[1] - a[1]);
+
+  // Filter suggestion chips — exclude whatever is already typed
+  const suggestions = recentLabels.filter(
+    (l) => !focusLabel || l.toLowerCase() !== focusLabel.toLowerCase()
+  );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -331,6 +333,7 @@ export default function FocusScreen() {
             onRightPress={() => router.push('/focus-stats')}
           />
 
+          {/* ── Timer panel ─────────────────────────────── */}
           <View style={[styles.timerPanel, { backgroundColor: '#0B1020' }]}>
             <AestheticBackground dark />
             <View style={styles.timerPanelInner}>
@@ -370,17 +373,45 @@ export default function FocusScreen() {
                 <Text style={styles.progressLabel}>{progressPct}</Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.selectedTaskPill}
-                onPress={() => setShowTaskPicker(true)}
-                activeOpacity={0.75}
-              >
-                <Ionicons name="flag-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.selectedTaskText} numberOfLines={1}>
-                  {selectedTask ? selectedTask.title : 'Choose a target task'}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.65)" />
-              </TouchableOpacity>
+              {/* Label input */}
+              <View style={styles.labelInputWrap}>
+                <Ionicons name="pencil-outline" size={15} color="rgba(255,255,255,0.65)" />
+                <TextInput
+                  style={styles.labelInput}
+                  value={focusLabel}
+                  onChangeText={setFocusLabel}
+                  onFocus={() => setLabelInputFocused(true)}
+                  onBlur={() => setLabelInputFocused(false)}
+                  placeholder="What are you focusing on?"
+                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  returnKeyType="done"
+                  maxLength={60}
+                />
+                {!!focusLabel && (
+                  <TouchableOpacity onPress={() => setFocusLabel('')} hitSlop={10}>
+                    <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.45)" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Suggestion chips */}
+              {suggestions.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                  {suggestions.map((label) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={styles.chip}
+                      onPress={() => {
+                        setFocusLabel(label);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.chipText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
 
               <View style={styles.controls}>
                 <TouchableOpacity style={styles.secondaryControl} onPress={resetTimer} activeOpacity={0.75}>
@@ -392,52 +423,47 @@ export default function FocusScreen() {
                     {running ? 'Pause' : secondsLeft === totalSecs ? 'Start' : 'Resume'}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryControl} onPress={() => setShowTaskPicker(true)} activeOpacity={0.75}>
-                  <Ionicons name="list-outline" size={19} color="#FFFFFF" />
-                </TouchableOpacity>
+                <View style={styles.secondaryControl} />
               </View>
             </View>
           </View>
 
+          {/* ── Stats ───────────────────────────────────── */}
           <View style={styles.statsGrid}>
             <FocusStat C={C} label="Today" value={`${todayMins}m`} icon="today-outline" color={C.primary} />
             <FocusStat C={C} label="Sessions" value={todayCount} icon="layers-outline" color={C.accent} />
             <FocusStat C={C} label="All time" value={`${allHours}h`} icon="infinite-outline" color={C.teal || C.success} />
           </View>
 
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: C.text }]}>Task runway</Text>
-              <Text style={[styles.sectionSub, { color: C.textSecondary }]}>Pick the thing your timer is for.</Text>
-            </View>
-            <TouchableOpacity style={[styles.sectionBtn, { backgroundColor: C.text }]} onPress={() => router.push('/tasks')}>
-              <Ionicons name="add" size={17} color={C.background} />
-            </TouchableOpacity>
-          </View>
+          {/* ── Today breakdown by label ─────────────────── */}
+          {breakdownEntries.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={[styles.sectionTitle, { color: C.text }]}>Today's focus</Text>
+                  <Text style={[styles.sectionSub, { color: C.textSecondary }]}>Where your time went.</Text>
+                </View>
+              </View>
+              <View style={[styles.breakdownCard, { backgroundColor: C.card, borderColor: C.border }]}>
+                {breakdownEntries.map(([label, mins], idx) => {
+                  const pct = todayMins > 0 ? mins / todayMins : 0;
+                  return (
+                    <View key={label} style={[styles.breakdownRow, idx > 0 && { borderTopWidth: 1, borderTopColor: C.border }]}>
+                      <Text style={[styles.breakdownLabel, { color: C.text }]} numberOfLines={1}>{label}</Text>
+                      <View style={styles.breakdownBarWrap}>
+                        <View style={[styles.breakdownBarTrack, { backgroundColor: `${C.primary}20` }]}>
+                          <View style={[styles.breakdownBarFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: C.primary }]} />
+                        </View>
+                      </View>
+                      <Text style={[styles.breakdownMins, { color: C.textSecondary }]}>{mins}m</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.taskRail}>
-            {activeTasks.slice(0, 8).map((task) => (
-              <FocusTaskCard
-                key={task.id}
-                C={C}
-                task={task}
-                selected={selectedTask?.id === task.id}
-                done={taskCounts[task.id] || 0}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSelectedTask(selectedTask?.id === task.id ? null : task);
-                }}
-                onToggle={() => handleToggleTask(task.id)}
-              />
-            ))}
-            {activeTasks.length === 0 && (
-              <TouchableOpacity style={[styles.emptyTaskCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/tasks')}>
-                <Ionicons name="add-circle-outline" size={24} color={C.primary} />
-                <Text style={[styles.emptyTaskTitle, { color: C.text }]}>Create your first focus task</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-
+          {/* ── Breathing ───────────────────────────────── */}
           <BreathingPanel
             C={C}
             open={breathingOpen}
@@ -452,6 +478,7 @@ export default function FocusScreen() {
             stopBreathing={stopBreathing}
           />
 
+          {/* ── Today log ───────────────────────────────── */}
           <View style={styles.sectionHeader}>
             <View>
               <Text style={[styles.sectionTitle, { color: C.text }]}>Today log</Text>
@@ -465,26 +492,14 @@ export default function FocusScreen() {
                 <Text style={[styles.emptyLogText, { color: C.textSecondary }]}>No focus blocks yet today.</Text>
               </View>
             ) : (
-              todayCompleteSessions.slice(0, 5).map((session) => (
+              todayCompleteSessions.slice(0, 8).map((session) => (
                 <SessionRow key={session.id} C={C} session={session} />
               ))
             )}
           </View>
         </ScrollView>
 
-        <TaskPickerModal
-          visible={showTaskPicker}
-          C={C}
-          tasks={activeTasks}
-          selectedTask={selectedTask}
-          taskCounts={taskCounts}
-          onClose={() => setShowTaskPicker(false)}
-          onSelect={(task) => {
-            setSelectedTask(task);
-            setShowTaskPicker(false);
-          }}
-        />
-
+        {/* ── Duration editor ─────────────────────────── */}
         <Modal visible={editingDuration} transparent animationType="fade" onRequestClose={() => setEditingDuration(false)}>
           <TouchableOpacity style={styles.durationOverlay} onPress={() => setEditingDuration(false)} activeOpacity={1}>
             <View style={[styles.durationSheet, { backgroundColor: C.card }]}>
@@ -523,51 +538,7 @@ function FocusStat({ C, label, value, icon, color }) {
   );
 }
 
-function FocusTaskCard({ C, task, selected, done, onPress, onToggle }) {
-  const target = task.target_pomodoros || 1;
-  const accent = task.list_color || C.primary;
-  return (
-    <TouchableOpacity
-      style={[
-        styles.focusTaskCard,
-        { backgroundColor: C.card, borderColor: selected ? accent : C.border },
-        selected && { borderWidth: 2 },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.76}
-    >
-      <View style={styles.focusTaskTop}>
-        <View style={[styles.focusTaskMark, { backgroundColor: `${accent}18` }]}>
-          <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={18} color={accent} />
-        </View>
-        <TouchableOpacity onPress={onToggle} hitSlop={12}>
-          <Ionicons name="checkmark-circle-outline" size={21} color={C.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      <Text style={[styles.focusTaskTitle, { color: C.text }]} numberOfLines={3}>{task.title}</Text>
-      {!!task.list_title && <Text style={[styles.focusTaskMeta, { color: C.textSecondary }]} numberOfLines={1}>{task.list_title}</Text>}
-      <View style={styles.blockDots}>
-        {Array.from({ length: Math.min(target, 6) }).map((_, i) => (
-          <View key={i} style={[styles.blockDot, { backgroundColor: i < done ? accent : C.border }]} />
-        ))}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function BreathingPanel({
-  C,
-  open,
-  setOpen,
-  patterns,
-  breathPattern,
-  setBreathPattern,
-  breathPhase,
-  breathCount,
-  breathCycle,
-  startBreathing,
-  stopBreathing,
-}) {
+function BreathingPanel({ C, open, setOpen, patterns, breathPattern, setBreathPattern, breathPhase, breathCount, breathCycle, startBreathing, stopBreathing }) {
   const pattern = patterns[breathPattern];
   return (
     <View style={[styles.breathPanel, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -587,10 +558,7 @@ function BreathingPanel({
                 <TouchableOpacity
                   key={key}
                   style={[styles.breathPatternBtn, { backgroundColor: active ? C.text : C.background, borderColor: C.border }]}
-                  onPress={() => {
-                    stopBreathing();
-                    setBreathPattern(key);
-                  }}
+                  onPress={() => { stopBreathing(); setBreathPattern(key); }}
                 >
                   <Text style={[styles.breathPatternText, { color: active ? C.background : C.textSecondary }]}>{value.label}</Text>
                 </TouchableOpacity>
@@ -627,7 +595,7 @@ function BreathingPanel({
 function SessionRow({ C, session }) {
   return (
     <View style={[styles.sessionRow, { backgroundColor: C.card, borderColor: C.border }]}>
-      <View style={[styles.sessionIcon, { backgroundColor: C.primaryLight }]}>
+      <View style={[styles.sessionIcon, { backgroundColor: `${C.primary}18` }]}>
         <Ionicons name="timer-outline" size={17} color={C.primary} />
       </View>
       <View style={{ flex: 1 }}>
@@ -635,7 +603,7 @@ function SessionRow({ C, session }) {
           {session.task_title || 'Focus block'}
         </Text>
         <Text style={[styles.sessionMeta, { color: C.textSecondary }]}>
-          {session.duration}m {formatSessionTime(session.started_at)}
+          {session.duration}m · {formatSessionTime(session.started_at)}
         </Text>
       </View>
       <Ionicons name="checkmark-circle" size={20} color={C.success} />
@@ -643,78 +611,15 @@ function SessionRow({ C, session }) {
   );
 }
 
-function TaskPickerModal({ visible, C, tasks, selectedTask, taskCounts, onClose, onSelect }) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
-        <View style={[styles.modalSheet, { backgroundColor: C.card }]}>
-          <View style={styles.sheetHandleWrap}>
-            <View style={[styles.sheetHandle, { backgroundColor: C.border }]} />
-          </View>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: C.text }]}>Target task</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={22} color={C.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <TouchableOpacity
-              style={[styles.modalTask, { borderColor: !selectedTask ? C.text : C.border, backgroundColor: C.background }]}
-              onPress={() => onSelect(null)}
-            >
-              <Ionicons name="remove-circle-outline" size={18} color={C.textSecondary} />
-              <Text style={[styles.modalTaskText, { color: C.text }]}>No task</Text>
-            </TouchableOpacity>
-            {tasks.map((task) => {
-              const selected = selectedTask?.id === task.id;
-              return (
-                <TouchableOpacity
-                  key={task.id}
-                  style={[styles.modalTask, { borderColor: selected ? C.primary : C.border, backgroundColor: C.background }]}
-                  onPress={() => onSelect(task)}
-                >
-                  <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={18} color={selected ? C.primary : C.textSecondary} />
-                  <Text style={[styles.modalTaskText, { color: C.text }]} numberOfLines={1}>{task.title}</Text>
-                  <Text style={[styles.modalTaskCount, { color: C.textSecondary }]}>
-                    {taskCounts[task.id] || 0}/{task.target_pomodoros || 1}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { paddingHorizontal: 20, paddingTop: 54, paddingBottom: 42 },
-  timerPanel: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    marginBottom: 14,
-    shadowColor: '#0B1020',
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 8,
-  },
-  timerPanelInner: { padding: 18, gap: 18 },
+
+  timerPanel: { borderRadius: 24, overflow: 'hidden', marginBottom: 14, shadowColor: '#0B1020', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
+  timerPanelInner: { padding: 18, gap: 14 },
   modeRow: { flexDirection: 'row', gap: 7 },
-  modeBtn: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
+  modeBtn: { flex: 1, minHeight: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5, backgroundColor: 'rgba(255,255,255,0.10)' },
   modeText: { fontSize: 11, fontWeight: '900' },
   timerMain: { alignItems: 'center', paddingVertical: 10 },
   timerKicker: { color: 'rgba(255,255,255,0.58)', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
@@ -724,31 +629,37 @@ const styles = StyleSheet.create({
   progressTrackDark: { flex: 1, height: 9, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
   progressFillDark: { height: 9, borderRadius: 999, backgroundColor: '#FFFFFF' },
   progressLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 11, fontWeight: '900', width: 44, textAlign: 'right' },
-  selectedTaskPill: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 13, paddingVertical: 12 },
-  selectedTaskText: { flex: 1, color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+
+  labelInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 15, paddingHorizontal: 13, paddingVertical: 11 },
+  labelInput: { flex: 1, color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+
+  chips: { gap: 7, paddingVertical: 2 },
+  chip: { backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 20, paddingHorizontal: 13, paddingVertical: 7 },
+  chipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   secondaryControl: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
   primaryControl: { minWidth: 142, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, backgroundColor: '#FFFFFF' },
   primaryControlText: { color: '#0B1020', fontSize: 15, fontWeight: '900' },
+
   statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: { flex: 1, borderRadius: 17, borderWidth: 1, padding: 12, minHeight: 104 },
   statIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   statValue: { fontSize: 22, fontWeight: '900' },
   statLabel: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase', marginTop: 2 },
+
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 18, fontWeight: '900' },
   sectionSub: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  sectionBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  taskRail: { gap: 10, paddingRight: 12, paddingBottom: 18 },
-  focusTaskCard: { width: 180, minHeight: 156, borderRadius: 18, borderWidth: 1, padding: 13 },
-  focusTaskTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  focusTaskMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  focusTaskTitle: { fontSize: 15, lineHeight: 20, fontWeight: '900', flex: 1 },
-  focusTaskMeta: { fontSize: 11, fontWeight: '800', marginTop: 7 },
-  blockDots: { flexDirection: 'row', gap: 5, marginTop: 12 },
-  blockDot: { width: 18, height: 5, borderRadius: 999 },
-  emptyTaskCard: { width: 220, minHeight: 130, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 18, gap: 8 },
-  emptyTaskTitle: { fontSize: 14, fontWeight: '900', textAlign: 'center' },
+
+  breakdownCard: { borderRadius: 18, borderWidth: 1, marginBottom: 20, overflow: 'hidden' },
+  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  breakdownLabel: { fontSize: 13, fontWeight: '800', width: 100 },
+  breakdownBarWrap: { flex: 1 },
+  breakdownBarTrack: { height: 7, borderRadius: 999, overflow: 'hidden' },
+  breakdownBarFill: { height: 7, borderRadius: 999 },
+  breakdownMins: { fontSize: 12, fontWeight: '900', width: 32, textAlign: 'right' },
+
   breathPanel: { borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 20 },
   breathHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   breathBody: { gap: 12, marginTop: 14 },
@@ -762,6 +673,7 @@ const styles = StyleSheet.create({
   breathHint: { fontSize: 13, lineHeight: 20, fontWeight: '800', textAlign: 'center', marginBottom: 14 },
   breathAction: { borderRadius: 14, paddingHorizontal: 18, paddingVertical: 11 },
   breathActionText: { fontSize: 13, fontWeight: '900' },
+
   sessionList: { gap: 8 },
   emptyLog: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, borderWidth: 1, padding: 16 },
   emptyLogText: { fontSize: 13, fontWeight: '800' },
@@ -769,16 +681,7 @@ const styles = StyleSheet.create({
   sessionIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   sessionTitle: { fontSize: 14, fontWeight: '900' },
   sessionMeta: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(11,16,32,0.48)', justifyContent: 'flex-end' },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '82%', paddingBottom: 20 },
-  sheetHandleWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
-  sheetHandle: { width: 42, height: 4, borderRadius: 999 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
-  modalTitle: { fontSize: 22, fontWeight: '900' },
-  modalContent: { paddingHorizontal: 20, paddingBottom: 28, gap: 9 },
-  modalTask: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, padding: 13 },
-  modalTaskText: { flex: 1, fontSize: 14, fontWeight: '900' },
-  modalTaskCount: { fontSize: 12, fontWeight: '900' },
+
   durationOverlay: { flex: 1, backgroundColor: 'rgba(11,16,32,0.48)', justifyContent: 'flex-end' },
   durationSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 34, gap: 14 },
   durationTitle: { fontSize: 20, fontWeight: '900' },
