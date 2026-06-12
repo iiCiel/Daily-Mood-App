@@ -164,7 +164,7 @@ export default function DashboardScreen() {
       {/* Hero */}
       <View style={[styles.heroCard, { backgroundColor: C.card }]}>
         <View style={[styles.heroAccent, { backgroundColor: C.primary }]} />
-        <View style={[styles.heroAccent2, { backgroundColor: '#C5A8E8' }]} />
+        <View style={[styles.heroAccent2, { backgroundColor: C.teal }]} />
         <View style={styles.heroInner}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.heroGreeting, { color: C.textSecondary }]}>{greeting}</Text>
@@ -185,7 +185,7 @@ export default function DashboardScreen() {
       {/* Stats row */}
       <View style={styles.statsRow}>
         <StatPill bg={C.mint}    label="mood"   value={moodObj ? moodObj.label : '—'}                                      color={moodObj?.color || C.primary} />
-        <StatPill bg={C.lavender} label="habits" value={habits.length ? `${completedHabits}/${habits.length}` : '—'}       color="#715B86" />
+        <StatPill bg={C.lavender} label="habits" value={habits.length ? `${completedHabits}/${habits.length}` : '—'}       color={C.grape} />
         <StatPill bg={C.sand}    label="focus"  value={focusMinutes > 0 ? `${focusMinutes}m` : '—'}                        color={C.primary} />
         <StatPill bg={C.peach}   label="tasks"  value={planningSummary?.dueTasks > 0 ? `${planningSummary.dueTasks} due` : '✓'} color={C.accent} />
       </View>
@@ -276,7 +276,7 @@ export default function DashboardScreen() {
         })}
         {habits.length > 0 && (
           <View style={[styles.progressBar, { backgroundColor: C.background }]}>
-            <View style={[styles.progressFill, { width: `${(completedHabits / habits.length) * 100}%`, backgroundColor: completedHabits === habits.length ? '#6CC97C' : C.primary }]} />
+            <View style={[styles.progressFill, { width: `${(completedHabits / habits.length) * 100}%`, backgroundColor: completedHabits === habits.length ? C.success : C.primary }]} />
           </View>
         )}
       </View>

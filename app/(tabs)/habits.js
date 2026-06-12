@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  TextInput, Modal, Alert, Dimensions, KeyboardAvoidingView, Platform,
+  TextInput, Modal, Alert, KeyboardAvoidingView, Platform,
   PanResponder, Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -16,14 +17,17 @@ import {
 } from '../../src/db/habitDatabase';
 
 const COLOR_OPTIONS = [
-  '#6CC97C', '#C5A8E8', '#F9C74F', '#F4A56A', '#89B4D4',
-  '#F28B82', '#AECBFA', '#E6C9A8', '#FF9AA2', '#B5EAD7',
-  '#FFD93D', '#6BCB77', '#4D96FF', '#FF6B6B',
+  '#4F8F6D', '#6E7FD9', '#D08A3E', '#C85D5D', '#4E9CA6',
+  '#8B6BAE', '#D6A23F', '#668A4C', '#B76E79', '#4F78B8',
+  '#C96B3A', '#6CC97C', '#F9C74F', '#F28B82',
 ];
+
+const DEFAULT_EMOJI = '\u{1F4A7}';
+const SMILE_EMOJI = '\u{1F60A}';
 
 function todayStr() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function buildCalendarDays(year, month) {
@@ -36,64 +40,131 @@ function buildCalendarDays(year, month) {
   return days;
 }
 
-function HabitCalendar({ calYear, calMonth, habits, monthCompletions, C, onPrev, onNext, todayDate, onDayPress }) {
-  const n = new Date();
-  const isCurrentMonth = calYear === n.getFullYear() && calMonth === n.getMonth() + 1;
-  const monthLabel = new Date(calYear, calMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+function formatDateLabel(dateStr) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function progressCopy(doneCount, total) {
+  if (!total) return 'Add a habit to start tracking your routine.';
+  if (doneCount === total) return 'Done for today. Your streaks are protected.';
+  if (doneCount === 0) return 'Start with one small check-in.';
+  return `${total - doneCount} left for today.`;
+}
+
+function HabitCalendar({
+  calYear,
+  calMonth,
+  habits,
+  monthCompletions,
+  C,
+  onPrev,
+  onNext,
+  todayDate,
+  onDayPress,
+}) {
+  const now = new Date();
+  const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth() + 1;
+  const monthLabel = new Date(calYear, calMonth - 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
   const calDays = buildCalendarDays(calYear, calMonth);
   const total = habits.length;
 
   return (
-    <View style={[styles.calCard, { backgroundColor: C.card }]}>
-      <View style={styles.calHeader}>
-        <TouchableOpacity onPress={onPrev} style={styles.calNavBtn}>
-          <Text style={[styles.calNav, { color: C.text }]}>‹</Text>
-        </TouchableOpacity>
-        <Text style={[styles.calTitle, { color: C.text }]}>{monthLabel}</Text>
-        <TouchableOpacity onPress={onNext} style={styles.calNavBtn} disabled={isCurrentMonth}>
-          <Text style={[styles.calNav, { color: isCurrentMonth ? C.border : C.text }]}>›</Text>
-        </TouchableOpacity>
+    <View style={[styles.calendarPanel, { backgroundColor: C.card, borderColor: C.border }]}>
+      <View style={styles.calendarHeader}>
+        <View>
+          <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>history</Text>
+          <Text style={[styles.calendarTitle, { color: C.text }]}>{monthLabel}</Text>
+        </View>
+        <View style={styles.calendarNav}>
+          <TouchableOpacity
+            onPress={onPrev}
+            style={[styles.iconButton, { backgroundColor: C.background, borderColor: C.border }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={17} color={C.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onNext}
+            style={[styles.iconButton, { backgroundColor: C.background, borderColor: C.border }, isCurrentMonth && { opacity: 0.35 }]}
+            disabled={isCurrentMonth}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-forward" size={17} color={C.text} />
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.calDayLabels}>
-        {['S','M','T','W','T','F','S'].map((d, i) => (
-          <Text key={i} style={[styles.calDayLabel, { color: C.textSecondary }]}>{d}</Text>
+
+      <View style={styles.calendarDayLabels}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <Text key={`${d}${i}`} style={[styles.calendarDayLabel, { color: C.textSecondary }]}>{d}</Text>
         ))}
       </View>
-      <View style={styles.calGrid}>
+
+      <View style={styles.calendarGrid}>
         {calDays.map((day, i) => {
-          if (!day) return <View key={`e${i}`} style={styles.calCell} />;
-          const dateStr = `${calYear}-${String(calMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          if (!day) return <View key={`empty-${i}`} style={styles.calendarCell} />;
+
+          const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isToday = dateStr === todayDate;
           const isFuture = dateStr > todayDate;
           const count = monthCompletions[dateStr] || 0;
-          const dotColor = isFuture || count === 0 ? 'transparent'
-            : count >= total ? '#6CC97C'
-            : '#F9C74F';
+          const ratio = total ? count / total : 0;
+          const done = ratio >= 1;
+          const partial = ratio > 0 && ratio < 1;
+
           return (
             <TouchableOpacity
               key={dateStr}
               style={[
-                styles.calCell,
-                isToday && { borderWidth: 1.5, borderColor: C.text, borderRadius: 8 },
+                styles.calendarCell,
+                {
+                  borderColor: isToday ? C.primary : 'transparent',
+                  backgroundColor: done ? C.mint : partial ? C.sand : 'transparent',
+                },
               ]}
               onPress={() => !isFuture && onDayPress(dateStr)}
-              activeOpacity={isFuture ? 1 : 0.6}
+              activeOpacity={isFuture ? 1 : 0.65}
               disabled={isFuture}
             >
-              <Text style={[styles.calDayNum, { color: isFuture ? C.border : C.text }]}>{day}</Text>
-              <View style={[styles.calDot, { backgroundColor: dotColor }]} />
+              <Text
+                style={[
+                  styles.calendarDayNum,
+                  { color: isFuture ? C.border : done ? C.success : C.text },
+                ]}
+              >
+                {day}
+              </Text>
+              <View style={[styles.calendarMiniTrack, { backgroundColor: C.border }]}>
+                <View
+                  style={[
+                    styles.calendarMiniFill,
+                    {
+                      width: `${Math.min(100, Math.round(ratio * 100))}%`,
+                      backgroundColor: done ? C.success : C.primary,
+                    },
+                  ]}
+                />
+              </View>
             </TouchableOpacity>
           );
         })}
       </View>
-      <View style={styles.calLegend}>
-        <View style={styles.calLegendItem}>
-          <View style={[styles.calDot, { backgroundColor: '#6CC97C' }]} />
-          <Text style={[styles.calLegendText, { color: C.textSecondary }]}>all done</Text>
+
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: C.success }]} />
+          <Text style={[styles.legendText, { color: C.textSecondary }]}>complete</Text>
         </View>
-        <View style={styles.calLegendItem}>
-          <View style={[styles.calDot, { backgroundColor: '#F9C74F' }]} />
-          <Text style={[styles.calLegendText, { color: C.textSecondary }]}>partial</Text>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: C.primary }]} />
+          <Text style={[styles.legendText, { color: C.textSecondary }]}>partial</Text>
         </View>
       </View>
     </View>
@@ -119,12 +190,10 @@ export default function HabitsScreen() {
   const [editingDate, setEditingDate] = useState(null);
   const [editDateCompletions, setEditDateCompletions] = useState(new Set());
 
-  // New habit form
   const [newTitle, setNewTitle] = useState('');
-  const [newEmoji, setNewEmoji] = useState('💧');
-  const [newColor, setNewColor] = useState('#6CC97C');
+  const [newEmoji, setNewEmoji] = useState(DEFAULT_EMOJI);
+  const [newColor, setNewColor] = useState('#4F8F6D');
 
-  // Swipe-down-to-dismiss — lives only on handle zone, no interactive children to steal gesture
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const resetFormRef = useRef(null);
   const handlePanResponder = useRef(
@@ -183,16 +252,24 @@ export default function HabitsScreen() {
   }
 
   function prevMonth() {
-    if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
-    else setCalMonth(m => m - 1);
+    if (calMonth === 1) {
+      setCalYear(y => y - 1);
+      setCalMonth(12);
+    } else {
+      setCalMonth(m => m - 1);
+    }
   }
 
   function nextMonth() {
     const n = new Date();
     const isNow = calYear === n.getFullYear() && calMonth === n.getMonth() + 1;
     if (isNow) return;
-    if (calMonth === 12) { setCalYear(y => y + 1); setCalMonth(1); }
-    else setCalMonth(m => m + 1);
+    if (calMonth === 12) {
+      setCalYear(y => y + 1);
+      setCalMonth(1);
+    } else {
+      setCalMonth(m => m + 1);
+    }
   }
 
   async function handleDayPress(dateStr) {
@@ -207,7 +284,6 @@ export default function HabitsScreen() {
     const done = await getCompletionsForDate(editingDate);
     setEditDateCompletions(done);
     loadMonthCompletions();
-    // If editing today, keep the main list in sync too
     if (editingDate === today) {
       setCompleted(done);
       const streak = await getHabitStreak(habitId);
@@ -239,8 +315,8 @@ export default function HabitsScreen() {
   function openAdd() {
     setEditingHabit(null);
     setNewTitle('');
-    setNewEmoji('💧');
-    setNewColor('#6CC97C');
+    setNewEmoji(DEFAULT_EMOJI);
+    setNewColor('#4F8F6D');
     setShowAdd(true);
   }
 
@@ -256,35 +332,56 @@ export default function HabitsScreen() {
     setShowAdd(false);
     setEditingHabit(null);
     setNewTitle('');
-    setNewEmoji('💧');
-    setNewColor('#6CC97C');
+    setNewEmoji(DEFAULT_EMOJI);
+    setNewColor('#4F8F6D');
   }
   resetFormRef.current = resetForm;
 
   async function handleDelete(habit) {
-    Alert.alert('delete habit', `"${habit.title}"? this will remove all history.`, [
-      { text: 'cancel', style: 'cancel' },
+    Alert.alert('Delete habit', `Remove "${habit.title}" and its history?`, [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'delete', style: 'destructive',
-        onPress: async () => { await archiveHabit(habit.id); load(); },
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await archiveHabit(habit.id);
+          load();
+        },
       },
     ]);
   }
 
+  function openHabitMenu(habit) {
+    Alert.alert(
+      habit.title,
+      null,
+      [
+        { text: 'Edit', onPress: () => openEdit(habit) },
+        { text: 'View history', onPress: () => router.push({ pathname: '/habit-detail', params: { id: habit.id } }) },
+        { text: 'Delete', style: 'destructive', onPress: () => handleDelete(habit) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }
+
   const doneCount = habits.filter(h => completed.has(h.id)).length;
   const total = habits.length;
+  const percent = total ? Math.round((doneCount / total) * 100) : 0;
+  const bestStreak = Math.max(0, ...Object.values(streaks));
+  const completedDaysThisMonth = Object.values(monthCompletions).filter(count => total > 0 && count >= total).length;
+  const remaining = Math.max(0, total - doneCount);
 
   if (loading) return (
     <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: C.textSecondary, fontSize: 14 }}>loading...</Text>
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>Loading habits...</Text>
     </View>
   );
 
   if (loadError) return (
     <View style={{ flex: 1, backgroundColor: C.background, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <Text style={{ color: C.textSecondary, fontSize: 14 }}>couldn't load habits</Text>
-      <TouchableOpacity onPress={load} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}>
-        <Text style={{ color: C.text, fontSize: 14 }}>try again</Text>
+      <Text style={{ color: C.textSecondary, fontSize: 14 }}>Couldn't load habits.</Text>
+      <TouchableOpacity onPress={load} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14 }}>
+        <Text style={{ color: C.text, fontSize: 14, fontWeight: '800' }}>Try again</Text>
       </TouchableOpacity>
     </View>
   );
@@ -293,191 +390,218 @@ export default function HabitsScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <AestheticBackground />
       <ScrollView
-        style={{ flex: 1, backgroundColor: 'transparent' }}
+        style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-      <MindfulHeader C={C} title="Habits" onRightPress={openAdd} rightLabel="+" />
+        <MindfulHeader C={C} title="Habits" onRightPress={openAdd} rightIcon="add" />
 
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: C.text }]}>Today's Habits</Text>
-          <Text style={[styles.dateLabel, { color: C.textSecondary }]}>Cultivating focus, one step at a time.</Text>
-        </View>
-      </View>
+        <View style={[styles.summaryPanel, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={styles.summaryTop}>
+            <View style={styles.summaryTitleBlock}>
+              <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>today</Text>
+              <Text style={[styles.summaryTitle, { color: C.text }]}>{formatDateLabel(today)}</Text>
+              <Text style={[styles.summarySub, { color: C.textSecondary }]}>{progressCopy(doneCount, total)}</Text>
+            </View>
+            <View style={[styles.percentBadge, { backgroundColor: C.primaryLight, borderColor: C.border }]}>
+              <Text style={[styles.percentText, { color: C.primary }]}>{percent}%</Text>
+            </View>
+          </View>
 
-      <View style={[styles.heroCard, { backgroundColor: C.primary }]}>
-        <View>
-          <Text style={styles.heroKicker}>TODAY'S MOMENTUM</Text>
-          <Text style={styles.heroCount}>{doneCount}/{total || 0}</Text>
-          <Text style={styles.heroSub}>{total > 0 ? 'habits complete' : 'habits ready to build'}</Text>
-        </View>
-        <View style={styles.heroRings}>
-          <View style={[styles.heroRingOuter, { borderColor: 'rgba(255,255,255,0.28)' }]}>
-            <View style={[styles.heroRingInner, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-              <Text style={styles.heroRingText}>{total ? Math.round((doneCount / total) * 100) : 0}%</Text>
+          <View style={[styles.progressTrack, { backgroundColor: C.border }]}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${percent}%`,
+                  backgroundColor: total > 0 && doneCount === total ? C.success : C.primary,
+                },
+              ]}
+            />
+          </View>
+
+          <View style={[styles.metricsRow, { borderTopColor: C.border }]}>
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricValue, { color: C.text }]}>{doneCount}/{total}</Text>
+              <Text style={[styles.metricLabel, { color: C.textSecondary }]}>complete</Text>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: C.border }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricValue, { color: C.text }]}>{remaining}</Text>
+              <Text style={[styles.metricLabel, { color: C.textSecondary }]}>remaining</Text>
+            </View>
+            <View style={[styles.metricDivider, { backgroundColor: C.border }]} />
+            <View style={styles.metricItem}>
+              <Text style={[styles.metricValue, { color: C.text }]}>{bestStreak}d</Text>
+              <Text style={[styles.metricLabel, { color: C.textSecondary }]}>best streak</Text>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* Progress bar */}
-      {total > 0 && (
-        <View style={[styles.progressCard, { backgroundColor: C.card }]}>
-          <View style={styles.progressTop}>
-            <Text style={[styles.progressLabel, { color: C.textSecondary }]}>today's progress</Text>
-            <Text style={[styles.progressCount, { color: C.text }]}>{doneCount}/{total}</Text>
+        {habits.length === 0 ? (
+          <View style={[styles.emptyPanel, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="repeat" size={25} color={C.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: C.text }]}>Build your first streak</Text>
+            <Text style={[styles.emptyDesc, { color: C.textSecondary }]}>
+              Add one small habit you can check off today.
+            </Text>
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: C.primary }]}
+              onPress={openAdd}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Add habit</Text>
+            </TouchableOpacity>
           </View>
-          <View style={[styles.progressTrack, { backgroundColor: C.border }]}>
-            <View style={[
-              styles.progressFill,
-              {
-                width: total > 0 ? `${(doneCount / total) * 100}%` : '0%',
-                    backgroundColor: doneCount === total && total > 0 ? '#6CC97C' : C.primary,
-              }
-            ]} />
-          </View>
-          {doneCount === total && total > 0 && (
-            <Text style={[styles.allDoneText, { color: '#6CC97C' }]}>all done for today ✓</Text>
-          )}
-        </View>
-      )}
-
-      {/* Habit Calendar */}
-      {habits.length > 0 && <HabitCalendar
-        calYear={calYear}
-        calMonth={calMonth}
-        habits={habits}
-        monthCompletions={monthCompletions}
-        C={C}
-        onPrev={prevMonth}
-        onNext={nextMonth}
-        todayDate={today}
-        onDayPress={handleDayPress}
-      />}
-
-      {/* Habit list */}
-      {habits.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyTitle, { color: C.text }]}>no habits yet</Text>
-          <Text style={[styles.emptyDesc, { color: C.textSecondary }]}>
-            add a habit to start tracking your daily routines.
-          </Text>
-          <TouchableOpacity
-            style={[styles.emptyBtn, { backgroundColor: C.card }]}
-            onPress={openAdd}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.emptyBtnText, { color: C.text }]}>+ add first habit</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.list}>
-          {habits.map((habit) => {
-            const done = completed.has(habit.id);
-            const streak = streaks[habit.id] || 0;
-            return (
-              <TouchableOpacity
-                key={habit.id}
-                style={[
-                styles.habitRow,
-                {
-                  backgroundColor: C.card,
-                    borderColor: done ? habit.color : C.border,
-                    borderWidth: 1,
-                    elevation: 2,
-                  }
-                ]}
-                onPress={() => handleToggle(habit.id)}
-                onLongPress={() => Alert.alert(
-                  habit.title,
-                  null,
-                  [
-                    { text: 'edit', onPress: () => openEdit(habit) },
-                    { text: 'view history', onPress: () => router.push({ pathname: '/habit-detail', params: { id: habit.id } }) },
-                    { text: 'delete', style: 'destructive', onPress: () => handleDelete(habit) },
-                    { text: 'cancel', style: 'cancel' },
-                  ]
-                )}
-                activeOpacity={0.7}
-              >
-                {/* Emoji circle */}
-                <View style={[styles.emojiCircle, { backgroundColor: done ? habit.color : C.primaryLight }]}>
-                  <Text style={styles.emoji}>{habit.emoji}</Text>
+        ) : (
+          <>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={[styles.sectionTitle, { color: C.text }]}>Today's checklist</Text>
+                <Text style={[styles.sectionHint, { color: C.textSecondary }]}>Tap a habit to mark it done.</Text>
+              </View>
+              {doneCount === total && (
+                <View style={[styles.donePill, { backgroundColor: C.mint }]}>
+                  <Ionicons name="checkmark-circle" size={15} color={C.success} />
+                  <Text style={[styles.donePillText, { color: C.success }]}>done</Text>
                 </View>
+              )}
+            </View>
 
-                {/* Title + streak */}
-                <View style={styles.habitInfo}>
-                  <Text style={[
-                    styles.habitTitle,
-                    { color: done ? C.textSecondary : C.text },
-                    done && { textDecorationLine: 'line-through', opacity: 0.7 }
-                  ]}>
-                    {habit.title}
-                  </Text>
-                  {streak > 0 && (
-                    <Text style={[styles.streak, { color: C.textSecondary }]}>
-                      🔥 {streak} day{streak !== 1 ? 's' : ''}
-                    </Text>
-                  )}
-                </View>
+            <View style={styles.list}>
+              {habits.map((habit) => {
+                const done = completed.has(habit.id);
+                const streak = streaks[habit.id] || 0;
+                return (
+                  <TouchableOpacity
+                    key={habit.id}
+                    style={[
+                      styles.habitRow,
+                      {
+                        backgroundColor: C.card,
+                        borderColor: done ? habit.color : C.border,
+                      },
+                    ]}
+                    onPress={() => handleToggle(habit.id)}
+                    onLongPress={() => openHabitMenu(habit)}
+                    activeOpacity={0.72}
+                  >
+                    <View style={[styles.habitAccent, { backgroundColor: habit.color }]} />
+                    <View style={[styles.emojiCircle, { backgroundColor: done ? habit.color : C.primaryLight }]}>
+                      <Text style={styles.emoji}>{habit.emoji}</Text>
+                    </View>
 
-                {/* Check */}
-                <View style={[
-                  styles.check,
-                  { borderColor: done ? habit.color : C.border },
-                  done && { backgroundColor: habit.color },
-                ]}>
-                  {done && <Text style={styles.checkMark}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+                    <View style={styles.habitInfo}>
+                      <Text
+                        style={[
+                          styles.habitTitle,
+                          { color: C.text },
+                          done && { color: C.textSecondary, textDecorationLine: 'line-through' },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {habit.title}
+                      </Text>
+                      <View style={styles.habitMetaRow}>
+                        <Ionicons name="flame-outline" size={13} color={streak > 0 ? C.primary : C.textSecondary} />
+                        <Text style={[styles.habitMeta, { color: C.textSecondary }]}>
+                          {streak > 0 ? `${streak} day streak` : 'No current streak'}
+                        </Text>
+                      </View>
+                    </View>
 
-      {/* Day edit modal */}
+                    <TouchableOpacity
+                      style={[styles.rowIconButton, { borderColor: C.border }]}
+                      onPress={() => openHabitMenu(habit)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={17} color={C.textSecondary} />
+                    </TouchableOpacity>
+
+                    <View
+                      style={[
+                        styles.check,
+                        {
+                          borderColor: done ? habit.color : C.border,
+                          backgroundColor: done ? habit.color : 'transparent',
+                        },
+                      ]}
+                    >
+                      {done && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <HabitCalendar
+              calYear={calYear}
+              calMonth={calMonth}
+              habits={habits}
+              monthCompletions={monthCompletions}
+              C={C}
+              onPrev={prevMonth}
+              onNext={nextMonth}
+              todayDate={today}
+              onDayPress={handleDayPress}
+            />
+
+            <View style={[styles.monthNote, { backgroundColor: C.mint, borderColor: C.border }]}>
+              <Ionicons name="calendar-clear-outline" size={17} color={C.success} />
+              <Text style={[styles.monthNoteText, { color: C.inkSoft }]}>
+                {completedDaysThisMonth} fully complete {completedDaysThisMonth === 1 ? 'day' : 'days'} this month.
+              </Text>
+            </View>
+          </>
+        )}
+      </ScrollView>
+
       <Modal visible={!!editingDate} transparent animationType="slide">
         <View style={styles.overlay}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setEditingDate(null)} activeOpacity={1} />
+          <TouchableOpacity style={styles.backdrop} onPress={() => setEditingDate(null)} activeOpacity={1} />
           <View style={[styles.sheet, { backgroundColor: C.card }]}>
-            <Text style={[styles.sheetTitle, { color: C.text }]}>
-              {editingDate
-                ? new Date(editingDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-                : ''}
-            </Text>
-            <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>tap to toggle</Text>
+            <View style={styles.sheetTopRow}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: C.text }]}>
+                  {editingDate ? formatDateLabel(editingDate) : ''}
+                </Text>
+                <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Edit completed habits</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: C.background, borderColor: C.border }]}
+                onPress={() => setEditingDate(null)}
+              >
+                <Ionicons name="close" size={18} color={C.text} />
+              </TouchableOpacity>
+            </View>
+
             {habits.map(habit => {
               const done = editDateCompletions.has(habit.id);
               return (
                 <TouchableOpacity
                   key={habit.id}
-                  style={[styles.habitRow, {
-                    backgroundColor: C.card,
-                    borderColor: done ? habit.color : 'transparent',
-                    borderWidth: done ? 2 : 0,
-                    elevation: 1,
-                  }]}
+                  style={[styles.sheetHabitRow, { backgroundColor: C.background, borderColor: done ? habit.color : C.border }]}
                   onPress={() => handleDayHabitToggle(habit.id)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.75}
                 >
-                  <View style={[styles.emojiCircle, {
-                    backgroundColor: done ? habit.color : C.border,
-                    width: 36, height: 36, borderRadius: 18,
-                  }]}>
-                    <Text style={[styles.emoji, { fontSize: 16 }]}>{habit.emoji}</Text>
+                  <View style={[styles.sheetEmoji, { backgroundColor: done ? habit.color : C.card }]}>
+                    <Text style={styles.sheetEmojiText}>{habit.emoji}</Text>
                   </View>
-                  <Text style={[
-                    styles.habitTitle, { color: done ? C.textSecondary : C.text, flex: 1 },
-                    done && { textDecorationLine: 'line-through', opacity: 0.7 },
-                  ]}>
+                  <Text
+                    style={[
+                      styles.sheetHabitTitle,
+                      { color: C.text },
+                      done && { color: C.textSecondary, textDecorationLine: 'line-through' },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {habit.title}
                   </Text>
-                  <View style={[styles.check,
-                    { borderColor: done ? habit.color : C.border },
-                    done && { backgroundColor: habit.color },
-                  ]}>
-                    {done && <Text style={styles.checkMark}>✓</Text>}
+                  <View style={[styles.check, { borderColor: done ? habit.color : C.border, backgroundColor: done ? habit.color : 'transparent' }]}>
+                    {done && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
                   </View>
                 </TouchableOpacity>
               );
@@ -486,237 +610,367 @@ export default function HabitsScreen() {
         </View>
       </Modal>
 
-      {/* Add/Edit Modal */}
       <Modal visible={showAdd} transparent animationType="slide">
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={styles.keyboardAvoid}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-        <View style={styles.overlay}>
-          {/* Backdrop — tapping here dismisses */}
-          <TouchableOpacity style={{ flex: 1 }} onPress={resetForm} activeOpacity={1} />
-          {/* Sheet — PanResponder only on handle zone, no interactive children there */}
-          <Animated.View
-            style={[styles.sheet, { backgroundColor: C.card, transform: [{ translateY: sheetTranslateY }] }]}
-          >
-            <View style={styles.sheetHandle} {...handlePanResponder.panHandlers}>
-              <View style={[styles.sheetHandleBar, { backgroundColor: C.border }]} />
-            </View>
-
-            <Text style={[styles.sheetTitle, { color: C.text }]}>
-              {editingHabit ? 'edit habit' : 'new habit'}
-            </Text>
-
-            {/* Name + emoji on one row */}
-            <View style={styles.nameRow}>
-              <TextInput
-                style={[styles.emojiInput, { backgroundColor: C.background, borderColor: C.border }]}
-                value={newEmoji}
-                onChangeText={(t) => {
-                  const chars = [...t];
-                  if (chars.length > 0) setNewEmoji(chars[chars.length - 1]);
-                }}
-                placeholder="😊"
-                placeholderTextColor={C.textSecondary}
-                returnKeyType="done"
-              />
-              <TextInput
-                style={[styles.nameInput, { backgroundColor: C.background, borderColor: C.border, color: C.text, flex: 1 }]}
-                placeholder="habit name..."
-                placeholderTextColor={C.textSecondary}
-                value={newTitle}
-                onChangeText={setNewTitle}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={handleAdd}
-              />
-            </View>
-
-            {/* Color picker */}
-            <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>color</Text>
-            <View style={styles.colorRow}>
-              {COLOR_OPTIONS.map((col) => (
-                <TouchableOpacity
-                  key={col}
-                  style={[
-                    styles.colorCircle,
-                    { backgroundColor: col },
-                    newColor === col && { borderWidth: 3, borderColor: C.text, transform: [{ scale: 1.15 }] },
-                  ]}
-                  onPress={() => setNewColor(col)}
-                />
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: newColor }, !newTitle.trim() && { opacity: 0.4 }]}
-              onPress={handleAdd}
-              disabled={!newTitle.trim()}
-              activeOpacity={0.8}
+          <View style={styles.overlay}>
+            <TouchableOpacity style={styles.backdrop} onPress={resetForm} activeOpacity={1} />
+            <Animated.View
+              style={[styles.sheet, { backgroundColor: C.card, transform: [{ translateY: sheetTranslateY }] }]}
             >
-              <Text style={styles.saveBtnText}>
-                {editingHabit ? 'save changes' : 'add habit'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
+              <View style={styles.sheetHandle} {...handlePanResponder.panHandlers}>
+                <View style={[styles.sheetHandleBar, { backgroundColor: C.border }]} />
+              </View>
+
+              <View style={styles.sheetTopRow}>
+                <View>
+                  <Text style={[styles.sheetTitle, { color: C.text }]}>
+                    {editingHabit ? 'Edit habit' : 'New habit'}
+                  </Text>
+                  <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Name it, pick a color, then start.</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.iconButton, { backgroundColor: C.background, borderColor: C.border }]}
+                  onPress={resetForm}
+                >
+                  <Ionicons name="close" size={18} color={C.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.nameRow}>
+                <TextInput
+                  style={[styles.emojiInput, { backgroundColor: C.background, borderColor: C.border, color: C.text }]}
+                  value={newEmoji}
+                  onChangeText={(t) => {
+                    const chars = [...t];
+                    if (chars.length > 0) setNewEmoji(chars[chars.length - 1]);
+                  }}
+                  placeholder={SMILE_EMOJI}
+                  placeholderTextColor={C.textSecondary}
+                  returnKeyType="done"
+                />
+                <TextInput
+                  style={[styles.nameInput, { backgroundColor: C.background, borderColor: C.border, color: C.text }]}
+                  placeholder="Habit name"
+                  placeholderTextColor={C.textSecondary}
+                  value={newTitle}
+                  onChangeText={setNewTitle}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={handleAdd}
+                />
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Color</Text>
+              <View style={styles.colorRow}>
+                {COLOR_OPTIONS.map((col) => (
+                  <TouchableOpacity
+                    key={col}
+                    style={[
+                      styles.colorCircle,
+                      { backgroundColor: col },
+                      newColor === col && { borderWidth: 3, borderColor: C.text, transform: [{ scale: 1.12 }] },
+                    ]}
+                    onPress={() => setNewColor(col)}
+                    activeOpacity={0.7}
+                  />
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.saveButton, { backgroundColor: newColor }, !newTitle.trim() && { opacity: 0.4 }]}
+                onPress={handleAdd}
+                disabled={!newTitle.trim()}
+                activeOpacity={0.85}
+              >
+                <Ionicons name={editingHabit ? 'save-outline' : 'add-circle-outline'} size={18} color="#FFFFFF" />
+                <Text style={styles.saveButtonText}>
+                  {editingHabit ? 'Save changes' : 'Add habit'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
-    </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 24, paddingTop: 54, paddingBottom: 28 },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: 20,
+  scroll: { flex: 1, backgroundColor: 'transparent' },
+  content: { padding: 20, paddingTop: 54, paddingBottom: 34 },
+
+  summaryPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 22,
   },
-  title: { fontSize: 25, fontWeight: '900', letterSpacing: 0 },
-  dateLabel: { fontSize: 12, letterSpacing: 0, marginTop: 5, fontWeight: '600' },
-  addBtn: {
-    width: 42, height: 42,
-    borderRadius: 21, elevation: 2,
-    alignItems: 'center', justifyContent: 'center',
+  summaryTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 14,
   },
-  addBtnText: { fontSize: 24, fontWeight: '500', lineHeight: 28 },
-  heroCard: {
-    borderRadius: 26,
-    padding: 20,
-    minHeight: 145,
-    marginBottom: 18,
+  summaryTitleBlock: { flex: 1 },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  summaryTitle: { fontSize: 23, fontWeight: '900', marginTop: 4 },
+  summarySub: { fontSize: 13, lineHeight: 18, marginTop: 6, fontWeight: '700' },
+  percentBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  percentText: { fontSize: 21, fontWeight: '900' },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 18,
+  },
+  progressFill: { height: '100%', borderRadius: 999 },
+  metricsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    marginTop: 18,
+    paddingTop: 14,
+  },
+  metricItem: { flex: 1, alignItems: 'center', gap: 3 },
+  metricValue: { fontSize: 17, fontWeight: '900' },
+  metricLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  metricDivider: { width: 1, alignSelf: 'stretch' },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '900' },
+  sectionHint: { fontSize: 12, fontWeight: '700', marginTop: 3 },
+  donePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  donePillText: { fontSize: 12, fontWeight: '900' },
+
+  list: { gap: 10, marginBottom: 22 },
+  habitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    gap: 11,
     overflow: 'hidden',
   },
-  heroKicker: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  heroCount: {
-    color: '#FFFFFF',
-    fontSize: 42,
-    fontWeight: '900',
-    letterSpacing: 0,
-    marginTop: 8,
-  },
-  heroSub: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  heroRings: {
-    width: 100,
-    height: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroRingOuter: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroRingInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroRingText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  progressCard: {
-    borderRadius: 22, elevation: 2,
-    padding: 16, marginBottom: 18, gap: 10,
-  },
-  progressTop: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressLabel: { fontSize: 12, letterSpacing: 0, fontWeight: '800' },
-  progressCount: { fontSize: 13, fontWeight: '700' },
-  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: 6, borderRadius: 3 },
-  allDoneText: { fontSize: 12, letterSpacing: 0.3, fontWeight: '600' },
-  emptyState: { alignItems: 'center', paddingTop: 42, gap: 10 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', letterSpacing: 0 },
-  emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
-  emptyBtn: {
-    marginTop: 12, paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 999, elevation: 1,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: '600' },
-  list: { gap: 12 },
-  habitRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 22, padding: 15, gap: 14,
+  habitAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
   },
   emojiCircle: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emoji: { fontSize: 20 },
-  habitInfo: { flex: 1, gap: 3 },
+  habitInfo: { flex: 1, minWidth: 0, gap: 5 },
   habitTitle: { fontSize: 15, letterSpacing: 0, fontWeight: '900' },
-  streak: { fontSize: 12, letterSpacing: 0.2 },
+  habitMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  habitMeta: { fontSize: 12, fontWeight: '700' },
+  rowIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   check: {
-    width: 26, height: 26, borderRadius: 13,
-    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  checkMark: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+
+  emptyPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    padding: 24,
+    gap: 10,
+  },
+  emptyIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: { fontSize: 19, fontWeight: '900', letterSpacing: 0 },
+  emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+
+  calendarPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 12,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  calendarTitle: { fontSize: 18, fontWeight: '900', marginTop: 3 },
+  calendarNav: { flexDirection: 'row', gap: 8 },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDayLabels: { flexDirection: 'row', marginBottom: 6 },
+  calendarDayLabel: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarCell: {
+    width: '14.285%',
+    aspectRatio: 1,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  calendarDayNum: { fontSize: 12, fontWeight: '900' },
+  calendarMiniTrack: {
+    height: 3,
+    width: '64%',
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 5,
+  },
+  calendarMiniFill: { height: '100%', borderRadius: 999 },
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 14,
+    marginTop: 12,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 11, fontWeight: '800' },
+  monthNote: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  monthNoteText: { flex: 1, fontSize: 12, fontWeight: '800', lineHeight: 17 },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(24,18,14,0.48)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1 },
+  keyboardAvoid: { flex: 1 },
   sheet: {
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, paddingBottom: 44, gap: 12,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 20,
+    paddingBottom: 34,
+    gap: 13,
   },
-  sheetTitle: { fontSize: 18, fontWeight: '700', letterSpacing: 0 },
-  fieldLabel: { fontSize: 12, letterSpacing: 0.4, marginBottom: 4 },
-  sheetHandle: { alignItems: 'center', justifyContent: 'center', height: 28, marginBottom: 4 },
-  sheetHandleBar: { width: 40, height: 4, borderRadius: 2 },
+  sheetTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sheetTitle: { fontSize: 20, fontWeight: '900', letterSpacing: 0 },
+  fieldLabel: { fontSize: 12, fontWeight: '800', lineHeight: 17 },
+  sheetHandle: { alignItems: 'center', justifyContent: 'center', height: 22, marginTop: -4 },
+  sheetHandleBar: { width: 42, height: 4, borderRadius: 999 },
+  sheetHabitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 15,
+    borderWidth: 1,
+    padding: 11,
+    gap: 11,
+  },
+  sheetEmoji: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetEmojiText: { fontSize: 18 },
+  sheetHabitTitle: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '900' },
+
   nameRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   emojiInput: {
-    width: 54, height: 54, borderRadius: 16, borderWidth: 1,
-    textAlign: 'center', fontSize: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 15,
+    borderWidth: 1,
+    textAlign: 'center',
+    fontSize: 25,
   },
   nameInput: {
-    borderRadius: 14, borderWidth: 1,
-    paddingHorizontal: 14, height: 54, fontSize: 15,
+    flex: 1,
+    height: 56,
+    borderRadius: 15,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    fontWeight: '800',
   },
-  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  colorCircle: { width: 30, height: 30, borderRadius: 15 },
-  saveBtn: { borderRadius: 999, paddingVertical: 15, alignItems: 'center', marginTop: 4 },
-  saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
-  calCard: {
-    borderRadius: 22, elevation: 2,
-    padding: 16, marginBottom: 20,
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 11 },
+  colorCircle: { width: 31, height: 31, borderRadius: 11 },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 15,
+    paddingVertical: 15,
+    marginTop: 4,
   },
-  calHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 10,
-  },
-  calNavBtn: { padding: 4 },
-  calNav: { fontSize: 22, fontWeight: '300', paddingHorizontal: 4 },
-  calTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
-  calDayLabels: { flexDirection: 'row', marginBottom: 4 },
-  calDayLabel: { flex: 1, textAlign: 'center', fontSize: 10, letterSpacing: 0.3 },
-  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCell: {
-    width: '14.285%', aspectRatio: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  calDayNum: { fontSize: 11, fontWeight: '500' },
-  calDot: { width: 5, height: 5, borderRadius: 3, marginTop: 2 },
-  calLegend: {
-    flexDirection: 'row', gap: 14, marginTop: 8, justifyContent: 'flex-end',
-  },
-  calLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  calLegendText: { fontSize: 10, letterSpacing: 0.3 },
+  saveButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
 });

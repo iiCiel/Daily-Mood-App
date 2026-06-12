@@ -2,19 +2,19 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, useColorScheme, View } from 'react-native';
 
 const LIGHT = {
-  canvas: '#F6F7FB',
-  line: 'rgba(37, 99, 235, 0.10)',
-  bandA: 'rgba(37, 99, 235, 0.08)',
-  bandB: 'rgba(13, 148, 136, 0.08)',
-  bandC: 'rgba(249, 115, 22, 0.08)',
+  canvas: '#F5F0E8',
+  line: 'rgba(150, 80, 30, 0.07)',
+  bandA: 'rgba(180, 90, 40, 0.09)',
+  bandB: 'rgba(90, 138, 90, 0.07)',
+  bandC: 'rgba(180, 140, 60, 0.08)',
 };
 
 const DARK = {
-  canvas: '#0B1020',
-  line: 'rgba(96, 165, 250, 0.12)',
-  bandA: 'rgba(96, 165, 250, 0.11)',
-  bandB: 'rgba(45, 212, 191, 0.09)',
-  bandC: 'rgba(251, 146, 60, 0.09)',
+  canvas: '#1C1108',
+  line: 'rgba(200, 120, 60, 0.10)',
+  bandA: 'rgba(200, 110, 50, 0.13)',
+  bandB: 'rgba(60, 122, 104, 0.09)',
+  bandC: 'rgba(180, 130, 60, 0.09)',
 };
 
 function FloatingBand({ style, delay = 0 }) {

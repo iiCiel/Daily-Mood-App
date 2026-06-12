@@ -178,7 +178,7 @@ export default function MoodScreen() {
       <View style={styles.moodHeroRow}>
         <View style={[styles.moodHeroCard, { backgroundColor: C.lavender }]}>
           <Text style={[styles.moodHeroLabel, { color: C.textSecondary }]}>Month Entries</Text>
-          <Text style={[styles.moodHeroValue, { color: '#715B86' }]}>{stats?.total || 0}</Text>
+          <Text style={[styles.moodHeroValue, { color: C.grape }]}>{stats?.total || 0}</Text>
           <Text style={[styles.moodHeroSub, { color: C.textSecondary }]}>logged reflections</Text>
         </View>
         <View style={[styles.moodHeroCard, { backgroundColor: C.mint }]}>
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 14,
     marginBottom: 18,
-    shadowColor: '#172417',
+    shadowColor: '#2C1A0E',
     shadowOpacity: 0.05,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 18,
     marginBottom: 18,
-    shadowColor: '#172417',
+    shadowColor: '#2C1A0E',
     shadowOpacity: 0.05,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
     elevation: 2,
-    shadowColor: '#172417',
+    shadowColor: '#2C1A0E',
     shadowOpacity: 0.04,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },

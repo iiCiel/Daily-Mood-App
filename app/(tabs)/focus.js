@@ -334,7 +334,7 @@ export default function FocusScreen() {
           />
 
           {/* ── Timer panel ─────────────────────────────── */}
-          <View style={[styles.timerPanel, { backgroundColor: '#0B1020' }]}>
+          <View style={[styles.timerPanel, { backgroundColor: '#2C1A0E' }]}>
             <AestheticBackground dark />
             <View style={styles.timerPanelInner}>
               <View style={styles.modeRow}>
@@ -343,12 +343,12 @@ export default function FocusScreen() {
                   return (
                     <TouchableOpacity
                       key={key}
-                      style={[styles.modeBtn, active && { backgroundColor: '#FFFFFF' }]}
+                      style={[styles.modeBtn, active && { backgroundColor: '#FFFDF7' }]}
                       onPress={() => switchMode(key)}
                       activeOpacity={0.75}
                     >
-                      <Ionicons name={MODE_ICONS[key]} size={15} color={active ? '#0B1020' : 'rgba(255,255,255,0.70)'} />
-                      <Text style={[styles.modeText, { color: active ? '#0B1020' : 'rgba(255,255,255,0.70)' }]}>
+                      <Ionicons name={MODE_ICONS[key]} size={15} color={active ? '#2C1A0E' : 'rgba(255,255,255,0.70)'} />
+                      <Text style={[styles.modeText, { color: active ? '#2C1A0E' : 'rgba(255,255,255,0.70)' }]}>
                         {MODE_LABELS[key]}
                       </Text>
                     </TouchableOpacity>
@@ -418,7 +418,7 @@ export default function FocusScreen() {
                   <Ionicons name="refresh-outline" size={19} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.primaryControl} onPress={running ? pauseTimer : startTimer} activeOpacity={0.82}>
-                  <Ionicons name={running ? 'pause' : 'play'} size={24} color="#0B1020" />
+                  <Ionicons name={running ? 'pause' : 'play'} size={24} color="#2C1A0E" />
                   <Text style={styles.primaryControlText}>
                     {running ? 'Pause' : secondsLeft === totalSecs ? 'Start' : 'Resume'}
                   </Text>
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { paddingHorizontal: 20, paddingTop: 54, paddingBottom: 42 },
 
-  timerPanel: { borderRadius: 24, overflow: 'hidden', marginBottom: 14, shadowColor: '#0B1020', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
+  timerPanel: { borderRadius: 24, overflow: 'hidden', marginBottom: 14, shadowColor: '#2C1A0E', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 16 }, elevation: 8 },
   timerPanelInner: { padding: 18, gap: 14 },
   modeRow: { flexDirection: 'row', gap: 7 },
   modeBtn: { flex: 1, minHeight: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 5, backgroundColor: 'rgba(255,255,255,0.10)' },
@@ -639,8 +639,8 @@ const styles = StyleSheet.create({
 
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   secondaryControl: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
-  primaryControl: { minWidth: 142, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, backgroundColor: '#FFFFFF' },
-  primaryControlText: { color: '#0B1020', fontSize: 15, fontWeight: '900' },
+  primaryControl: { minWidth: 142, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, backgroundColor: '#FFFDF7' },
+  primaryControlText: { color: '#2C1A0E', fontSize: 15, fontWeight: '900' },
 
   statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: { flex: 1, borderRadius: 17, borderWidth: 1, padding: 12, minHeight: 104 },
