@@ -31,6 +31,14 @@ const PROMPTS = [
   "what challenged you today?",
 ];
 const ENTRY_TAGS = ['work', 'health', 'social', 'family', 'sleep', 'exercise', 'food', 'learning', 'creative', 'travel'];
+const PRODUCTIVITY_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const PRAYERS = [
+  { key: 'fajr', label: 'fajr' },
+  { key: 'dhuhr', label: 'dhuhr' },
+  { key: 'asr', label: 'asr' },
+  { key: 'maghrib', label: 'maghrib' },
+  { key: 'isha', label: 'isha' },
+];
 import { getEntry, saveEntry, deleteEntry, getStreak } from '../src/db/database';
 import { checkStreakMilestone } from '../src/notifications';
 import { COLORS, MOODS } from '../src/constants/theme';
@@ -50,6 +58,8 @@ export default function EntryScreen() {
   const [promptIndex, setPromptIndex] = useState(() => Math.floor(Math.random() * PROMPTS.length));
   const [tags, setTags] = useState([]);
   const [gratitude, setGratitude] = useState(['', '', '']);
+  const [productivity, setProductivity] = useState(null);
+  const [prayers, setPrayers] = useState({});
 
   useEffect(() => {
     loadEntry();
@@ -66,6 +76,8 @@ export default function EntryScreen() {
         setTags(data.tags || []);
         const g = data.gratitude || [];
         setGratitude([g[0] || '', g[1] || '', g[2] || '']);
+        setProductivity(data.productivity || null);
+        setPrayers(data.prayers || {});
         setHasExisting(true);
       }
     } catch (e) {
@@ -81,7 +93,7 @@ export default function EntryScreen() {
     setSaving(true);
     try {
       const filteredGratitude = gratitude.filter(g => g.trim());
-      await saveEntry(date, mood, note, photos, tags, filteredGratitude);
+      await saveEntry(date, mood, note, photos, tags, filteredGratitude, productivity, prayers);
       setHasExisting(true);
       try {
         const streak = await getStreak();
@@ -164,6 +176,60 @@ export default function EntryScreen() {
           </View>
 
           <MoodPicker selected={mood} onSelect={setMood} />
+
+          {/* Productivity */}
+          <View style={styles.tagSection}>
+            <Text style={[styles.tagLabel, { color: C.textSecondary }]}>how productive were you?</Text>
+            <View style={styles.productivityRow}>
+              {PRODUCTIVITY_LEVELS.map((level) => {
+                const sel = productivity === level;
+                return (
+                  <TouchableOpacity
+                    key={level}
+                    style={[styles.productivityPill, {
+                      backgroundColor: sel ? C.accent : C.card,
+                      borderColor: sel ? C.accent : C.border,
+                    }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setProductivity(prev => prev === level ? null : level);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.productivityText, { color: sel ? C.white : C.text }]}>{level}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Daily Prayers */}
+          <View style={styles.tagSection}>
+            <Text style={[styles.tagLabel, { color: C.textSecondary }]}>prayers</Text>
+            <View style={styles.prayerRow}>
+              {PRAYERS.map(({ key, label }) => {
+                const sel = !!prayers[key];
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.tagChip, {
+                      backgroundColor: sel ? C.text : C.card,
+                      borderColor: sel ? C.text : C.border,
+                    }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setPrayers(prev => ({ ...prev, [key]: !prev[key] }));
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.tagChipText, { color: sel ? C.white : C.textSecondary }]}>
+                      {sel ? '✓ ' : ''}{label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
 
           {/* Note */}
           <View style={styles.noteSection}>
@@ -376,4 +442,28 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   tagChipText: { fontSize: 13, letterSpacing: 0.2 },
+  prayerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 8,
+  },
+  productivityRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 8,
+  },
+  productivityPill: {
+    flexBasis: '17%',
+    flexGrow: 1,
+    marginRight: '2%',
+    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  productivityText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

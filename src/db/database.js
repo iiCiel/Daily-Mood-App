@@ -208,6 +208,8 @@ async function _initDatabase() {
   try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN gratitude TEXT DEFAULT '[]'"); } catch {}
+  try { await database.runAsync('ALTER TABLE entries ADD COLUMN productivity INTEGER'); } catch {}
+  try { await database.runAsync("ALTER TABLE entries ADD COLUMN prayers TEXT DEFAULT '{}'"); } catch {}
   try { await database.runAsync('ALTER TABLE pomodoro_sessions ADD COLUMN label TEXT'); } catch {}
   await database.runAsync(
     `INSERT OR IGNORE INTO projects (id, name, color, status, notes, archived, created_at, updated_at)
@@ -229,7 +231,7 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
 
-export async function saveEntry(date, mood, note, photoUris = [], tags = [], gratitude = []) {
+export async function saveEntry(date, mood, note, photoUris = [], tags = [], gratitude = [], productivity = null, prayers = {}) {
   const database = await getDatabase();
   const existing = await database.getFirstAsync(
     'SELECT id FROM entries WHERE date = ?',
@@ -240,16 +242,17 @@ export async function saveEntry(date, mood, note, photoUris = [], tags = [], gra
   const now = new Date().toISOString();
   const tagsJson = JSON.stringify(tags || []);
   const gratitudeJson = JSON.stringify(gratitude || []);
+  const prayersJson = JSON.stringify(prayers || {});
 
   if (existing) {
     await database.runAsync(
-      'UPDATE entries SET mood = ?, note = ?, tags = ?, gratitude = ?, updated_at = ?, synced = 0 WHERE id = ?',
-      [mood, note, tagsJson, gratitudeJson, now, entryId]
+      'UPDATE entries SET mood = ?, note = ?, tags = ?, gratitude = ?, productivity = ?, prayers = ?, updated_at = ?, synced = 0 WHERE id = ?',
+      [mood, note, tagsJson, gratitudeJson, productivity, prayersJson, now, entryId]
     );
   } else {
     await database.runAsync(
-      'INSERT INTO entries (id, date, mood, note, tags, gratitude, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [entryId, date, mood, note, tagsJson, gratitudeJson, now, now]
+      'INSERT INTO entries (id, date, mood, note, tags, gratitude, productivity, prayers, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [entryId, date, mood, note, tagsJson, gratitudeJson, productivity, prayersJson, now, now]
     );
   }
 
@@ -302,7 +305,9 @@ export async function getEntry(date) {
   try { parsedTags = JSON.parse(entry.tags || '[]'); } catch {}
   let parsedGratitude = [];
   try { parsedGratitude = JSON.parse(entry.gratitude || '[]'); } catch {}
-  return { ...entry, photos, tags: parsedTags, gratitude: parsedGratitude };
+  let parsedPrayers = {};
+  try { parsedPrayers = JSON.parse(entry.prayers || '{}'); } catch {}
+  return { ...entry, photos, tags: parsedTags, gratitude: parsedGratitude, prayers: parsedPrayers };
 }
 
 export async function getEntries(limit = 50, offset = 0) {
