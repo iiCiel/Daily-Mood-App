@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  TextInput, Modal, Alert, KeyboardAvoidingView, Platform,
+  TextInput, Modal, KeyboardAvoidingView, Platform,
   PanResponder, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import MindfulHeader from '../../src/components/MindfulHeader';
 import AestheticBackground from '../../src/components/AestheticBackground';
+import HabitIcon from '../../src/components/HabitIcon';
+import { HABIT_ICONS, DEFAULT_HABIT_ICON } from '../../src/constants/habitIcons';
 import {
   getHabits, createHabit, updateHabit, archiveHabit,
   toggleCompletion, getCompletionsForDate,
@@ -21,9 +23,6 @@ const COLOR_OPTIONS = [
   '#8B6BAE', '#D6A23F', '#668A4C', '#B76E79', '#4F78B8',
   '#C96B3A', '#6CC97C', '#F9C74F', '#F28B82',
 ];
-
-const DEFAULT_EMOJI = '\u{1F4A7}';
-const SMILE_EMOJI = '\u{1F60A}';
 
 function todayStr() {
   const d = new Date();
@@ -191,8 +190,10 @@ export default function HabitsScreen() {
   const [editDateCompletions, setEditDateCompletions] = useState(new Set());
 
   const [newTitle, setNewTitle] = useState('');
-  const [newEmoji, setNewEmoji] = useState(DEFAULT_EMOJI);
+  const [newIcon, setNewIcon] = useState(DEFAULT_HABIT_ICON);
   const [newColor, setNewColor] = useState('#4F8F6D');
+  const [menuHabit, setMenuHabit] = useState(null);
+  const [confirmDeleteHabit, setConfirmDeleteHabit] = useState(null);
 
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const resetFormRef = useRef(null);
@@ -304,9 +305,9 @@ export default function HabitsScreen() {
   async function handleAdd() {
     if (!newTitle.trim()) return;
     if (editingHabit) {
-      await updateHabit(editingHabit.id, newTitle.trim(), newEmoji, newColor);
+      await updateHabit(editingHabit.id, newTitle.trim(), newIcon, newColor);
     } else {
-      await createHabit(newTitle.trim(), newEmoji, newColor);
+      await createHabit(newTitle.trim(), newIcon, newColor);
     }
     resetForm();
     load();
@@ -315,7 +316,7 @@ export default function HabitsScreen() {
   function openAdd() {
     setEditingHabit(null);
     setNewTitle('');
-    setNewEmoji(DEFAULT_EMOJI);
+    setNewIcon(DEFAULT_HABIT_ICON);
     setNewColor('#4F8F6D');
     setShowAdd(true);
   }
@@ -323,7 +324,7 @@ export default function HabitsScreen() {
   function openEdit(habit) {
     setEditingHabit(habit);
     setNewTitle(habit.title);
-    setNewEmoji(habit.emoji);
+    setNewIcon(HABIT_ICONS.includes(habit.emoji) ? habit.emoji : DEFAULT_HABIT_ICON);
     setNewColor(habit.color);
     setShowAdd(true);
   }
@@ -332,36 +333,26 @@ export default function HabitsScreen() {
     setShowAdd(false);
     setEditingHabit(null);
     setNewTitle('');
-    setNewEmoji(DEFAULT_EMOJI);
+    setNewIcon(DEFAULT_HABIT_ICON);
     setNewColor('#4F8F6D');
   }
   resetFormRef.current = resetForm;
 
-  async function handleDelete(habit) {
-    Alert.alert('Delete habit', `Remove "${habit.title}" and its history?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await archiveHabit(habit.id);
-          load();
-        },
-      },
-    ]);
+  function openHabitMenu(habit) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMenuHabit(habit);
   }
 
-  function openHabitMenu(habit) {
-    Alert.alert(
-      habit.title,
-      null,
-      [
-        { text: 'Edit', onPress: () => openEdit(habit) },
-        { text: 'View history', onPress: () => router.push({ pathname: '/habit-detail', params: { id: habit.id } }) },
-        { text: 'Delete', style: 'destructive', onPress: () => handleDelete(habit) },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+  function handleDeleteRequest(habit) {
+    setMenuHabit(null);
+    setConfirmDeleteHabit(habit);
+  }
+
+  async function confirmDelete() {
+    if (!confirmDeleteHabit) return;
+    await archiveHabit(confirmDeleteHabit.id);
+    setConfirmDeleteHabit(null);
+    load();
   }
 
   const doneCount = habits.filter(h => completed.has(h.id)).length;
@@ -491,7 +482,7 @@ export default function HabitsScreen() {
                   >
                     <View style={[styles.habitAccent, { backgroundColor: habit.color }]} />
                     <View style={[styles.emojiCircle, { backgroundColor: done ? habit.color : C.primaryLight }]}>
-                      <Text style={styles.emoji}>{habit.emoji}</Text>
+                      <HabitIcon name={habit.emoji} size={20} color={done ? '#FFFFFF' : habit.color} />
                     </View>
 
                     <View style={styles.habitInfo}>
@@ -588,7 +579,7 @@ export default function HabitsScreen() {
                   activeOpacity={0.75}
                 >
                   <View style={[styles.sheetEmoji, { backgroundColor: done ? habit.color : C.card }]}>
-                    <Text style={styles.sheetEmojiText}>{habit.emoji}</Text>
+                    <HabitIcon name={habit.emoji} size={18} color={done ? '#FFFFFF' : habit.color} />
                   </View>
                   <Text
                     style={[
@@ -640,17 +631,9 @@ export default function HabitsScreen() {
               </View>
 
               <View style={styles.nameRow}>
-                <TextInput
-                  style={[styles.emojiInput, { backgroundColor: C.background, borderColor: C.border, color: C.text }]}
-                  value={newEmoji}
-                  onChangeText={(t) => {
-                    const chars = [...t];
-                    if (chars.length > 0) setNewEmoji(chars[chars.length - 1]);
-                  }}
-                  placeholder={SMILE_EMOJI}
-                  placeholderTextColor={C.textSecondary}
-                  returnKeyType="done"
-                />
+                <View style={[styles.iconPreview, { backgroundColor: newColor }]}>
+                  <HabitIcon name={newIcon} size={22} color="#FFFFFF" />
+                </View>
                 <TextInput
                   style={[styles.nameInput, { backgroundColor: C.background, borderColor: C.border, color: C.text }]}
                   placeholder="Habit name"
@@ -661,6 +644,27 @@ export default function HabitsScreen() {
                   returnKeyType="done"
                   onSubmitEditing={handleAdd}
                 />
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Icon</Text>
+              <View style={styles.iconRow}>
+                {HABIT_ICONS.map((icon) => (
+                  <TouchableOpacity
+                    key={icon}
+                    style={[
+                      styles.iconOption,
+                      { backgroundColor: C.background, borderColor: C.border },
+                      newIcon === icon && { backgroundColor: newColor, borderColor: newColor },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNewIcon(icon);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name={icon} size={18} color={newIcon === icon ? '#FFFFFF' : C.text} />
+                  </TouchableOpacity>
+                ))}
               </View>
 
               <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Color</Text>
@@ -693,6 +697,91 @@ export default function HabitsScreen() {
             </Animated.View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={!!menuHabit} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <TouchableOpacity style={styles.backdrop} onPress={() => setMenuHabit(null)} activeOpacity={1} />
+          <View style={[styles.sheet, { backgroundColor: C.card }]}>
+            {menuHabit && (
+              <>
+                <View style={styles.sheetTopRow}>
+                  <View style={styles.menuTitleRow}>
+                    <View style={[styles.sheetEmoji, { backgroundColor: menuHabit.color }]}>
+                      <HabitIcon name={menuHabit.emoji} size={18} color="#FFFFFF" />
+                    </View>
+                    <Text style={[styles.sheetTitle, { color: C.text }]} numberOfLines={1}>{menuHabit.title}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.iconButton, { backgroundColor: C.background, borderColor: C.border }]}
+                    onPress={() => setMenuHabit(null)}
+                  >
+                    <Ionicons name="close" size={18} color={C.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.menuRow, { backgroundColor: C.background, borderColor: C.border }]}
+                  onPress={() => { setMenuHabit(null); openEdit(menuHabit); }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={C.text} />
+                  <Text style={[styles.menuRowText, { color: C.text }]}>Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.menuRow, { backgroundColor: C.background, borderColor: C.border }]}
+                  onPress={() => { setMenuHabit(null); router.push({ pathname: '/habit-detail', params: { id: menuHabit.id } }); }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="stats-chart-outline" size={18} color={C.text} />
+                  <Text style={[styles.menuRowText, { color: C.text }]}>View history</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.menuRow, { backgroundColor: C.background, borderColor: C.border }]}
+                  onPress={() => handleDeleteRequest(menuHabit)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="trash-outline" size={18} color={C.danger} />
+                  <Text style={[styles.menuRowText, { color: C.danger }]}>Delete</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!confirmDeleteHabit} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <TouchableOpacity style={styles.backdrop} onPress={() => setConfirmDeleteHabit(null)} activeOpacity={1} />
+          <View style={[styles.sheet, { backgroundColor: C.card }]}>
+            {confirmDeleteHabit && (
+              <>
+                <Text style={[styles.sheetTitle, { color: C.text }]}>Delete habit</Text>
+                <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>
+                  Remove "{confirmDeleteHabit.title}" and its history? This can't be undone.
+                </Text>
+                <View style={styles.confirmRow}>
+                  <TouchableOpacity
+                    style={[styles.confirmButton, { backgroundColor: C.background, borderColor: C.border }]}
+                    onPress={() => setConfirmDeleteHabit(null)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.confirmButtonText, { color: C.text }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.confirmButton, { backgroundColor: C.danger }]}
+                    onPress={confirmDelete}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.confirmButtonText, { color: '#FFFFFF' }]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -940,17 +1029,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sheetEmojiText: { fontSize: 18 },
   sheetHabitTitle: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '900' },
 
+  menuTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1, minWidth: 0 },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderRadius: 15,
+    borderWidth: 1,
+    padding: 14,
+  },
+  menuRowText: { fontSize: 15, fontWeight: '900' },
+  confirmRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  confirmButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    paddingVertical: 14,
+  },
+  confirmButtonText: { fontSize: 15, fontWeight: '900' },
+
   nameRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  emojiInput: {
+  iconPreview: {
     width: 56,
     height: 56,
     borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  iconOption: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     borderWidth: 1,
-    textAlign: 'center',
-    fontSize: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nameInput: {
     flex: 1,

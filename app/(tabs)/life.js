@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import AestheticBackground from '../../src/components/AestheticBackground';
 import MoodFace from '../../src/components/MoodFace';
+import HabitIcon from '../../src/components/HabitIcon';
 import { getPlannerEntry, getPlanningSummary } from '../../src/db/plannerDatabase';
 import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
 import { getGoals } from '../../src/db/goalsDatabase';
@@ -265,7 +266,7 @@ export default function DashboardScreen() {
               activeOpacity={0.75}
             >
               <View style={[styles.habitEmoji, { backgroundColor: done ? habit.color : C.card }]}>
-                <Text style={{ fontSize: 15 }}>{habit.emoji}</Text>
+                <HabitIcon name={habit.emoji} size={15} color={done ? '#FFFFFF' : habit.color} />
               </View>
               <Text style={[styles.habitTitle, { color: done ? C.textSecondary : C.text }, done && { textDecorationLine: 'line-through', opacity: 0.55 }]} numberOfLines={1}>{habit.title}</Text>
               <View style={[styles.habitCheck, { borderColor: done ? C.primary : C.border, backgroundColor: done ? C.primary : 'transparent' }]}>

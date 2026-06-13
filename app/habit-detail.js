@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
+import HabitIcon from '../src/components/HabitIcon';
 import {
   getHabits, getHabitHistory, getHabitStreak,
   getCompletionRate, toggleCompletion, getCompletionsForDate,
@@ -81,7 +82,7 @@ export default function HabitDetail() {
         {/* Habit title */}
         <View style={styles.titleRow}>
           <View style={[styles.emojiCircle, { backgroundColor: habit.color }]}>
-            <Text style={styles.emoji}>{habit.emoji}</Text>
+            <HabitIcon name={habit.emoji} size={26} color="#FFFFFF" />
           </View>
           <Text style={[styles.habitName, { color: C.text }]}>{habit.title}</Text>
         </View>
@@ -157,7 +158,6 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: 28,
     alignItems: 'center', justifyContent: 'center',
   },
-  emoji: { fontSize: 26 },
   habitName: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, flex: 1 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
