@@ -1,5 +1,6 @@
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { useEffect, useState, useRef } from 'react';
 import { useColorScheme, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -96,6 +97,13 @@ function AppLayout() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Story: require('../assets/fonts/Caveat.ttf'),
+    Rounded: require('../assets/fonts/Nunito.ttf'),
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
     <ThemeProvider>
       <AppLayout />

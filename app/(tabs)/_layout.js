@@ -95,5 +95,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '800',
+    fontFamily: 'Rounded',
   },
 });
