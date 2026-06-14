@@ -8,7 +8,7 @@ import HabitIcon from '../../src/components/HabitIcon';
 import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons';
 import { createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
 
-const catArt = require('../../assets/illustrations/storybook-calm-cat.png');
+const habitsArt = require('../../assets/illustrations/storybook-habits.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
 
 function todayStr() {
@@ -61,7 +61,7 @@ export default function HabitsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <ImageBackground source={catArt} style={styles.hero} imageStyle={styles.heroImage}>
+      <ImageBackground source={habitsArt} style={styles.hero} imageStyle={styles.heroImage}>
         <View style={styles.topBar}>
           <Text style={[styles.title, { color: C.text }]}>Routine Story</Text>
           <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => setShowAdd(true)}>
