@@ -1,14 +1,30 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
+const SLICE_COUNT = 48;
+const SLICE_STEP = 3;
+const SLICE_HEIGHT = 9;
+const PAPER_TINT = '#FAF5ED';
+
 export default function StorybookHeroFade() {
   return (
     <View pointerEvents="none" style={styles.fade}>
-      <View style={[styles.band, styles.bandOne]} />
-      <View style={[styles.band, styles.bandTwo]} />
-      <View style={[styles.band, styles.bandThree]} />
-      <View style={[styles.band, styles.bandFour]} />
-      <View style={[styles.band, styles.bandFive]} />
+      {Array.from({ length: SLICE_COUNT }, (_, index) => {
+        const progress = (index + 1) / SLICE_COUNT;
+        const eased = Math.pow(progress, 2.35);
+        return (
+          <View
+            key={index}
+            style={[
+              styles.slice,
+              {
+                bottom: (SLICE_COUNT - index - 1) * SLICE_STEP,
+                opacity: Math.min(0.92, eased * 0.96),
+              },
+            ]}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -19,37 +35,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 150,
+    height: SLICE_COUNT * SLICE_STEP + SLICE_HEIGHT,
+    overflow: 'hidden',
   },
-  band: {
+  slice: {
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: '#FCF8F2',
-  },
-  bandOne: {
-    bottom: 96,
-    height: 28,
-    opacity: 0.08,
-  },
-  bandTwo: {
-    bottom: 68,
-    height: 34,
-    opacity: 0.2,
-  },
-  bandThree: {
-    bottom: 42,
-    height: 36,
-    opacity: 0.4,
-  },
-  bandFour: {
-    bottom: 18,
-    height: 34,
-    opacity: 0.66,
-  },
-  bandFive: {
-    bottom: 0,
-    height: 24,
-    opacity: 1,
+    height: SLICE_HEIGHT,
+    backgroundColor: PAPER_TINT,
   },
 });
