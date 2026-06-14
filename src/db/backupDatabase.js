@@ -28,6 +28,17 @@ function parseArray(value) {
   }
 }
 
+function parseObject(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function numberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
   const num = Number(value);
@@ -254,10 +265,11 @@ async function importFocusSessions(db, sessions, counts) {
   for (const session of asArray(sessions)) {
     if (!session?.date || !session.started_at) continue;
     await db.runAsync(
-      `INSERT INTO pomodoro_sessions (id, task_id, duration, completed, date, started_at, ended_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO pomodoro_sessions (id, task_id, label, duration, completed, date, started_at, ended_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
         task_id = excluded.task_id,
+        label = excluded.label,
         duration = excluded.duration,
         completed = excluded.completed,
         date = excluded.date,
@@ -266,6 +278,7 @@ async function importFocusSessions(db, sessions, counts) {
       [
         session.id || genId(),
         session.task_id || null,
+        session.label || session.task_title || null,
         Math.max(1, parseInt(session.duration, 10) || 25),
         intFlag(session.completed),
         session.date,
@@ -320,7 +333,9 @@ export async function importBackup(backup) {
       entry.note || '',
       [],
       parseArray(entry.tags),
-      parseArray(entry.gratitude)
+      parseArray(entry.gratitude),
+      numberOrNull(entry.productivity),
+      parseObject(entry.prayers)
     );
     count(counts, 'mood');
   }

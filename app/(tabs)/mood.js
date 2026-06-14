@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -8,6 +8,7 @@ import { MOODS } from '../../src/constants/theme';
 import { useTheme } from '../../src/context/ThemeContext';
 import MoodFace from '../../src/components/MoodFace';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
+import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
 
 const catArt = require('../../assets/illustrations/storybook-calm-cat.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
@@ -23,6 +24,7 @@ function formatDate(year, month, day) {
 
 export default function MoodScreen() {
   const C = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -56,11 +58,12 @@ export default function MoodScreen() {
   const cells = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
   const today = todayStr();
   const monthName = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long' });
+  const heroHeight = getStoryHeroHeight(screenHeight, { min: 520, max: 570, ratio: 0.57 });
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-        <ImageBackground source={catArt} style={styles.hero} imageStyle={styles.heroImage}>
+        <ImageBackground source={catArt} style={[styles.hero, { height: heroHeight }]} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={copyMonth}>
@@ -68,11 +71,11 @@ export default function MoodScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.affirmation}>
-            <Text style={[styles.posterText, { color: C.text }]}>YOU ARE{'\n'}DOING{'\n'}GREAT{'\n'}LOVE</Text>
+            <Text style={[styles.posterText, { color: C.text }]}>CHECK IN{'\n'}WITH{'\n'}YOUR{'\n'}DAY</Text>
           </View>
           <View style={[styles.player, { backgroundColor: C.white }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.playerTitle, { color: C.text }]}>Amazing Grace</Text>
+              <Text style={[styles.playerTitle, { color: C.text }]}>Mood Journal</Text>
               <Text style={[styles.playerSub, { color: C.textSecondary }]}>{stats?.total || 0} reflections this month</Text>
             </View>
             <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push({ pathname: '/entry', params: { date: today } })}>
@@ -90,7 +93,7 @@ export default function MoodScreen() {
           <View style={styles.statsRow}>
             <MiniStat C={C} label="Entries" value={stats?.total || 0} />
             <MiniStat C={C} label="Streak" value={`${streak}d`} />
-            <MiniStat C={C} label="Avg" value={stats?.avg ? stats.avg.toFixed(1) : '-'} />
+            <MiniStat C={C} label="Avg" value={stats?.avgMood ? stats.avgMood.toFixed(1) : '-'} />
           </View>
 
           <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -141,7 +144,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
   pageContent: { paddingBottom: 0 },
-  hero: { height: 570, paddingTop: 56, paddingHorizontal: 22, justifyContent: 'space-between' },
+  hero: { paddingTop: 56, paddingHorizontal: 22, justifyContent: 'space-between' },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   smallTime: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900' },
@@ -167,7 +170,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 142,
+    paddingBottom: STORY_TAB_BOTTOM_PADDING,
   },
   sheetDecor: {
     ...StyleSheet.absoluteFillObject,

@@ -1,4 +1,4 @@
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { useEffect, useState, useRef } from 'react';
@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
-import { saveEntry } from '../src/db/database';
+import { getEntry, saveEntry } from '../src/db/database';
 import { registerMoodCategory } from '../src/notifications';
 import LockScreen from './lock';
 
@@ -22,7 +22,6 @@ function AppLayout() {
   const bgTimestampRef = useRef(null);
 
   useEffect(() => {
-    checkOnboarding();
     registerMoodCategory();
     initLock();
 
@@ -33,7 +32,17 @@ function AppLayout() {
       if (mood >= 1 && mood <= 5) {
         const d = new Date();
         const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        await saveEntry(date, mood, '', []);
+        const existing = await getEntry(date);
+        await saveEntry(
+          date,
+          mood,
+          existing?.note || '',
+          existing?.photos?.map((p) => p.uri) || [],
+          existing?.tags || [],
+          existing?.gratitude || [],
+          existing?.productivity || null,
+          existing?.prayers || {}
+        );
       }
     });
 
@@ -65,13 +74,6 @@ function AppLayout() {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (hasHardware && enrolled) setLocked(true);
-  }
-
-  async function checkOnboarding() {
-    const done = await AsyncStorage.getItem('onboarding_done');
-    if (!done) {
-      router.replace('/onboarding');
-    }
   }
 
   if (locked) {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -8,6 +8,7 @@ import HabitIcon from '../../src/components/HabitIcon';
 import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons';
 import { archiveHabit, createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
+import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
 
 const habitsArt = require('../../assets/illustrations/storybook-habits.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
@@ -21,6 +22,7 @@ function todayStr() {
 
 export default function HabitsScreen() {
   const C = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const today = todayStr();
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
@@ -74,11 +76,12 @@ export default function HabitsScreen() {
 
   const doneCount = habits.filter((habit) => completed.has(habit.id)).length;
   const percent = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
+  const heroHeight = getStoryHeroHeight(screenHeight, { min: 480, max: 530, ratio: 0.52 });
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-        <ImageBackground source={habitsArt} style={styles.hero} imageStyle={styles.heroImage}>
+        <ImageBackground source={habitsArt} style={[styles.hero, { height: heroHeight }]} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
             <Text style={[styles.title, { color: C.text }]}>Routine Story</Text>
@@ -97,7 +100,7 @@ export default function HabitsScreen() {
         </ImageBackground>
 
         <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
-          <Text style={[styles.sectionTitle, { color: C.text }]}>Today&apos;s playlist</Text>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Today's habits</Text>
           <View style={styles.list}>
             {habits.length === 0 ? (
               <TouchableOpacity style={[styles.empty, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowAdd(true)}>
@@ -185,7 +188,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
   pageContent: { paddingBottom: 0 },
-  hero: { height: 500, paddingTop: 58, paddingHorizontal: 22 },
+  hero: { paddingTop: 58, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontFamily: 'Rounded', fontSize: 24, fontWeight: '900' },
@@ -204,7 +207,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
-  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 150 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: STORY_TAB_BOTTOM_PADDING + 8 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },
   item: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },

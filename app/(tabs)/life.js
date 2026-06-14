@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -11,6 +11,7 @@ import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
+import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
 
 const catsArt = require('../../assets/illustrations/storybook-cats.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
@@ -26,16 +27,23 @@ function clockLabel() {
 
 export default function DashboardScreen() {
   const C = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const today = todayStr();
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
   const [sessions, setSessions] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [clockNow, setClockNow] = useState(clockLabel());
 
   useFocusEffect(useCallback(() => {
     load();
   }, []));
+
+  useEffect(() => {
+    const id = setInterval(() => setClockNow(clockLabel()), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   async function load() {
     const [h, done, focusSessions, moodEntry] = await Promise.all([
@@ -54,7 +62,16 @@ export default function DashboardScreen() {
   async function handleQuickMood(value) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const existing = await getEntry(today);
-    await saveEntry(today, value, existing?.note || '', existing?.photos?.map((p) => p.uri) || [], existing?.tags || [], existing?.gratitude || []);
+    await saveEntry(
+      today,
+      value,
+      existing?.note || '',
+      existing?.photos?.map((p) => p.uri) || [],
+      existing?.tags || [],
+      existing?.gratitude || [],
+      existing?.productivity || null,
+      existing?.prayers || {}
+    );
     setTodayMood(await getEntry(today));
   }
 
@@ -67,6 +84,7 @@ export default function DashboardScreen() {
   const moodObj = todayMood ? MOODS.find((m) => m.value === todayMood.mood) : null;
   const doneCount = habits.filter((h) => completed.has(h.id)).length;
   const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
+  const heroHeight = getStoryHeroHeight(screenHeight, { min: 500, max: 560, ratio: 0.56 });
 
   if (loading) {
     return <View style={[styles.loading, { backgroundColor: C.background }]}><Text style={[styles.body, { color: C.textSecondary }]}>loading...</Text></View>;
@@ -75,7 +93,7 @@ export default function DashboardScreen() {
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-        <ImageBackground source={catsArt} style={styles.heroImage} imageStyle={styles.heroImageInner}>
+        <ImageBackground source={catsArt} style={[styles.heroImage, { height: heroHeight }]} imageStyle={styles.heroImageInner}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/(tabs)/settings')}>
@@ -84,13 +102,13 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.heroCopy}>
-            <Text style={[styles.time, { color: C.text }]}>{clockLabel()}</Text>
+            <Text style={[styles.time, { color: C.text }]}>{clockNow}</Text>
             <Text style={[styles.script, { color: C.text }]}>You can do it beautiful</Text>
           </View>
 
           <View style={[styles.player, { backgroundColor: C.white }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.playerTitle, { color: C.text }]}>Daily Story</Text>
+              <Text style={[styles.playerTitle, { color: C.text }]}>Today Story</Text>
               <Text style={[styles.playerSub, { color: C.textSecondary }]}>
                 {habits.length - doneCount > 0 ? `${habits.length - doneCount} habits left` : 'soft day complete'}
               </Text>
@@ -110,7 +128,7 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.storyRow}>
             <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
-            <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="musical-notes-outline" onPress={() => router.push('/(tabs)/focus')} />
+            <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="timer-outline" onPress={() => router.push('/(tabs)/focus')} />
           </View>
 
           <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
@@ -163,7 +181,7 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pageScroll: { flex: 1 },
   pageContent: { paddingBottom: 0 },
-  heroImage: { height: 560, paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
+  heroImage: { paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
   heroImageInner: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   smallTime: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
@@ -190,7 +208,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 140,
+    paddingBottom: STORY_TAB_BOTTOM_PADDING,
   },
   sheetDecor: {
     ...StyleSheet.absoluteFillObject,

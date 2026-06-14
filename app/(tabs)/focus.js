@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ImageBackground, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import { getSessionsForDay, getTotalFocusMinutes, saveSession } from '../../src/db/focusDatabase';
+import { cancelTimerNotification, showTimerNotification } from '../../src/notifications';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
+import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
 
 const focusArt = require('../../assets/illustrations/storybook-focus.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
@@ -24,6 +26,7 @@ function formatTime(secs) {
 
 export default function FocusScreen() {
   const C = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const [secondsLeft, setSecondsLeft] = useState(DEFAULT_SECONDS);
   const [running, setRunning] = useState(false);
   const [label, setLabel] = useState('');
@@ -31,10 +34,22 @@ export default function FocusScreen() {
   const [totalMinutes, setTotalMinutes] = useState(0);
   const intervalRef = useRef(null);
   const startedAtRef = useRef(null);
+  const targetEndRef = useRef(null);
+  const secondsLeftRef = useRef(DEFAULT_SECONDS);
+  const labelRef = useRef('');
+  const completingRef = useRef(false);
 
   useFocusEffect(useCallback(() => {
     loadStats();
   }, []));
+
+  useEffect(() => {
+    secondsLeftRef.current = secondsLeft;
+  }, [secondsLeft]);
+
+  useEffect(() => {
+    labelRef.current = label;
+  }, [label]);
 
   useEffect(() => {
     if (!running) {
@@ -42,14 +57,12 @@ export default function FocusScreen() {
       return;
     }
     intervalRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current);
-          completeSession();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const remaining = getRemainingSeconds();
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(intervalRef.current);
+        completeSession({ finished: true });
+      }
     }, 1000);
     return () => clearInterval(intervalRef.current);
   }, [running]);
@@ -60,45 +73,88 @@ export default function FocusScreen() {
     setTotalMinutes(total);
   }
 
-  async function completeSession() {
-    const mins = Math.round((DEFAULT_SECONDS - secondsLeft) / 60) || 25;
+  function getRemainingSeconds() {
+    if (!targetEndRef.current) return secondsLeftRef.current;
+    return Math.max(0, Math.ceil((targetEndRef.current - Date.now()) / 1000));
+  }
+
+  function getElapsedSeconds() {
+    if (!targetEndRef.current) return DEFAULT_SECONDS - secondsLeftRef.current;
+    return Math.min(DEFAULT_SECONDS, Math.max(0, DEFAULT_SECONDS - getRemainingSeconds()));
+  }
+
+  async function completeSession({ finished = false } = {}) {
+    if (completingRef.current) return;
+    completingRef.current = true;
+    const elapsedSeconds = finished ? DEFAULT_SECONDS : getElapsedSeconds();
+    await cancelTimerNotification();
+    if (elapsedSeconds <= 0) {
+      resetTimerState();
+      return;
+    }
+    const mins = finished ? Math.round(DEFAULT_SECONDS / 60) : Math.max(1, Math.round(elapsedSeconds / 60));
     await saveSession({
       taskId: null,
-      label: label.trim() || null,
+      label: labelRef.current.trim() || null,
       duration: mins,
       completed: true,
       date: todayStr(),
       startedAt: startedAtRef.current || new Date().toISOString(),
       endedAt: new Date().toISOString(),
     });
-    setRunning(false);
-    setSecondsLeft(DEFAULT_SECONDS);
+    resetTimerState();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await loadStats();
   }
 
-  function toggleTimer() {
+  async function toggleTimer() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!running && secondsLeft === DEFAULT_SECONDS) startedAtRef.current = new Date().toISOString();
-    setRunning((r) => !r);
+    if (running) {
+      const remaining = getRemainingSeconds();
+      secondsLeftRef.current = remaining;
+      setSecondsLeft(remaining);
+      setRunning(false);
+      targetEndRef.current = null;
+      await cancelTimerNotification();
+      return;
+    }
+    if (secondsLeftRef.current <= 0) secondsLeftRef.current = DEFAULT_SECONDS;
+    if (secondsLeftRef.current === DEFAULT_SECONDS || !startedAtRef.current) {
+      startedAtRef.current = new Date().toISOString();
+    }
+    targetEndRef.current = Date.now() + secondsLeftRef.current * 1000;
+    completingRef.current = false;
+    setRunning(true);
+    await showTimerNotification(secondsLeftRef.current, labelRef.current.trim() || null);
   }
 
-  function resetTimer() {
+  function resetTimerState() {
     setRunning(false);
+    clearInterval(intervalRef.current);
+    targetEndRef.current = null;
+    startedAtRef.current = null;
+    secondsLeftRef.current = DEFAULT_SECONDS;
     setSecondsLeft(DEFAULT_SECONDS);
+    completingRef.current = false;
+  }
+
+  async function resetTimer() {
+    await cancelTimerNotification();
+    resetTimerState();
   }
 
   const todayMinutes = todaySessions.reduce((sum, session) => sum + session.duration, 0);
   const progress = 1 - secondsLeft / DEFAULT_SECONDS;
   const ringDeg = `${Math.max(10, Math.round(progress * 300))}deg`;
+  const heroHeight = getStoryHeroHeight(screenHeight, { min: 500, max: 560, ratio: 0.56 });
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-        <ImageBackground source={focusArt} style={styles.hero} imageStyle={styles.heroImage}>
+        <ImageBackground source={focusArt} style={[styles.hero, { height: heroHeight }]} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
-            <Text style={[styles.topTitle, { color: C.text }]}>Love Story</Text>
+            <Text style={[styles.topTitle, { color: C.text }]}>Focus Story</Text>
             <TouchableOpacity style={[styles.statsChip, { backgroundColor: C.white }]} onPress={() => router.push('/focus-stats')}>
               <Ionicons name="stats-chart-outline" size={16} color={C.primary} />
               <Text style={[styles.statsChipText, { color: C.text }]}>Stats</Text>
@@ -109,7 +165,7 @@ export default function FocusScreen() {
             <View style={[styles.clockRing, { borderColor: C.primaryLight }]}>
               <View style={[styles.clockArc, { borderTopColor: C.primary, transform: [{ rotate: ringDeg }] }]} />
               <Text style={[styles.timer, { color: C.text }]}>{formatTime(secondsLeft)}</Text>
-              <Text style={[styles.subtitle, { color: C.textSecondary }]}>{running ? 'playing focus' : 'press play'}</Text>
+              <Text style={[styles.subtitle, { color: C.textSecondary }]}>{running ? 'focusing' : 'press play'}</Text>
               <View style={styles.transport}>
                 <TouchableOpacity onPress={resetTimer}>
                   <Ionicons name="play-skip-back" size={16} color={C.textSecondary} />
@@ -176,7 +232,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
   pageContent: { paddingBottom: 0 },
-  hero: { height: 560, paddingTop: 56, paddingHorizontal: 22 },
+  hero: { paddingTop: 56, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: '#8D94BE', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
@@ -210,7 +266,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
-  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 140 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: STORY_TAB_BOTTOM_PADDING },
   player: { minHeight: 58, borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   input: { flex: 1, fontFamily: 'Rounded', fontSize: 14, fontWeight: '800' },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },

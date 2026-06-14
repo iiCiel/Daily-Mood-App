@@ -51,6 +51,10 @@ export async function syncEntries(getUnsyncedFn, markSyncedFn) {
         date: entry.date,
         mood: entry.mood,
         note: entry.note,
+        tags: entry.tags || '[]',
+        gratitude: entry.gratitude || '[]',
+        productivity: entry.productivity ?? null,
+        prayers: entry.prayers || '{}',
         created_at: entry.created_at,
         updated_at: entry.updated_at,
       });
