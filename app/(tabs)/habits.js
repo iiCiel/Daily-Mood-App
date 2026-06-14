@@ -10,7 +10,7 @@ import { createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCo
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const habitsArt = require('../../assets/illustrations/storybook-habits.png');
-const paperArt = require('../../assets/illustrations/storybook-paper.png');
+const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
 
 function todayStr() {

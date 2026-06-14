@@ -10,7 +10,7 @@ import MoodFace from '../../src/components/MoodFace';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const catArt = require('../../assets/illustrations/storybook-calm-cat.png');
-const paperArt = require('../../assets/illustrations/storybook-paper.png');
+const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 
 function todayStr() {
   const d = new Date();

@@ -8,7 +8,7 @@ import { getSessionsForDay, getTotalFocusMinutes, saveSession } from '../../src/
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const focusArt = require('../../assets/illustrations/storybook-focus.png');
-const paperArt = require('../../assets/illustrations/storybook-paper.png');
+const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 const DEFAULT_SECONDS = 25 * 60;
 
 function todayStr() {

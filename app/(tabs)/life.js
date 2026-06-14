@@ -14,7 +14,7 @@ import { getPlanningSummary } from '../../src/db/plannerDatabase';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const catsArt = require('../../assets/illustrations/storybook-cats.png');
-const paperArt = require('../../assets/illustrations/storybook-paper.png');
+const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 
 function todayStr() {
   const d = new Date();
