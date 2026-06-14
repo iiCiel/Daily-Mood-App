@@ -102,7 +102,13 @@ export default function DashboardScreen() {
         </View>
       </ImageBackground>
 
-      <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={[styles.sheet, { backgroundColor: C.panel }]} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+        <View pointerEvents="none" style={styles.sheetDecor}>
+          <View style={[styles.sheetBlobLarge, { backgroundColor: C.lavender }]} />
+          <View style={[styles.sheetBlobSmall, { backgroundColor: C.peach }]} />
+          <Ionicons name="musical-note" size={24} color={C.primary} style={styles.decorNoteOne} />
+          <Ionicons name="sparkles-outline" size={21} color={C.teal} style={styles.decorNoteTwo} />
+        </View>
         <View style={styles.storyRow}>
           <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
           <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="musical-notes-outline" onPress={() => router.push('/(tabs)/focus')} />
@@ -168,8 +174,54 @@ const styles = StyleSheet.create({
   playerTitle: { fontFamily: 'Rounded', fontSize: 13, fontWeight: '900' },
   playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  sheet: { flex: 1, marginTop: -56 },
-  sheetContent: { paddingHorizontal: 20, paddingBottom: 28 },
+  sheet: {
+    flex: 1,
+    marginTop: -62,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    overflow: 'hidden',
+  },
+  sheetContent: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 28,
+  },
+  sheetDecor: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  sheetBlobLarge: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    right: -72,
+    top: 36,
+    opacity: 0.45,
+  },
+  sheetBlobSmall: {
+    position: 'absolute',
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    left: -42,
+    top: 185,
+    opacity: 0.5,
+  },
+  decorNoteOne: {
+    position: 'absolute',
+    right: 34,
+    top: 178,
+    opacity: 0.28,
+    transform: [{ rotate: '12deg' }],
+  },
+  decorNoteTwo: {
+    position: 'absolute',
+    left: 34,
+    top: 86,
+    opacity: 0.22,
+    transform: [{ rotate: '-10deg' }],
+  },
   storyRow: { flexDirection: 'row', gap: 10, marginBottom: 22 },
   storyTile: { flex: 1, borderRadius: 20, borderWidth: 1, padding: 13, minHeight: 106, justifyContent: 'space-between', shadowColor: '#7D88B8', shadowOpacity: 0.11, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   tileValue: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900' },

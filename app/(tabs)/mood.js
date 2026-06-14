@@ -78,7 +78,12 @@ export default function MoodScreen() {
         </View>
       </ImageBackground>
 
-      <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={[styles.sheet, { backgroundColor: C.panel }]} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+        <View pointerEvents="none" style={styles.sheetDecor}>
+          <View style={[styles.sheetBlobOne, { backgroundColor: C.lavender }]} />
+          <View style={[styles.sheetBlobTwo, { backgroundColor: C.peach }]} />
+          <Ionicons name="musical-notes-outline" size={24} color={C.primary} style={styles.decorNote} />
+        </View>
         <View style={styles.statsRow}>
           <MiniStat C={C} label="Entries" value={stats?.total || 0} />
           <MiniStat C={C} label="Streak" value={`${streak}d`} />
@@ -141,8 +146,47 @@ const styles = StyleSheet.create({
   playerTitle: { fontFamily: 'Rounded', fontSize: 13, fontWeight: '900' },
   playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  sheet: { flex: 1, marginTop: -54 },
-  sheetContent: { paddingHorizontal: 20, paddingBottom: 30 },
+  sheet: {
+    flex: 1,
+    marginTop: -22,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    overflow: 'hidden',
+  },
+  sheetContent: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 30,
+  },
+  sheetDecor: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  sheetBlobOne: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    right: -66,
+    top: 20,
+    opacity: 0.42,
+  },
+  sheetBlobTwo: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    left: -48,
+    top: 158,
+    opacity: 0.44,
+  },
+  decorNote: {
+    position: 'absolute',
+    right: 42,
+    top: 150,
+    opacity: 0.22,
+    transform: [{ rotate: '13deg' }],
+  },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   stat: { flex: 1, borderRadius: 20, borderWidth: 1, padding: 13, alignItems: 'center' },
   statValue: { fontFamily: 'Rounded', fontSize: 20, fontWeight: '900' },
