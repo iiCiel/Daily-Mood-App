@@ -13,6 +13,7 @@ import { getEntry, saveEntry } from '../../src/db/database';
 import { getPlanningSummary } from '../../src/db/plannerDatabase';
 
 const catsArt = require('../../assets/illustrations/storybook-cats.png');
+const paperArt = require('../../assets/illustrations/storybook-paper.png');
 
 function todayStr() {
   const d = new Date();
@@ -103,7 +104,7 @@ export default function DashboardScreen() {
           </View>
         </ImageBackground>
 
-        <View style={[styles.sheet, { backgroundColor: C.panel }, styles.sheetContent]}>
+        <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
           <View pointerEvents="none" style={styles.sheetDecor}>
             <View style={[styles.sheetBlobLarge, { backgroundColor: C.lavender }]} />
             <View style={[styles.sheetBlobSmall, { backgroundColor: C.peach }]} />
@@ -145,7 +146,7 @@ export default function DashboardScreen() {
               );
             })}
           </View>
-        </View>
+        </ImageBackground>
       </ScrollView>
     </View>
   );
@@ -179,11 +180,15 @@ const styles = StyleSheet.create({
   playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
-    flex: 1,
     marginTop: -62,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
+  },
+  sheetImage: {
+    resizeMode: 'cover',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
   },
   sheetContent: {
     paddingHorizontal: 20,

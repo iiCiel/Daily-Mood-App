@@ -9,6 +9,7 @@ import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons'
 import { createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
 
 const habitsArt = require('../../assets/illustrations/storybook-habits.png');
+const paperArt = require('../../assets/illustrations/storybook-paper.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
 
 function todayStr() {
@@ -79,7 +80,7 @@ export default function HabitsScreen() {
           </View>
         </ImageBackground>
 
-        <View style={[styles.sheet, styles.sheetContent]}>
+        <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
           <Text style={[styles.sectionTitle, { color: C.text }]}>Today&apos;s playlist</Text>
           <View style={styles.list}>
             {habits.length === 0 ? (
@@ -103,7 +104,7 @@ export default function HabitsScreen() {
               );
             })}
           </View>
-        </View>
+        </ImageBackground>
       </ScrollView>
 
       <Modal visible={showAdd} transparent animationType="slide">
@@ -147,8 +148,14 @@ const styles = StyleSheet.create({
   caption: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '900' },
   track: { height: 8, borderRadius: 999, overflow: 'hidden', marginTop: 12 },
   fill: { height: '100%', borderRadius: 999 },
-  sheet: { marginTop: -44 },
-  sheetContent: { paddingHorizontal: 20, paddingBottom: 30 },
+  sheet: {
+    marginTop: -44,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    overflow: 'hidden',
+  },
+  sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 30 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },
   item: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },

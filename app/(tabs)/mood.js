@@ -9,6 +9,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import MoodFace from '../../src/components/MoodFace';
 
 const catArt = require('../../assets/illustrations/storybook-calm-cat.png');
+const paperArt = require('../../assets/illustrations/storybook-paper.png');
 
 function todayStr() {
   const d = new Date();
@@ -79,7 +80,7 @@ export default function MoodScreen() {
           </View>
         </ImageBackground>
 
-        <View style={[styles.sheet, { backgroundColor: C.panel }, styles.sheetContent]}>
+        <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
           <View pointerEvents="none" style={styles.sheetDecor}>
             <View style={[styles.sheetBlobOne, { backgroundColor: C.lavender }]} />
             <View style={[styles.sheetBlobTwo, { backgroundColor: C.peach }]} />
@@ -120,7 +121,7 @@ export default function MoodScreen() {
               })}
             </View>
           </View>
-        </View>
+        </ImageBackground>
       </ScrollView>
     </View>
   );
@@ -151,11 +152,15 @@ const styles = StyleSheet.create({
   playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
-    flex: 1,
     marginTop: -22,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
+  },
+  sheetImage: {
+    resizeMode: 'cover',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
   },
   sheetContent: {
     paddingHorizontal: 20,

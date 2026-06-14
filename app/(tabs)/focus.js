@@ -7,6 +7,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { getSessionsForDay, getTotalFocusMinutes, saveSession } from '../../src/db/focusDatabase';
 
 const focusArt = require('../../assets/illustrations/storybook-focus.png');
+const paperArt = require('../../assets/illustrations/storybook-paper.png');
 const DEFAULT_SECONDS = 25 * 60;
 
 function todayStr() {
@@ -124,7 +125,7 @@ export default function FocusScreen() {
           </View>
         </ImageBackground>
 
-        <View style={[styles.sheet, styles.sheetContent]}>
+        <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
           <View style={[styles.player, { backgroundColor: C.card, borderColor: C.border }]}>
             <Ionicons name="headset-outline" size={20} color={C.primary} />
             <TextInput
@@ -156,7 +157,7 @@ export default function FocusScreen() {
               </View>
             ))}
           </View>
-        </View>
+        </ImageBackground>
       </ScrollView>
     </View>
   );
@@ -187,8 +188,14 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '900', marginTop: 2 },
   transport: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 },
   play: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  sheet: { marginTop: -52 },
-  sheetContent: { paddingHorizontal: 20, paddingBottom: 28 },
+  sheet: {
+    marginTop: -52,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    overflow: 'hidden',
+  },
+  sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 },
   player: { minHeight: 58, borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   input: { flex: 1, fontFamily: 'Rounded', fontSize: 14, fontWeight: '800' },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
