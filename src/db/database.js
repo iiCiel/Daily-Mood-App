@@ -108,6 +108,7 @@ async function _initDatabase() {
       title TEXT NOT NULL,
       emoji TEXT DEFAULT '✦',
       color TEXT DEFAULT '#C5A8E8',
+      schedule_days TEXT DEFAULT '[0,1,2,3,4,5,6]',
       created_at TEXT NOT NULL,
       archived INTEGER DEFAULT 0
     );
@@ -211,6 +212,7 @@ async function _initDatabase() {
   try { await database.runAsync('ALTER TABLE entries ADD COLUMN productivity INTEGER'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN prayers TEXT DEFAULT '{}'"); } catch {}
   try { await database.runAsync('ALTER TABLE pomodoro_sessions ADD COLUMN label TEXT'); } catch {}
+  try { await database.runAsync("ALTER TABLE habits ADD COLUMN schedule_days TEXT DEFAULT '[0,1,2,3,4,5,6]'"); } catch {}
   await database.runAsync(
     `INSERT OR IGNORE INTO projects (id, name, color, status, notes, archived, created_at, updated_at)
      VALUES ('default-project', 'Personal', '#4A7856', 'active', NULL, 0, datetime('now'), datetime('now'))`

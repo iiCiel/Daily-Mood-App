@@ -6,7 +6,17 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import HabitIcon from '../../src/components/HabitIcon';
 import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons';
-import { archiveHabit, createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
+import {
+  archiveHabit,
+  createHabit,
+  getCompletionsForDate,
+  getHabitStreak,
+  getHabits,
+  isHabitScheduledOn,
+  parseScheduleDays,
+  toggleCompletion,
+  updateHabit,
+} from '../../src/db/habitDatabase';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
 
@@ -14,6 +24,15 @@ const habitsArt = require('../../assets/illustrations/storybook-habits.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 const deleteCardArt = require('../../assets/illustrations/dialogs/delete-habit-card.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
+const WEEKDAYS = [
+  { value: 0, label: 'S', short: 'Sun' },
+  { value: 1, label: 'M', short: 'Mon' },
+  { value: 2, label: 'T', short: 'Tue' },
+  { value: 3, label: 'W', short: 'Wed' },
+  { value: 4, label: 'T', short: 'Thu' },
+  { value: 5, label: 'F', short: 'Fri' },
+  { value: 6, label: 'S', short: 'Sat' },
+];
 
 function todayStr() {
   const d = new Date();
@@ -31,6 +50,9 @@ export default function HabitsScreen() {
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState(DEFAULT_HABIT_ICON);
   const [color, setColor] = useState(COLORS[0]);
+  const [scheduleDays, setScheduleDays] = useState(WEEKDAYS.map((day) => day.value));
+  const [editingSchedule, setEditingSchedule] = useState(null);
+  const [editScheduleDays, setEditScheduleDays] = useState(WEEKDAYS.map((day) => day.value));
   const [pendingDelete, setPendingDelete] = useState(null);
 
   useFocusEffect(useCallback(() => {
@@ -54,10 +76,11 @@ export default function HabitsScreen() {
 
   async function addHabit() {
     if (!title.trim()) return;
-    await createHabit(title.trim(), icon, color);
+    await createHabit(title.trim(), icon, color, scheduleDays);
     setTitle('');
     setIcon(DEFAULT_HABIT_ICON);
     setColor(COLORS[0]);
+    setScheduleDays(WEEKDAYS.map((day) => day.value));
     setShowAdd(false);
     await load();
   }
@@ -67,6 +90,19 @@ export default function HabitsScreen() {
     setPendingDelete(habit);
   }
 
+  function openScheduleEditor(habit) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingSchedule(habit);
+    setEditScheduleDays(parseScheduleDays(habit.schedule_days));
+  }
+
+  async function saveSchedule() {
+    if (!editingSchedule) return;
+    await updateHabit(editingSchedule.id, editingSchedule.title, editingSchedule.emoji, editingSchedule.color, editScheduleDays);
+    setEditingSchedule(null);
+    await load();
+  }
+
   async function confirmDeleteHabit() {
     if (!pendingDelete) return;
     await archiveHabit(pendingDelete.id);
@@ -74,8 +110,23 @@ export default function HabitsScreen() {
     await load();
   }
 
-  const doneCount = habits.filter((habit) => completed.has(habit.id)).length;
-  const percent = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
+  function toggleScheduleDay(day) {
+    setScheduleDays((current) => {
+      const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+      return next.length ? next.sort((a, b) => a - b) : current;
+    });
+  }
+
+  function toggleEditScheduleDay(day) {
+    setEditScheduleDays((current) => {
+      const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+      return next.length ? next.sort((a, b) => a - b) : current;
+    });
+  }
+
+  const scheduledToday = habits.filter((habit) => isHabitScheduledOn(habit));
+  const doneCount = scheduledToday.filter((habit) => completed.has(habit.id)).length;
+  const percent = scheduledToday.length ? Math.round((doneCount / scheduledToday.length) * 100) : 100;
   const heroHeight = getStoryHeroHeight(screenHeight, { min: 480, max: 530, ratio: 0.52 });
 
   return (
@@ -92,7 +143,9 @@ export default function HabitsScreen() {
           <View style={[styles.progressCard, { backgroundColor: C.white }]}>
             <Text style={[styles.script, { color: C.text }]}>keep it gentle</Text>
             <Text style={[styles.percent, { color: C.primary }]}>{percent}%</Text>
-            <Text style={[styles.caption, { color: C.textSecondary }]}>{doneCount}/{habits.length} habits complete</Text>
+            <Text style={[styles.caption, { color: C.textSecondary }]}>
+              {scheduledToday.length ? `${doneCount}/${scheduledToday.length} due today` : 'nothing due today'}
+            </Text>
             <View style={[styles.track, { backgroundColor: C.primaryLight }]}>
               <View style={[styles.fill, { width: `${percent}%`, backgroundColor: C.primary }]} />
             </View>
@@ -109,10 +162,12 @@ export default function HabitsScreen() {
               </TouchableOpacity>
             ) : habits.map((habit) => {
               const done = completed.has(habit.id);
+              const scheduled = isHabitScheduledOn(habit);
+              const scheduleLabel = formatSchedule(parseScheduleDays(habit.schedule_days));
               return (
                 <TouchableOpacity
                   key={habit.id}
-                  style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]}
+                  style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }, !scheduled && styles.offDayItem]}
                   onPress={() => toggle(habit.id)}
                   onLongPress={() => requestDeleteHabit(habit)}
                   delayLongPress={360}
@@ -122,8 +177,13 @@ export default function HabitsScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.itemTitle, { color: done ? C.textSecondary : C.text }, done && { textDecorationLine: 'line-through' }]}>{habit.title}</Text>
-                    <Text style={[styles.itemMeta, { color: C.textSecondary }]}>{streaks[habit.id] || 0} day streak</Text>
+                    <Text style={[styles.itemMeta, { color: C.textSecondary }]}>
+                      {streaks[habit.id] || 0} streak · {scheduled ? scheduleLabel : `off today · ${scheduleLabel}`}
+                    </Text>
                   </View>
+                  <TouchableOpacity style={[styles.rowIconBtn, { backgroundColor: C.primaryLight }]} onPress={() => openScheduleEditor(habit)}>
+                    <Ionicons name="calendar-outline" size={17} color={C.primary} />
+                  </TouchableOpacity>
                   <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={done ? habit.color : C.textSecondary} />
                 </TouchableOpacity>
               );
@@ -143,6 +203,23 @@ export default function HabitsScreen() {
             <View style={[styles.sheetModal, { backgroundColor: C.card }]}>
               <Text style={[styles.modalTitle, { color: C.text }]}>New habit</Text>
               <TextInput style={[styles.input, { backgroundColor: C.panel, borderColor: C.border, color: C.text }]} value={title} onChangeText={setTitle} placeholder="Habit title" placeholderTextColor={C.textSecondary} />
+              <View>
+                <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Which days?</Text>
+                <View style={styles.dayRow}>
+                  {WEEKDAYS.map((day) => {
+                    const active = scheduleDays.includes(day.value);
+                    return (
+                      <TouchableOpacity
+                        key={`${day.value}-${day.label}`}
+                        style={[styles.dayChip, { backgroundColor: active ? color : C.panel, borderColor: active ? color : C.border }]}
+                        onPress={() => toggleScheduleDay(day.value)}
+                      >
+                        <Text style={[styles.dayChipText, { color: active ? C.white : C.textSecondary }]}>{day.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
               <View style={styles.iconGrid}>
                 {HABIT_ICONS.slice(0, 12).map((name) => (
                   <TouchableOpacity key={name} style={[styles.pickIcon, { backgroundColor: icon === name ? color : C.panel, borderColor: C.border }]} onPress={() => setIcon(name)}>
@@ -159,6 +236,40 @@ export default function HabitsScreen() {
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={!!editingSchedule} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity style={styles.confirmBackdrop} onPress={() => setEditingSchedule(null)} />
+          <View style={[styles.scheduleCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            <Text style={[styles.confirmTitle, { color: C.text }]}>Habit schedule</Text>
+            <Text style={[styles.confirmBody, { color: C.textSecondary }]} numberOfLines={2}>
+              {editingSchedule?.title}
+            </Text>
+            <View style={styles.dayRow}>
+              {WEEKDAYS.map((day) => {
+                const active = editScheduleDays.includes(day.value);
+                return (
+                  <TouchableOpacity
+                    key={`edit-${day.value}-${day.label}`}
+                    style={[styles.dayChip, { backgroundColor: active ? (editingSchedule?.color || C.primary) : C.panel, borderColor: active ? (editingSchedule?.color || C.primary) : C.border }]}
+                    onPress={() => toggleEditScheduleDay(day.value)}
+                  >
+                    <Text style={[styles.dayChipText, { color: active ? C.white : C.textSecondary }]}>{day.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={[styles.confirmButton, styles.cancelButton, { backgroundColor: C.white, borderColor: C.border }]} onPress={() => setEditingSchedule(null)}>
+                <Text style={[styles.cancelText, { color: C.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmButton, { backgroundColor: editingSchedule?.color || C.primary }]} onPress={saveSchedule}>
+                <Text style={styles.deleteText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!pendingDelete} transparent animationType="fade" statusBarTranslucent>
@@ -182,6 +293,11 @@ export default function HabitsScreen() {
       </Modal>
     </View>
   );
+}
+
+function formatSchedule(days) {
+  if (days.length === 7) return 'daily';
+  return WEEKDAYS.filter((day) => days.includes(day.value)).map((day) => day.short).join(' ');
 }
 
 const styles = StyleSheet.create({
@@ -211,8 +327,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },
   item: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  offDayItem: { opacity: 0.74 },
   empty: { borderRadius: 22, borderWidth: 1, padding: 18 },
   iconWrap: { width: 44, height: 44, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  rowIconBtn: { width: 34, height: 34, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   itemTitle: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
   itemMeta: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800', marginTop: 3 },
   overlay: { flex: 1, backgroundColor: 'rgba(39,42,75,0.45)', justifyContent: 'flex-end' },
@@ -222,6 +340,10 @@ const styles = StyleSheet.create({
   sheetModal: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, paddingBottom: 34, gap: 14 },
   modalTitle: { fontFamily: 'Rounded', fontSize: 22, fontWeight: '900' },
   input: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontFamily: 'Rounded', fontWeight: '800' },
+  fieldLabel: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900', marginBottom: 8 },
+  dayRow: { flexDirection: 'row', gap: 7 },
+  dayChip: { flex: 1, height: 38, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  dayChipText: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
   iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   pickIcon: { width: 40, height: 40, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   colorRow: { flexDirection: 'row', gap: 10 },
@@ -231,6 +353,7 @@ const styles = StyleSheet.create({
   confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,42,75,0.28)', padding: 22 },
   confirmBackdrop: { ...StyleSheet.absoluteFillObject },
   confirmCard: { width: '88%', maxWidth: 320, minHeight: 250, paddingHorizontal: 24, paddingTop: 46, paddingBottom: 24, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  scheduleCard: { width: '90%', maxWidth: 340, borderRadius: 30, borderWidth: 1, padding: 22, alignItems: 'center', shadowColor: '#7D88B8', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
   confirmCardImage: { resizeMode: 'stretch', borderRadius: 30 },
   confirmTitle: { fontFamily: 'Rounded', fontSize: 24, fontWeight: '900', textAlign: 'center' },
   confirmBody: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 8, minHeight: 34 },

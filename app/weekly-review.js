@@ -68,6 +68,7 @@ export default function WeeklyReviewScreen() {
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 6);
+  const habitsDueToday = habits?.todayDue ?? habits?.total ?? 0;
   const weekLabel = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
   async function handleShare() {
@@ -160,7 +161,7 @@ export default function WeeklyReviewScreen() {
               <View style={[s.fill, { width: `${habits.rate30}%`, backgroundColor: '#6CC97C' }]} />
             </View>
             <Text style={[s.cardNote, { color: C.textSecondary }]}>
-              {habits.todayDone}/{habits.total} done today · best streak {habits.bestStreak}d
+              {habits.todayDone}/{habitsDueToday} due today · best streak {habits.bestStreak}d
             </Text>
           </View>
         )}

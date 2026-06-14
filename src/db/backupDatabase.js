@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase, saveEntry } from './database';
 import { saveSleep } from './sleepDatabase';
 import { importCalorieEntry } from './calorieDatabase';
-import { importHabitCompletion } from './habitDatabase';
+import { importHabitCompletion, importHabitDefinition } from './habitDatabase';
 import { saveWeightEntry } from './weightDatabase';
 
 const SAVED_MEALS_KEY = 'saved_meals_v1';
@@ -361,12 +361,6 @@ export async function importBackup(backup) {
     count(counts, 'calories');
   }
 
-  for (const entry of asArray(backup.habits)) {
-    if (!entry?.date || !textOrNull(entry.title)) continue;
-    await importHabitCompletion(entry.title, entry.emoji, entry.date);
-    count(counts, 'habits');
-  }
-
   for (const entry of asArray(backup.weight)) {
     if (!entry?.date || !Number.isFinite(Number(entry.weight))) continue;
     await saveWeightEntry({
@@ -381,6 +375,15 @@ export async function importBackup(backup) {
   await importGoals(db, backup.goals, counts);
   await importNotes(db, backup.notes, counts);
   await importPlannerEntries(db, backup.planner, counts);
+  for (const habit of asArray(backup.habit_definitions)) {
+    await importHabitDefinition(habit);
+    count(counts, 'habitDefinitions');
+  }
+  for (const entry of asArray(backup.habits)) {
+    if (!entry?.date || !textOrNull(entry.title)) continue;
+    await importHabitCompletion(entry.title, entry.emoji, entry.date, entry.schedule_days);
+    count(counts, 'habits');
+  }
   await importFocusSessions(db, backup.focus_sessions, counts);
   await importSavedMeals(backup.saved_meals, counts);
 

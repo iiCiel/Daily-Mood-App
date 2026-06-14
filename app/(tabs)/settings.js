@@ -19,7 +19,7 @@ import { getGoals } from '../../src/db/goalsDatabase';
 import { getNotes } from '../../src/db/notesDatabase';
 import { getRecentSleep } from '../../src/db/sleepDatabase';
 import { getAllCalorieEntries } from '../../src/db/calorieDatabase';
-import { getAllHabitCompletions } from '../../src/db/habitDatabase';
+import { getAllHabitCompletions, getAllHabitsForBackup } from '../../src/db/habitDatabase';
 import { getWeightEntries } from '../../src/db/weightDatabase';
 import {
   getAllPlannerEntries,
@@ -162,13 +162,14 @@ export default function SettingsScreen() {
   async function handleExportEverything() {
     try {
       const [
-        moodEntries, sleepEntries, calorieEntries, habitCompletions, weightEntries,
+        moodEntries, sleepEntries, calorieEntries, habitCompletions, habitDefinitions, weightEntries,
         goals, notes, plannerEntries, focusSessions, tasks, projects, taskLists, savedMeals,
       ] = await Promise.all([
         getEntries(10000),
         getRecentSleep(3650),
         getAllCalorieEntries(),
         getAllHabitCompletions(),
+        getAllHabitsForBackup(),
         getWeightEntries(3650),
         getGoals(),
         getNotes(),
@@ -183,12 +184,13 @@ export default function SettingsScreen() {
       const backup = {
         app: 'Daily Mood',
         exported_at: new Date().toISOString(),
-        version: 3,
+        version: 4,
         photo_note: 'Photos stay local to this device and are not embedded in this backup.',
         mood: moodEntries,
         sleep: sleepEntries,
         calories: calorieEntries,
         habits: habitCompletions,
+        habit_definitions: habitDefinitions,
         weight: weightEntries,
         goals,
         notes,
@@ -301,8 +303,8 @@ export default function SettingsScreen() {
         {
           name: 'habits.csv',
           content: toCSV(
-            ['date', 'habit', 'emoji'],
-            habitCompletions.map((e) => [e.date, e.title, e.emoji || ''])
+            ['date', 'habit', 'emoji', 'schedule_days'],
+            habitCompletions.map((e) => [e.date, e.title, e.emoji || '', e.schedule_days || '[0,1,2,3,4,5,6]'])
           ),
         },
         {

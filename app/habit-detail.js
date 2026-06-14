@@ -8,12 +8,22 @@ import HabitIcon from '../src/components/HabitIcon';
 import {
   getHabits, getHabitHistory, getHabitStreak,
   getCompletionRate, toggleCompletion, getCompletionsForDate,
+  isHabitScheduledOn, parseScheduleDays,
 } from '../src/db/habitDatabase';
 
 const SCREEN_W = Dimensions.get('window').width;
 const H_PAD = 24;
 const DOT_GAP = 4;
 const DOT_SIZE = Math.floor((SCREEN_W - H_PAD * 2 - DOT_GAP * 29) / 30);
+const WEEKDAYS = [
+  { value: 0, label: 'Sun' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+];
 
 function todayStr() {
   const d = new Date();
@@ -63,7 +73,14 @@ export default function HabitDetail() {
 
   if (!habit) return null;
 
-  const totalDone = history.filter(d => d.done).length;
+  const totalDone = history.filter(d => d.done && d.scheduled).length;
+  const scheduledCount = history.filter(d => d.scheduled).length;
+  const bonusDone = history.filter(d => d.done && !d.scheduled).length;
+  const scheduledToday = isHabitScheduledOn(habit);
+  const scheduleLabel = formatSchedule(parseScheduleDays(habit.schedule_days));
+  const todayAction = todayDone
+    ? scheduledToday ? 'done today' : 'bonus done today'
+    : scheduledToday ? 'mark as done today' : 'bonus check-in today';
 
   return (
     <>
@@ -72,7 +89,8 @@ export default function HabitDetail() {
         style={[styles.container, { backgroundColor: C.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-      >`n        {/* Header */}
+      >
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={[styles.backText, { color: C.text }]}>←</Text>
@@ -90,7 +108,7 @@ export default function HabitDetail() {
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
-            <Text style={[styles.statVal, { color: C.text }]}>🔥 {streak}</Text>
+            <Text style={[styles.statVal, { color: C.text }]}>{streak}</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>streak</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
@@ -102,6 +120,9 @@ export default function HabitDetail() {
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>30 days</Text>
           </View>
         </View>
+        <Text style={[styles.scheduleText, { color: C.textSecondary }]}>
+          scheduled {scheduleLabel}
+        </Text>
 
         {/* Today's check-in */}
         <TouchableOpacity
@@ -116,7 +137,7 @@ export default function HabitDetail() {
           activeOpacity={0.7}
         >
           <Text style={[styles.todayBtnText, { color: todayDone ? '#fff' : C.text }]}>
-            {todayDone ? '✓  done today' : 'mark as done today'}
+            {todayAction}
           </Text>
         </TouchableOpacity>
 
@@ -124,14 +145,18 @@ export default function HabitDetail() {
         <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>last 30 days</Text>
         <View style={[styles.histCard, { backgroundColor: C.card }]}>
           <View style={styles.dotGrid}>
-            {history.map(({ date, done }) => {
+            {history.map(({ date, done, scheduled }) => {
               const isToday = date === todayStr();
               return (
                 <View
                   key={date}
                   style={[
                     styles.dot,
-                    { backgroundColor: done ? habit.color : C.border },
+                    scheduled
+                      ? { backgroundColor: done ? habit.color : C.border }
+                      : done
+                        ? { backgroundColor: habit.color, opacity: 0.35 }
+                        : { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border, opacity: 0.45 },
                     isToday && { borderWidth: 1.5, borderColor: C.text },
                   ]}
                 />
@@ -139,12 +164,17 @@ export default function HabitDetail() {
             })}
           </View>
           <Text style={[styles.histCaption, { color: C.textSecondary }]}>
-            {totalDone} out of 30 days completed
+            {totalDone} out of {scheduledCount} scheduled days completed{bonusDone ? `, plus ${bonusDone} bonus` : ''}
           </Text>
         </View>
       </ScrollView>
     </>
   );
+}
+
+function formatSchedule(days) {
+  if (days.length === 7) return 'daily';
+  return WEEKDAYS.filter((day) => days.includes(day.value)).map((day) => day.label).join(', ');
 }
 
 const styles = StyleSheet.create({
@@ -166,6 +196,7 @@ const styles = StyleSheet.create({
   },
   statVal: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   statLbl: { fontSize: 11, letterSpacing: 0.3 },
+  scheduleText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.2, marginTop: -8, marginBottom: 18 },
   todayBtn: {
     borderRadius: 999, borderWidth: 1.5,
     paddingVertical: 16, alignItems: 'center',

@@ -7,7 +7,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import HabitIcon from '../../src/components/HabitIcon';
 import MoodFace from '../../src/components/MoodFace';
 import { MOODS } from '../../src/constants/theme';
-import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db/habitDatabase';
+import { getHabits, getCompletionsForDate, isHabitScheduledOn, toggleCompletion } from '../../src/db/habitDatabase';
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
@@ -82,7 +82,9 @@ export default function DashboardScreen() {
   }
 
   const moodObj = todayMood ? MOODS.find((m) => m.value === todayMood.mood) : null;
-  const doneCount = habits.filter((h) => completed.has(h.id)).length;
+  const scheduledHabits = habits.filter((habit) => isHabitScheduledOn(habit));
+  const doneCount = scheduledHabits.filter((h) => completed.has(h.id)).length;
+  const previewHabits = [...habits].sort((a, b) => Number(isHabitScheduledOn(b)) - Number(isHabitScheduledOn(a)));
   const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
   const heroHeight = getStoryHeroHeight(screenHeight, { min: 500, max: 560, ratio: 0.56 });
 
@@ -110,7 +112,9 @@ export default function DashboardScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.playerTitle, { color: C.text }]}>Today Story</Text>
               <Text style={[styles.playerSub, { color: C.textSecondary }]}>
-                {habits.length - doneCount > 0 ? `${habits.length - doneCount} habits left` : 'soft day complete'}
+                {scheduledHabits.length
+                  ? scheduledHabits.length - doneCount > 0 ? `${scheduledHabits.length - doneCount} habits left` : 'soft day complete'
+                  : 'no habits due today'}
               </Text>
             </View>
             <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push('/(tabs)/focus')}>
@@ -147,10 +151,11 @@ export default function DashboardScreen() {
               <TouchableOpacity style={[styles.emptyCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/(tabs)/habits')}>
                 <Text style={[styles.body, { color: C.textSecondary }]}>Add one soft routine for today</Text>
               </TouchableOpacity>
-            ) : habits.slice(0, 4).map((habit) => {
+            ) : previewHabits.slice(0, 4).map((habit) => {
               const done = completed.has(habit.id);
+              const scheduled = isHabitScheduledOn(habit);
               return (
-                <TouchableOpacity key={habit.id} style={[styles.habitCard, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]} onPress={() => toggleHabit(habit.id)}>
+                <TouchableOpacity key={habit.id} style={[styles.habitCard, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }, !scheduled && styles.offDayHabit]} onPress={() => toggleHabit(habit.id)}>
                   <View style={[styles.habitIcon, { backgroundColor: done ? habit.color : C.primaryLight }]}>
                     <HabitIcon name={habit.emoji} size={18} color={done ? C.white : habit.color} />
                   </View>
@@ -256,6 +261,7 @@ const styles = StyleSheet.create({
   moodLabel: { fontFamily: 'Rounded', fontSize: 9, fontWeight: '900' },
   habitStack: { gap: 10 },
   habitCard: { minHeight: 62, borderRadius: 20, borderWidth: 1, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  offDayHabit: { opacity: 0.72 },
   habitIcon: { width: 40, height: 40, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   habitTitle: { flex: 1, fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
   emptyCard: { borderRadius: 20, borderWidth: 1, padding: 18 },

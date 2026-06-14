@@ -1,23 +1,49 @@
 import { getDatabase } from './database';
 
+const DAILY_SCHEDULE = [0, 1, 2, 3, 4, 5, 6];
+const DEFAULT_HABIT_ICON = 'star-outline';
+
+export function parseScheduleDays(value) {
+  if (Array.isArray(value)) return normalizeScheduleDays(value);
+  if (!value) return DAILY_SCHEDULE;
+  try {
+    return normalizeScheduleDays(JSON.parse(value));
+  } catch {
+    return DAILY_SCHEDULE;
+  }
+}
+
+function normalizeScheduleDays(days) {
+  const unique = [...new Set((days || []).map(Number).filter((day) => day >= 0 && day <= 6))];
+  return unique.length ? unique.sort((a, b) => a - b) : DAILY_SCHEDULE;
+}
+
+function dateStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+export function isHabitScheduledOn(habit, date = new Date()) {
+  return parseScheduleDays(habit?.schedule_days).includes(date.getDay());
+}
+
 export async function getHabits() {
   const database = await getDatabase();
   return database.getAllAsync('SELECT * FROM habits WHERE archived = 0 ORDER BY created_at ASC');
 }
 
-export async function createHabit(title, emoji, color) {
+export async function createHabit(title, emoji, color, scheduleDays = DAILY_SCHEDULE) {
   const database = await getDatabase();
   await database.runAsync(
-    'INSERT INTO habits (title, emoji, color, created_at) VALUES (?, ?, ?, ?)',
-    [title, emoji || '✦', color || '#C5A8E8', new Date().toISOString()]
+    'INSERT INTO habits (title, emoji, color, schedule_days, created_at) VALUES (?, ?, ?, ?, ?)',
+    [title, emoji || DEFAULT_HABIT_ICON, color || '#C5A8E8', JSON.stringify(normalizeScheduleDays(scheduleDays)), new Date().toISOString()]
   );
 }
 
-export async function updateHabit(id, title, emoji, color) {
+export async function updateHabit(id, title, emoji, color, scheduleDays = DAILY_SCHEDULE) {
   const database = await getDatabase();
   await database.runAsync(
-    'UPDATE habits SET title = ?, emoji = ?, color = ? WHERE id = ?',
-    [title, emoji, color, id]
+    'UPDATE habits SET title = ?, emoji = ?, color = ?, schedule_days = ? WHERE id = ?',
+    [title, emoji, color, JSON.stringify(normalizeScheduleDays(scheduleDays)), id]
   );
 }
 
@@ -38,13 +64,13 @@ export async function toggleCompletion(habitId, date) {
       [habitId, date]
     );
     return false;
-  } else {
-    await database.runAsync(
-      'INSERT INTO habit_completions (habit_id, date, completed_at) VALUES (?, ?, ?)',
-      [habitId, date, new Date().toISOString()]
-    );
-    return true;
   }
+
+  await database.runAsync(
+    'INSERT INTO habit_completions (habit_id, date, completed_at) VALUES (?, ?, ?)',
+    [habitId, date, new Date().toISOString()]
+  );
+  return true;
 }
 
 export async function getCompletionsForDate(date) {
@@ -54,7 +80,7 @@ export async function getCompletionsForDate(date) {
     [date]
   );
   const set = new Set();
-  for (const r of rows) set.add(r.habit_id);
+  for (const row of rows) set.add(row.habit_id);
   return set;
 }
 
@@ -66,41 +92,52 @@ export async function getCompletionsForMonth(year, month) {
     [prefix]
   );
   const map = {};
-  for (const r of rows) {
-    if (!map[r.date]) map[r.date] = new Set();
-    map[r.date].add(r.habit_id);
+  for (const row of rows) {
+    if (!map[row.date]) map[row.date] = new Set();
+    map[row.date].add(row.habit_id);
   }
   return map;
 }
 
 export async function getHabitStreak(habitId) {
   const database = await getDatabase();
+  const habit = await database.getFirstAsync('SELECT schedule_days FROM habits WHERE id = ?', [habitId]);
+  const scheduleDays = parseScheduleDays(habit?.schedule_days);
   const rows = await database.getAllAsync(
     'SELECT date FROM habit_completions WHERE habit_id = ? ORDER BY date DESC',
     [habitId]
   );
   if (rows.length === 0) return 0;
 
-  let streak = 0;
+  const doneSet = new Set(rows.map((row) => row.date));
   const today = new Date();
-  let check = new Date(today);
+  const check = new Date(today);
+  let streak = 0;
+  let skippedCurrentScheduledDay = false;
 
-  for (const { date } of rows) {
-    const checkStr = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
-    if (date === checkStr) {
+  for (let guard = 0; guard < 730; guard++) {
+    const current = dateStr(check);
+    if (!scheduleDays.includes(check.getDay())) {
+      check.setDate(check.getDate() - 1);
+      continue;
+    }
+
+    if (doneSet.has(current)) {
       streak++;
       check.setDate(check.getDate() - 1);
-    } else {
-      if (streak === 0) {
-        check.setDate(check.getDate() - 1);
-        const yStr = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
-        if (date === yStr) {
-          streak++;
-          check.setDate(check.getDate() - 1);
-        } else break;
-      } else break;
+      continue;
     }
+
+    // Do not break a displayed streak before today's scheduled window is over.
+    if (streak === 0 && !skippedCurrentScheduledDay && current === dateStr(today)) {
+      skippedCurrentScheduledDay = true;
+      check.setDate(check.getDate() - 1);
+      continue;
+    }
+
+    break;
   }
+
   return streak;
 }
 
@@ -111,59 +148,121 @@ export async function getHabitHistory(habitId, days = 30) {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const str = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    result.push(str);
+    result.push(dateStr(d));
   }
+
   const rows = await database.getAllAsync(
     `SELECT date FROM habit_completions WHERE habit_id = ? AND date IN (${result.map(() => '?').join(',')})`,
     [habitId, ...result]
   );
-  const doneSet = new Set(rows.map(r => r.date));
-  return result.map(date => ({ date, done: doneSet.has(date) }));
+  const habit = await database.getFirstAsync('SELECT schedule_days FROM habits WHERE id = ?', [habitId]);
+  const scheduleDays = parseScheduleDays(habit?.schedule_days);
+  const doneSet = new Set(rows.map((row) => row.date));
+
+  return result.map((date) => {
+    const localDate = new Date(`${date}T00:00:00`);
+    return { date, done: doneSet.has(date), scheduled: scheduleDays.includes(localDate.getDay()) };
+  });
 }
 
 export async function getCompletionRate(habitId, days = 30) {
   const database = await getDatabase();
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const sinceStr = `${since.getFullYear()}-${String(since.getMonth()+1).padStart(2,'0')}-${String(since.getDate()).padStart(2,'0')}`;
+  const habit = await database.getFirstAsync('SELECT schedule_days FROM habits WHERE id = ?', [habitId]);
+  const scheduleDays = parseScheduleDays(habit?.schedule_days);
+  const scheduledDates = [];
+  const today = new Date();
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (scheduleDays.includes(d.getDay())) scheduledDates.push(dateStr(d));
+  }
+  if (!scheduledDates.length) return 0;
+
   const row = await database.getFirstAsync(
-    'SELECT COUNT(*) as count FROM habit_completions WHERE habit_id = ? AND date >= ?',
-    [habitId, sinceStr]
+    `SELECT COUNT(*) as count FROM habit_completions WHERE habit_id = ? AND date IN (${scheduledDates.map(() => '?').join(',')})`,
+    [habitId, ...scheduledDates]
   );
-  return Math.round(((row?.count || 0) / days) * 100);
+  return Math.round(((row?.count || 0) / scheduledDates.length) * 100);
 }
 
 export async function getHabitInsights() {
   const database = await getDatabase();
-  const habits = await database.getAllAsync('SELECT id FROM habits WHERE archived = 0');
-  if (!habits.length) return { total: 0, rate30: 0, bestStreak: 0, todayDone: 0 };
+  const habits = await database.getAllAsync('SELECT id, schedule_days FROM habits WHERE archived = 0');
+  if (!habits.length) return { total: 0, todayDue: 0, rate30: 0, bestStreak: 0, todayDone: 0 };
 
   const today = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-  const since = new Date(today); since.setDate(today.getDate() - 30);
-  const sinceStr = `${since.getFullYear()}-${pad(since.getMonth()+1)}-${pad(since.getDate())}`;
+  const since = new Date(today);
+  since.setDate(today.getDate() - 29);
+  const sinceStr = dateStr(since);
+  const todayString = dateStr(today);
 
-  const done30 = await database.getFirstAsync(
-    'SELECT COUNT(*) as count FROM habit_completions WHERE date >= ?', [sinceStr]
+  const done30 = await database.getAllAsync(
+    'SELECT habit_id, date FROM habit_completions WHERE date >= ?',
+    [sinceStr]
   );
-  const rate30 = Math.round(((done30?.count || 0) / (habits.length * 30)) * 100);
+  const doneSet = new Set(done30.map((row) => `${row.habit_id}:${row.date}`));
+  let opportunities = 0;
+  let completed = 0;
+
+  for (const habit of habits) {
+    const scheduleDays = parseScheduleDays(habit.schedule_days);
+    const cursor = new Date(since);
+    for (let i = 0; i < 30; i++) {
+      const current = dateStr(cursor);
+      if (scheduleDays.includes(cursor.getDay())) {
+        opportunities++;
+        if (doneSet.has(`${habit.id}:${current}`)) completed++;
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  const rate30 = opportunities ? Math.round((completed / opportunities) * 100) : 0;
 
   let bestStreak = 0;
-  for (const h of habits) {
-    const s = await getHabitStreak(h.id);
-    if (s > bestStreak) bestStreak = s;
+  for (const habit of habits) {
+    const streak = await getHabitStreak(habit.id);
+    if (streak > bestStreak) bestStreak = streak;
   }
 
-  const todayDone = await database.getFirstAsync(
-    'SELECT COUNT(*) as count FROM habit_completions WHERE date = ?', [todayStr]
+  const todayRows = await database.getAllAsync(
+    'SELECT habit_id FROM habit_completions WHERE date = ?',
+    [todayString]
   );
+  const todayDoneSet = new Set(todayRows.map((row) => row.habit_id));
+  const todayDueHabits = habits.filter((habit) => parseScheduleDays(habit.schedule_days).includes(today.getDay()));
+  const todayDone = todayDueHabits.filter((habit) => todayDoneSet.has(habit.id)).length;
 
-  return { total: habits.length, rate30, bestStreak, todayDone: todayDone?.count || 0 };
+  return { total: habits.length, todayDue: todayDueHabits.length, rate30, bestStreak, todayDone };
 }
 
-export async function importHabitCompletion(title, emoji, date) {
+export async function importHabitDefinition(habit) {
+  if (!habit?.title) return;
+  const database = await getDatabase();
+  const scheduleDays = JSON.stringify(parseScheduleDays(habit.schedule_days));
+  const now = new Date().toISOString();
+  await database.runAsync(
+    `INSERT INTO habits (id, title, emoji, color, schedule_days, created_at, archived)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      emoji = excluded.emoji,
+      color = excluded.color,
+      schedule_days = excluded.schedule_days,
+      archived = excluded.archived`,
+    [
+      habit.id || null,
+      String(habit.title).trim(),
+      habit.emoji || DEFAULT_HABIT_ICON,
+      habit.color || '#C5A8E8',
+      scheduleDays,
+      habit.created_at || now,
+      habit.archived ? 1 : 0,
+    ]
+  );
+}
+
+export async function importHabitCompletion(title, emoji, date, scheduleDays = DAILY_SCHEDULE) {
   const database = await getDatabase();
   let habit = await database.getFirstAsync(
     'SELECT id FROM habits WHERE LOWER(title) = LOWER(?)',
@@ -172,8 +271,8 @@ export async function importHabitCompletion(title, emoji, date) {
   if (!habit) {
     const now = new Date().toISOString();
     await database.runAsync(
-      'INSERT INTO habits (title, emoji, color, created_at, archived) VALUES (?, ?, ?, ?, 0)',
-      [title, emoji || '✦', '#C5A8E8', now]
+      'INSERT INTO habits (title, emoji, color, schedule_days, created_at, archived) VALUES (?, ?, ?, ?, ?, 0)',
+      [title, emoji || DEFAULT_HABIT_ICON, '#C5A8E8', JSON.stringify(parseScheduleDays(scheduleDays)), now]
     );
     habit = await database.getFirstAsync('SELECT id FROM habits WHERE LOWER(title) = LOWER(?)', [title]);
   }
@@ -186,10 +285,17 @@ export async function importHabitCompletion(title, emoji, date) {
   } catch {}
 }
 
+export async function getAllHabitsForBackup() {
+  const database = await getDatabase();
+  return database.getAllAsync(
+    'SELECT id, title, emoji, color, schedule_days, archived, created_at FROM habits ORDER BY created_at ASC'
+  );
+}
+
 export async function getAllHabitCompletions() {
   const database = await getDatabase();
   return database.getAllAsync(
-    `SELECT hc.date, h.title, h.emoji
+    `SELECT hc.date, h.title, h.emoji, h.schedule_days
      FROM habit_completions hc
      JOIN habits h ON h.id = hc.habit_id
      ORDER BY hc.date DESC, h.title ASC`
