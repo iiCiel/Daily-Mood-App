@@ -177,7 +177,7 @@ function Stat({ C, value, label }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 112 },
+  pageContent: { paddingBottom: 0 },
   hero: { height: 560, paddingTop: 56, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -192,12 +192,13 @@ const styles = StyleSheet.create({
   play: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     marginTop: 0,
+    minHeight: 520,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
   },
   sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
-  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 140 },
   player: { minHeight: 58, borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   input: { flex: 1, fontFamily: 'Rounded', fontSize: 14, fontWeight: '800' },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },

@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 112 },
+  pageContent: { paddingBottom: 0 },
   heroImage: { height: 560, paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
   heroImageInner: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -178,6 +178,7 @@ const styles = StyleSheet.create({
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     marginTop: 0,
+    minHeight: 520,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 28,
+    paddingBottom: 140,
   },
   sheetDecor: {
     ...StyleSheet.absoluteFillObject,

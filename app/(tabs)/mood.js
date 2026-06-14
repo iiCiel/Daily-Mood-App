@@ -141,7 +141,7 @@ function MiniStat({ C, label, value }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 112 },
+  pageContent: { paddingBottom: 0 },
   hero: { height: 570, paddingTop: 56, paddingHorizontal: 22, justifyContent: 'space-between' },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -155,6 +155,7 @@ const styles = StyleSheet.create({
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     marginTop: 0,
+    minHeight: 560,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 30,
+    paddingBottom: 142,
   },
   sheetDecor: {
     ...StyleSheet.absoluteFillObject,
