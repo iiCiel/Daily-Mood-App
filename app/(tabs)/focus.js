@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import { getSessionsForDay, getTotalFocusMinutes, saveSession } from '../../src/db/focusDatabase';
+import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const focusArt = require('../../assets/illustrations/storybook-focus.png');
 const paperArt = require('../../assets/illustrations/storybook-paper.png');
@@ -95,6 +96,7 @@ export default function FocusScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
         <ImageBackground source={focusArt} style={styles.hero} imageStyle={styles.heroImage}>
+          <StorybookHeroFade />
           <View style={styles.topBar}>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.back()}>
               <Ionicons name="chevron-back" size={18} color={C.text} />
@@ -189,7 +191,7 @@ const styles = StyleSheet.create({
   transport: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 },
   play: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   sheet: {
-    marginTop: -52,
+    marginTop: 0,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',

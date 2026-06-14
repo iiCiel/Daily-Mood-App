@@ -7,6 +7,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import HabitIcon from '../../src/components/HabitIcon';
 import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons';
 import { createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
+import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const habitsArt = require('../../assets/illustrations/storybook-habits.png');
 const paperArt = require('../../assets/illustrations/storybook-paper.png');
@@ -64,6 +65,7 @@ export default function HabitsScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
         <ImageBackground source={habitsArt} style={styles.hero} imageStyle={styles.heroImage}>
+          <StorybookHeroFade />
           <View style={styles.topBar}>
             <Text style={[styles.title, { color: C.text }]}>Routine Story</Text>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => setShowAdd(true)}>
@@ -149,7 +151,7 @@ const styles = StyleSheet.create({
   track: { height: 8, borderRadius: 999, overflow: 'hidden', marginTop: 12 },
   fill: { height: '100%', borderRadius: 999 },
   sheet: {
-    marginTop: -44,
+    marginTop: 0,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',

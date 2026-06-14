@@ -7,6 +7,7 @@ import { getEntriesForMonth, getMonthStats, getStreak, exportMonthAsText } from 
 import { MOODS } from '../../src/constants/theme';
 import { useTheme } from '../../src/context/ThemeContext';
 import MoodFace from '../../src/components/MoodFace';
+import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const catArt = require('../../assets/illustrations/storybook-calm-cat.png');
 const paperArt = require('../../assets/illustrations/storybook-paper.png');
@@ -60,6 +61,7 @@ export default function MoodScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
         <ImageBackground source={catArt} style={styles.hero} imageStyle={styles.heroImage}>
+          <StorybookHeroFade />
           <View style={styles.topBar}>
             <Text style={[styles.smallTime, { color: C.text }]}>13:11</Text>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={copyMonth}>
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
   playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
-    marginTop: -22,
+    marginTop: 0,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',

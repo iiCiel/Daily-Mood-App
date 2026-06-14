@@ -11,6 +11,7 @@ import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
 import { getPlanningSummary } from '../../src/db/plannerDatabase';
+import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const catsArt = require('../../assets/illustrations/storybook-cats.png');
 const paperArt = require('../../assets/illustrations/storybook-paper.png');
@@ -79,6 +80,7 @@ export default function DashboardScreen() {
     <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
         <ImageBackground source={catsArt} style={styles.heroImage} imageStyle={styles.heroImageInner}>
+          <StorybookHeroFade />
           <View style={styles.topBar}>
             <Text style={[styles.smallTime, { color: C.text }]}>9:41</Text>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/(tabs)/settings')}>
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
   playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
   play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
-    marginTop: -62,
+    marginTop: 0,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
