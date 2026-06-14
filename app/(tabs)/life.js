@@ -78,9 +78,8 @@ export default function DashboardScreen() {
         <ImageBackground source={catsArt} style={styles.heroImage} imageStyle={styles.heroImageInner}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
-            <Text style={[styles.smallTime, { color: C.text }]}>9:41</Text>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/(tabs)/settings')}>
-              <Ionicons name="close" size={16} color={C.text} />
+              <Ionicons name="settings-outline" size={17} color={C.text} />
             </TouchableOpacity>
           </View>
 
@@ -166,7 +165,7 @@ const styles = StyleSheet.create({
   pageContent: { paddingBottom: 0 },
   heroImage: { height: 560, paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
   heroImageInner: { resizeMode: 'cover' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   smallTime: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
   circleBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
   heroCopy: { alignItems: 'center', marginTop: 10 },

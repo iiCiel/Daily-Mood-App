@@ -98,12 +98,10 @@ export default function FocusScreen() {
         <ImageBackground source={focusArt} style={styles.hero} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
-            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={18} color={C.text} />
-            </TouchableOpacity>
             <Text style={[styles.topTitle, { color: C.text }]}>Love Story</Text>
-            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/focus-stats')}>
-              <Ionicons name="stats-chart-outline" size={17} color={C.text} />
+            <TouchableOpacity style={[styles.statsChip, { backgroundColor: C.white }]} onPress={() => router.push('/focus-stats')}>
+              <Ionicons name="stats-chart-outline" size={16} color={C.primary} />
+              <Text style={[styles.statsChipText, { color: C.text }]}>Stats</Text>
             </TouchableOpacity>
           </View>
 
@@ -141,20 +139,20 @@ export default function FocusScreen() {
 
           <View style={styles.statsRow}>
             <Stat C={C} value={`${todayMinutes}m`} label="today" />
-            <Stat C={C} value={todaySessions.length} label="tracks" />
+            <Stat C={C} value={todaySessions.length} label="sessions" />
             <Stat C={C} value={`${Math.floor(totalMinutes / 60)}h`} label="all time" />
           </View>
 
-          <Text style={[styles.sectionTitle, { color: C.text }]}>Recent tracks</Text>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Recent sessions</Text>
           <View style={styles.trackList}>
             {todaySessions.length === 0 ? (
               <View style={[styles.track, { backgroundColor: C.card, borderColor: C.border }]}>
-                <Text style={[styles.trackTitle, { color: C.textSecondary }]}>No focus songs yet today.</Text>
+                <Text style={[styles.trackTitle, { color: C.textSecondary }]}>No focus sessions yet today.</Text>
               </View>
             ) : todaySessions.slice(0, 6).map((session) => (
               <View key={session.id} style={[styles.track, { backgroundColor: C.card, borderColor: C.border }]}>
-                <Ionicons name="musical-note" size={18} color={C.primary} />
-                <Text style={[styles.trackTitle, { color: C.text }]} numberOfLines={1}>{session.task_title || 'Focus track'}</Text>
+                <Ionicons name="timer-outline" size={18} color={C.primary} />
+                <Text style={[styles.trackTitle, { color: C.text }]} numberOfLines={1}>{session.task_title || session.label || 'Focus session'}</Text>
                 <Text style={[styles.trackMeta, { color: C.textSecondary }]}>{session.duration}m</Text>
               </View>
             ))}
@@ -183,6 +181,20 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: '#8D94BE', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   topTitle: { fontFamily: 'Rounded', fontSize: 17, fontWeight: '900' },
+  statsChip: {
+    minHeight: 36,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#8D94BE',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  statsChipText: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
   clockWrap: { alignItems: 'center', marginTop: 54 },
   clockRing: { width: 210, height: 210, borderRadius: 105, borderWidth: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.56)' },
   clockArc: { position: 'absolute', width: 210, height: 210, borderRadius: 105, borderWidth: 14, borderColor: 'transparent' },

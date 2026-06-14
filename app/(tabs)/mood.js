@@ -63,7 +63,6 @@ export default function MoodScreen() {
         <ImageBackground source={catArt} style={styles.hero} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
-            <Text style={[styles.smallTime, { color: C.text }]}>13:11</Text>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={copyMonth}>
               <Ionicons name="copy-outline" size={16} color={C.text} />
             </TouchableOpacity>
@@ -144,7 +143,7 @@ const styles = StyleSheet.create({
   pageContent: { paddingBottom: 0 },
   hero: { height: 570, paddingTop: 56, paddingHorizontal: 22, justifyContent: 'space-between' },
   heroImage: { resizeMode: 'cover' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   smallTime: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900' },
   circleBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#8792BE', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   affirmation: { alignItems: 'flex-end', marginTop: 64 },
