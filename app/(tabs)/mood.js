@@ -57,66 +57,68 @@ export default function MoodScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <ImageBackground source={catArt} style={styles.hero} imageStyle={styles.heroImage}>
-        <View style={styles.topBar}>
-          <Text style={[styles.smallTime, { color: C.text }]}>13:11</Text>
-          <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={copyMonth}>
-            <Ionicons name="copy-outline" size={16} color={C.text} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.affirmation}>
-          <Text style={[styles.posterText, { color: C.text }]}>YOU ARE{'\n'}DOING{'\n'}GREAT{'\n'}LOVE</Text>
-        </View>
-        <View style={[styles.player, { backgroundColor: C.white }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.playerTitle, { color: C.text }]}>Amazing Grace</Text>
-            <Text style={[styles.playerSub, { color: C.textSecondary }]}>{stats?.total || 0} reflections this month</Text>
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+        <ImageBackground source={catArt} style={styles.hero} imageStyle={styles.heroImage}>
+          <View style={styles.topBar}>
+            <Text style={[styles.smallTime, { color: C.text }]}>13:11</Text>
+            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={copyMonth}>
+              <Ionicons name="copy-outline" size={16} color={C.text} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push({ pathname: '/entry', params: { date: today } })}>
-            <Ionicons name="play" size={15} color={C.primary} />
-          </TouchableOpacity>
-        </View>
-      </ImageBackground>
-
-      <ScrollView style={[styles.sheet, { backgroundColor: C.panel }]} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <View pointerEvents="none" style={styles.sheetDecor}>
-          <View style={[styles.sheetBlobOne, { backgroundColor: C.lavender }]} />
-          <View style={[styles.sheetBlobTwo, { backgroundColor: C.peach }]} />
-          <Ionicons name="musical-notes-outline" size={24} color={C.primary} style={styles.decorNote} />
-        </View>
-        <View style={styles.statsRow}>
-          <MiniStat C={C} label="Entries" value={stats?.total || 0} />
-          <MiniStat C={C} label="Streak" value={`${streak}d`} />
-          <MiniStat C={C} label="Avg" value={stats?.avg ? stats.avg.toFixed(1) : '-'} />
-        </View>
-
-        <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
-          <View style={styles.monthHeader}>
-            <Text style={[styles.monthTitle, { color: C.text }]}>{monthName}</Text>
-            <View style={styles.monthControls}>
-              <TouchableOpacity style={[styles.monthBtn, { backgroundColor: C.primaryLight }]} onPress={() => setMonth((m) => (m === 1 ? 12 : m - 1))}>
-                <Ionicons name="chevron-back" size={16} color={C.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.monthBtn, { backgroundColor: C.primaryLight }]} onPress={() => setMonth((m) => (m === 12 ? 1 : m + 1))}>
-                <Ionicons name="chevron-forward" size={16} color={C.primary} />
-              </TouchableOpacity>
+          <View style={styles.affirmation}>
+            <Text style={[styles.posterText, { color: C.text }]}>YOU ARE{'\n'}DOING{'\n'}GREAT{'\n'}LOVE</Text>
+          </View>
+          <View style={[styles.player, { backgroundColor: C.white }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.playerTitle, { color: C.text }]}>Amazing Grace</Text>
+              <Text style={[styles.playerSub, { color: C.textSecondary }]}>{stats?.total || 0} reflections this month</Text>
             </View>
+            <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push({ pathname: '/entry', params: { date: today } })}>
+              <Ionicons name="play" size={15} color={C.primary} />
+            </TouchableOpacity>
           </View>
-          <View style={styles.dayLabels}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <Text key={`${d}${i}`} style={[styles.dayLabel, { color: C.textSecondary }]}>{d}</Text>)}
+        </ImageBackground>
+
+        <View style={[styles.sheet, { backgroundColor: C.panel }, styles.sheetContent]}>
+          <View pointerEvents="none" style={styles.sheetDecor}>
+            <View style={[styles.sheetBlobOne, { backgroundColor: C.lavender }]} />
+            <View style={[styles.sheetBlobTwo, { backgroundColor: C.peach }]} />
+            <Ionicons name="musical-notes-outline" size={24} color={C.primary} style={styles.decorNote} />
           </View>
-          <View style={styles.grid}>
-            {cells.map((day, i) => {
-              if (!day) return <View key={`empty-${i}`} style={styles.cell} />;
-              const entry = entryMap[day];
-              const mood = entry ? MOODS.find((m) => m.value === entry.mood) : null;
-              const date = formatDate(year, month, day);
-              return (
-                <TouchableOpacity key={date} style={styles.cell} onPress={() => router.push({ pathname: '/entry', params: { date } })}>
-                  {mood ? <MoodFace color={mood.color} moodValue={mood.value} size={34} /> : <Text style={[styles.dayNum, { color: date > today ? C.border : C.textSecondary }]}>{day}</Text>}
+          <View style={styles.statsRow}>
+            <MiniStat C={C} label="Entries" value={stats?.total || 0} />
+            <MiniStat C={C} label="Streak" value={`${streak}d`} />
+            <MiniStat C={C} label="Avg" value={stats?.avg ? stats.avg.toFixed(1) : '-'} />
+          </View>
+
+          <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={styles.monthHeader}>
+              <Text style={[styles.monthTitle, { color: C.text }]}>{monthName}</Text>
+              <View style={styles.monthControls}>
+                <TouchableOpacity style={[styles.monthBtn, { backgroundColor: C.primaryLight }]} onPress={() => setMonth((m) => (m === 1 ? 12 : m - 1))}>
+                  <Ionicons name="chevron-back" size={16} color={C.primary} />
                 </TouchableOpacity>
-              );
-            })}
+                <TouchableOpacity style={[styles.monthBtn, { backgroundColor: C.primaryLight }]} onPress={() => setMonth((m) => (m === 12 ? 1 : m + 1))}>
+                  <Ionicons name="chevron-forward" size={16} color={C.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.dayLabels}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <Text key={`${d}${i}`} style={[styles.dayLabel, { color: C.textSecondary }]}>{d}</Text>)}
+            </View>
+            <View style={styles.grid}>
+              {cells.map((day, i) => {
+                if (!day) return <View key={`empty-${i}`} style={styles.cell} />;
+                const entry = entryMap[day];
+                const mood = entry ? MOODS.find((m) => m.value === entry.mood) : null;
+                const date = formatDate(year, month, day);
+                return (
+                  <TouchableOpacity key={date} style={styles.cell} onPress={() => router.push({ pathname: '/entry', params: { date } })}>
+                    {mood ? <MoodFace color={mood.color} moodValue={mood.value} size={34} /> : <Text style={[styles.dayNum, { color: date > today ? C.border : C.textSecondary }]}>{day}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -135,6 +137,8 @@ function MiniStat({ C, label, value }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  pageScroll: { flex: 1 },
+  pageContent: { paddingBottom: 0 },
   hero: { height: 570, paddingTop: 56, paddingHorizontal: 22, justifyContent: 'space-between' },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

@@ -76,73 +76,75 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <ImageBackground source={catsArt} style={styles.heroImage} imageStyle={styles.heroImageInner}>
-        <View style={styles.topBar}>
-          <Text style={[styles.smallTime, { color: C.text }]}>9:41</Text>
-          <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/(tabs)/settings')}>
-            <Ionicons name="close" size={16} color={C.text} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.heroCopy}>
-          <Text style={[styles.time, { color: C.text }]}>{clockLabel()}</Text>
-          <Text style={[styles.script, { color: C.text }]}>You can do it beautiful</Text>
-        </View>
-
-        <View style={[styles.player, { backgroundColor: C.white }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.playerTitle, { color: C.text }]}>Daily Story</Text>
-            <Text style={[styles.playerSub, { color: C.textSecondary }]}>
-              {habits.length - doneCount > 0 ? `${habits.length - doneCount} tiny rituals left` : 'soft day complete'}
-            </Text>
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+        <ImageBackground source={catsArt} style={styles.heroImage} imageStyle={styles.heroImageInner}>
+          <View style={styles.topBar}>
+            <Text style={[styles.smallTime, { color: C.text }]}>9:41</Text>
+            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/(tabs)/settings')}>
+              <Ionicons name="close" size={16} color={C.text} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push('/(tabs)/focus')}>
-            <Ionicons name="play" size={16} color={C.primary} />
-          </TouchableOpacity>
-        </View>
-      </ImageBackground>
 
-      <ScrollView style={[styles.sheet, { backgroundColor: C.panel }]} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <View pointerEvents="none" style={styles.sheetDecor}>
-          <View style={[styles.sheetBlobLarge, { backgroundColor: C.lavender }]} />
-          <View style={[styles.sheetBlobSmall, { backgroundColor: C.peach }]} />
-          <Ionicons name="musical-note" size={24} color={C.primary} style={styles.decorNoteOne} />
-          <Ionicons name="sparkles-outline" size={21} color={C.teal} style={styles.decorNoteTwo} />
-        </View>
-        <View style={styles.storyRow}>
-          <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
-          <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="musical-notes-outline" onPress={() => router.push('/(tabs)/focus')} />
-          <StoryTile C={C} label="Tasks" value={planningSummary?.dueTasks ? `${planningSummary.dueTasks}` : '0'} tone={C.accent} icon="list-outline" onPress={() => router.push('/planner')} />
-        </View>
+          <View style={styles.heroCopy}>
+            <Text style={[styles.time, { color: C.text }]}>{clockLabel()}</Text>
+            <Text style={[styles.script, { color: C.text }]}>You can do it beautiful</Text>
+          </View>
 
-        <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
-        <View style={styles.moodRow}>
-          {MOODS.map((mood) => (
-            <TouchableOpacity key={mood.value} style={[styles.moodButton, { backgroundColor: C.card, borderColor: todayMood?.mood === mood.value ? mood.color : C.border }]} onPress={() => handleQuickMood(mood.value)}>
-              <MoodFace color={mood.color} moodValue={mood.value} size={38} />
-              <Text style={[styles.moodLabel, { color: C.textSecondary }]}>{mood.label}</Text>
+          <View style={[styles.player, { backgroundColor: C.white }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.playerTitle, { color: C.text }]}>Daily Story</Text>
+              <Text style={[styles.playerSub, { color: C.textSecondary }]}>
+                {habits.length - doneCount > 0 ? `${habits.length - doneCount} tiny rituals left` : 'soft day complete'}
+              </Text>
+            </View>
+            <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push('/(tabs)/focus')}>
+              <Ionicons name="play" size={16} color={C.primary} />
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
+        </ImageBackground>
 
-        <Text style={[styles.sectionTitle, { color: C.text }]}>Tiny rituals</Text>
-        <View style={styles.habitStack}>
-          {habits.length === 0 ? (
-            <TouchableOpacity style={[styles.emptyCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/(tabs)/habits')}>
-              <Text style={[styles.body, { color: C.textSecondary }]}>Add one soft routine for today</Text>
-            </TouchableOpacity>
-          ) : habits.slice(0, 4).map((habit) => {
-            const done = completed.has(habit.id);
-            return (
-              <TouchableOpacity key={habit.id} style={[styles.habitCard, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]} onPress={() => toggleHabit(habit.id)}>
-                <View style={[styles.habitIcon, { backgroundColor: done ? habit.color : C.primaryLight }]}>
-                  <HabitIcon name={habit.emoji} size={18} color={done ? C.white : habit.color} />
-                </View>
-                <Text style={[styles.habitTitle, { color: C.text }, done && { textDecorationLine: 'line-through', color: C.textSecondary }]}>{habit.title}</Text>
-                <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={done ? habit.color : C.textSecondary} />
+        <View style={[styles.sheet, { backgroundColor: C.panel }, styles.sheetContent]}>
+          <View pointerEvents="none" style={styles.sheetDecor}>
+            <View style={[styles.sheetBlobLarge, { backgroundColor: C.lavender }]} />
+            <View style={[styles.sheetBlobSmall, { backgroundColor: C.peach }]} />
+            <Ionicons name="musical-note" size={24} color={C.primary} style={styles.decorNoteOne} />
+            <Ionicons name="sparkles-outline" size={21} color={C.teal} style={styles.decorNoteTwo} />
+          </View>
+          <View style={styles.storyRow}>
+            <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
+            <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="musical-notes-outline" onPress={() => router.push('/(tabs)/focus')} />
+            <StoryTile C={C} label="Tasks" value={planningSummary?.dueTasks ? `${planningSummary.dueTasks}` : '0'} tone={C.accent} icon="list-outline" onPress={() => router.push('/planner')} />
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
+          <View style={styles.moodRow}>
+            {MOODS.map((mood) => (
+              <TouchableOpacity key={mood.value} style={[styles.moodButton, { backgroundColor: C.card, borderColor: todayMood?.mood === mood.value ? mood.color : C.border }]} onPress={() => handleQuickMood(mood.value)}>
+                <MoodFace color={mood.color} moodValue={mood.value} size={38} />
+                <Text style={[styles.moodLabel, { color: C.textSecondary }]}>{mood.label}</Text>
               </TouchableOpacity>
-            );
-          })}
+            ))}
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Tiny rituals</Text>
+          <View style={styles.habitStack}>
+            {habits.length === 0 ? (
+              <TouchableOpacity style={[styles.emptyCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/(tabs)/habits')}>
+                <Text style={[styles.body, { color: C.textSecondary }]}>Add one soft routine for today</Text>
+              </TouchableOpacity>
+            ) : habits.slice(0, 4).map((habit) => {
+              const done = completed.has(habit.id);
+              return (
+                <TouchableOpacity key={habit.id} style={[styles.habitCard, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]} onPress={() => toggleHabit(habit.id)}>
+                  <View style={[styles.habitIcon, { backgroundColor: done ? habit.color : C.primaryLight }]}>
+                    <HabitIcon name={habit.emoji} size={18} color={done ? C.white : habit.color} />
+                  </View>
+                  <Text style={[styles.habitTitle, { color: C.text }, done && { textDecorationLine: 'line-through', color: C.textSecondary }]}>{habit.title}</Text>
+                  <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={done ? habit.color : C.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -162,6 +164,8 @@ function StoryTile({ C, label, value, tone, icon, onPress }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  pageScroll: { flex: 1 },
+  pageContent: { paddingBottom: 0 },
   heroImage: { height: 560, paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
   heroImageInner: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

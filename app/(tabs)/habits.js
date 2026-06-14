@@ -61,46 +61,48 @@ export default function HabitsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <ImageBackground source={habitsArt} style={styles.hero} imageStyle={styles.heroImage}>
-        <View style={styles.topBar}>
-          <Text style={[styles.title, { color: C.text }]}>Routine Story</Text>
-          <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => setShowAdd(true)}>
-            <Ionicons name="add" size={20} color={C.primary} />
-          </TouchableOpacity>
-        </View>
-        <View style={[styles.progressCard, { backgroundColor: C.white }]}>
-          <Text style={[styles.script, { color: C.text }]}>keep it gentle</Text>
-          <Text style={[styles.percent, { color: C.primary }]}>{percent}%</Text>
-          <Text style={[styles.caption, { color: C.textSecondary }]}>{doneCount}/{habits.length} rituals complete</Text>
-          <View style={[styles.track, { backgroundColor: C.primaryLight }]}>
-            <View style={[styles.fill, { width: `${percent}%`, backgroundColor: C.primary }]} />
-          </View>
-        </View>
-      </ImageBackground>
-
-      <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.sectionTitle, { color: C.text }]}>Today&apos;s playlist</Text>
-        <View style={styles.list}>
-          {habits.length === 0 ? (
-            <TouchableOpacity style={[styles.empty, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowAdd(true)}>
-              <Text style={[styles.itemTitle, { color: C.text }]}>Add your first ritual</Text>
-              <Text style={[styles.itemMeta, { color: C.textSecondary }]}>Start with something tiny.</Text>
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+        <ImageBackground source={habitsArt} style={styles.hero} imageStyle={styles.heroImage}>
+          <View style={styles.topBar}>
+            <Text style={[styles.title, { color: C.text }]}>Routine Story</Text>
+            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => setShowAdd(true)}>
+              <Ionicons name="add" size={20} color={C.primary} />
             </TouchableOpacity>
-          ) : habits.map((habit) => {
-            const done = completed.has(habit.id);
-            return (
-              <TouchableOpacity key={habit.id} style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]} onPress={() => toggle(habit.id)}>
-                <View style={[styles.iconWrap, { backgroundColor: done ? habit.color : C.primaryLight }]}>
-                  <HabitIcon name={habit.emoji} size={20} color={done ? C.white : habit.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.itemTitle, { color: done ? C.textSecondary : C.text }, done && { textDecorationLine: 'line-through' }]}>{habit.title}</Text>
-                  <Text style={[styles.itemMeta, { color: C.textSecondary }]}>{streaks[habit.id] || 0} day streak</Text>
-                </View>
-                <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={done ? habit.color : C.textSecondary} />
+          </View>
+          <View style={[styles.progressCard, { backgroundColor: C.white }]}>
+            <Text style={[styles.script, { color: C.text }]}>keep it gentle</Text>
+            <Text style={[styles.percent, { color: C.primary }]}>{percent}%</Text>
+            <Text style={[styles.caption, { color: C.textSecondary }]}>{doneCount}/{habits.length} rituals complete</Text>
+            <View style={[styles.track, { backgroundColor: C.primaryLight }]}>
+              <View style={[styles.fill, { width: `${percent}%`, backgroundColor: C.primary }]} />
+            </View>
+          </View>
+        </ImageBackground>
+
+        <View style={[styles.sheet, styles.sheetContent]}>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Today&apos;s playlist</Text>
+          <View style={styles.list}>
+            {habits.length === 0 ? (
+              <TouchableOpacity style={[styles.empty, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowAdd(true)}>
+                <Text style={[styles.itemTitle, { color: C.text }]}>Add your first ritual</Text>
+                <Text style={[styles.itemMeta, { color: C.textSecondary }]}>Start with something tiny.</Text>
               </TouchableOpacity>
-            );
-          })}
+            ) : habits.map((habit) => {
+              const done = completed.has(habit.id);
+              return (
+                <TouchableOpacity key={habit.id} style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]} onPress={() => toggle(habit.id)}>
+                  <View style={[styles.iconWrap, { backgroundColor: done ? habit.color : C.primaryLight }]}>
+                    <HabitIcon name={habit.emoji} size={20} color={done ? C.white : habit.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemTitle, { color: done ? C.textSecondary : C.text }, done && { textDecorationLine: 'line-through' }]}>{habit.title}</Text>
+                    <Text style={[styles.itemMeta, { color: C.textSecondary }]}>{streaks[habit.id] || 0} day streak</Text>
+                  </View>
+                  <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={done ? habit.color : C.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
 
@@ -132,6 +134,8 @@ export default function HabitsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  pageScroll: { flex: 1 },
+  pageContent: { paddingBottom: 0 },
   hero: { height: 500, paddingTop: 58, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -143,7 +147,7 @@ const styles = StyleSheet.create({
   caption: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '900' },
   track: { height: 8, borderRadius: 999, overflow: 'hidden', marginTop: 12 },
   fill: { height: '100%', borderRadius: 999 },
-  sheet: { flex: 1, marginTop: -44 },
+  sheet: { marginTop: -44 },
   sheetContent: { paddingHorizontal: 20, paddingBottom: 30 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },

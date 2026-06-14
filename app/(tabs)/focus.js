@@ -92,68 +92,70 @@ export default function FocusScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <ImageBackground source={focusArt} style={styles.hero} imageStyle={styles.heroImage}>
-        <View style={styles.topBar}>
-          <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={18} color={C.text} />
-          </TouchableOpacity>
-          <Text style={[styles.topTitle, { color: C.text }]}>Love Story</Text>
-          <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/focus-stats')}>
-            <Ionicons name="stats-chart-outline" size={17} color={C.text} />
-          </TouchableOpacity>
-        </View>
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+        <ImageBackground source={focusArt} style={styles.hero} imageStyle={styles.heroImage}>
+          <View style={styles.topBar}>
+            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={18} color={C.text} />
+            </TouchableOpacity>
+            <Text style={[styles.topTitle, { color: C.text }]}>Love Story</Text>
+            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/focus-stats')}>
+              <Ionicons name="stats-chart-outline" size={17} color={C.text} />
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.clockWrap}>
-          <View style={[styles.clockRing, { borderColor: C.primaryLight }]}>
-            <View style={[styles.clockArc, { borderTopColor: C.primary, transform: [{ rotate: ringDeg }] }]} />
-            <Text style={[styles.timer, { color: C.text }]}>{formatTime(secondsLeft)}</Text>
-            <Text style={[styles.subtitle, { color: C.textSecondary }]}>{running ? 'playing focus' : 'press play'}</Text>
-            <View style={styles.transport}>
-              <TouchableOpacity onPress={resetTimer}>
-                <Ionicons name="play-skip-back" size={16} color={C.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={toggleTimer}>
-                <Ionicons name={running ? 'pause' : 'play'} size={17} color={C.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={completeSession}>
-                <Ionicons name="play-skip-forward" size={16} color={C.textSecondary} />
-              </TouchableOpacity>
+          <View style={styles.clockWrap}>
+            <View style={[styles.clockRing, { borderColor: C.primaryLight }]}>
+              <View style={[styles.clockArc, { borderTopColor: C.primary, transform: [{ rotate: ringDeg }] }]} />
+              <Text style={[styles.timer, { color: C.text }]}>{formatTime(secondsLeft)}</Text>
+              <Text style={[styles.subtitle, { color: C.textSecondary }]}>{running ? 'playing focus' : 'press play'}</Text>
+              <View style={styles.transport}>
+                <TouchableOpacity onPress={resetTimer}>
+                  <Ionicons name="play-skip-back" size={16} color={C.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={toggleTimer}>
+                  <Ionicons name={running ? 'pause' : 'play'} size={17} color={C.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={completeSession}>
+                  <Ionicons name="play-skip-forward" size={16} color={C.textSecondary} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </ImageBackground>
+        </ImageBackground>
 
-      <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.player, { backgroundColor: C.card, borderColor: C.border }]}>
-          <Ionicons name="headset-outline" size={20} color={C.primary} />
-          <TextInput
-            style={[styles.input, { color: C.text }]}
-            value={label}
-            onChangeText={setLabel}
-            placeholder="What are you focusing on?"
-            placeholderTextColor={C.textSecondary}
-          />
-        </View>
+        <View style={[styles.sheet, styles.sheetContent]}>
+          <View style={[styles.player, { backgroundColor: C.card, borderColor: C.border }]}>
+            <Ionicons name="headset-outline" size={20} color={C.primary} />
+            <TextInput
+              style={[styles.input, { color: C.text }]}
+              value={label}
+              onChangeText={setLabel}
+              placeholder="What are you focusing on?"
+              placeholderTextColor={C.textSecondary}
+            />
+          </View>
 
-        <View style={styles.statsRow}>
-          <Stat C={C} value={`${todayMinutes}m`} label="today" />
-          <Stat C={C} value={todaySessions.length} label="tracks" />
-          <Stat C={C} value={`${Math.floor(totalMinutes / 60)}h`} label="all time" />
-        </View>
+          <View style={styles.statsRow}>
+            <Stat C={C} value={`${todayMinutes}m`} label="today" />
+            <Stat C={C} value={todaySessions.length} label="tracks" />
+            <Stat C={C} value={`${Math.floor(totalMinutes / 60)}h`} label="all time" />
+          </View>
 
-        <Text style={[styles.sectionTitle, { color: C.text }]}>Recent tracks</Text>
-        <View style={styles.trackList}>
-          {todaySessions.length === 0 ? (
-            <View style={[styles.track, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Text style={[styles.trackTitle, { color: C.textSecondary }]}>No focus songs yet today.</Text>
-            </View>
-          ) : todaySessions.slice(0, 6).map((session) => (
-            <View key={session.id} style={[styles.track, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Ionicons name="musical-note" size={18} color={C.primary} />
-              <Text style={[styles.trackTitle, { color: C.text }]} numberOfLines={1}>{session.task_title || 'Focus track'}</Text>
-              <Text style={[styles.trackMeta, { color: C.textSecondary }]}>{session.duration}m</Text>
-            </View>
-          ))}
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Recent tracks</Text>
+          <View style={styles.trackList}>
+            {todaySessions.length === 0 ? (
+              <View style={[styles.track, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Text style={[styles.trackTitle, { color: C.textSecondary }]}>No focus songs yet today.</Text>
+              </View>
+            ) : todaySessions.slice(0, 6).map((session) => (
+              <View key={session.id} style={[styles.track, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Ionicons name="musical-note" size={18} color={C.primary} />
+                <Text style={[styles.trackTitle, { color: C.text }]} numberOfLines={1}>{session.task_title || 'Focus track'}</Text>
+                <Text style={[styles.trackMeta, { color: C.textSecondary }]}>{session.duration}m</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -171,6 +173,8 @@ function Stat({ C, value, label }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  pageScroll: { flex: 1 },
+  pageContent: { paddingBottom: 0 },
   hero: { height: 560, paddingTop: 56, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -183,7 +187,7 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '900', marginTop: 2 },
   transport: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 },
   play: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  sheet: { flex: 1, marginTop: -52 },
+  sheet: { marginTop: -52 },
   sheetContent: { paddingHorizontal: 20, paddingBottom: 28 },
   player: { minHeight: 58, borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   input: { flex: 1, fontFamily: 'Rounded', fontSize: 14, fontWeight: '800' },
