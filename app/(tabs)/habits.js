@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import HabitIcon from '../../src/components/HabitIcon';
 import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons';
-import { createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
+import { archiveHabit, createHabit, getCompletionsForDate, getHabitStreak, getHabits, toggleCompletion } from '../../src/db/habitDatabase';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const habitsArt = require('../../assets/illustrations/storybook-habits.png');
@@ -58,6 +58,25 @@ export default function HabitsScreen() {
     await load();
   }
 
+  async function deleteHabit(habit) {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      'Delete habit?',
+      habit.title,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await archiveHabit(habit.id);
+            await load();
+          },
+        },
+      ],
+    );
+  }
+
   const doneCount = habits.filter((habit) => completed.has(habit.id)).length;
   const percent = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
 
@@ -75,7 +94,7 @@ export default function HabitsScreen() {
           <View style={[styles.progressCard, { backgroundColor: C.white }]}>
             <Text style={[styles.script, { color: C.text }]}>keep it gentle</Text>
             <Text style={[styles.percent, { color: C.primary }]}>{percent}%</Text>
-            <Text style={[styles.caption, { color: C.textSecondary }]}>{doneCount}/{habits.length} rituals complete</Text>
+            <Text style={[styles.caption, { color: C.textSecondary }]}>{doneCount}/{habits.length} habits complete</Text>
             <View style={[styles.track, { backgroundColor: C.primaryLight }]}>
               <View style={[styles.fill, { width: `${percent}%`, backgroundColor: C.primary }]} />
             </View>
@@ -87,13 +106,19 @@ export default function HabitsScreen() {
           <View style={styles.list}>
             {habits.length === 0 ? (
               <TouchableOpacity style={[styles.empty, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowAdd(true)}>
-                <Text style={[styles.itemTitle, { color: C.text }]}>Add your first ritual</Text>
+                <Text style={[styles.itemTitle, { color: C.text }]}>Add your first habit</Text>
                 <Text style={[styles.itemMeta, { color: C.textSecondary }]}>Start with something tiny.</Text>
               </TouchableOpacity>
             ) : habits.map((habit) => {
               const done = completed.has(habit.id);
               return (
-                <TouchableOpacity key={habit.id} style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]} onPress={() => toggle(habit.id)}>
+                <TouchableOpacity
+                  key={habit.id}
+                  style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]}
+                  onPress={() => toggle(habit.id)}
+                  onLongPress={() => deleteHabit(habit)}
+                  delayLongPress={360}
+                >
                   <View style={[styles.iconWrap, { backgroundColor: done ? habit.color : C.primaryLight }]}>
                     <HabitIcon name={habit.emoji} size={20} color={done ? C.white : habit.color} />
                   </View>
@@ -109,27 +134,33 @@ export default function HabitsScreen() {
         </ImageBackground>
       </ScrollView>
 
-      <Modal visible={showAdd} transparent animationType="slide">
-        <View style={styles.overlay}>
+      <Modal visible={showAdd} transparent animationType="slide" statusBarTranslucent>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={18}
+        >
           <TouchableOpacity style={styles.backdrop} onPress={() => setShowAdd(false)} />
-          <View style={[styles.sheetModal, { backgroundColor: C.card }]}>
-            <Text style={[styles.modalTitle, { color: C.text }]}>New ritual</Text>
-            <TextInput style={[styles.input, { backgroundColor: C.panel, borderColor: C.border, color: C.text }]} value={title} onChangeText={setTitle} placeholder="Habit title" placeholderTextColor={C.textSecondary} />
-            <View style={styles.iconGrid}>
-              {HABIT_ICONS.slice(0, 12).map((name) => (
-                <TouchableOpacity key={name} style={[styles.pickIcon, { backgroundColor: icon === name ? color : C.panel, borderColor: C.border }]} onPress={() => setIcon(name)}>
-                  <Ionicons name={name} size={18} color={icon === name ? C.white : C.text} />
-                </TouchableOpacity>
-              ))}
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={[styles.sheetModal, { backgroundColor: C.card }]}>
+              <Text style={[styles.modalTitle, { color: C.text }]}>New habit</Text>
+              <TextInput style={[styles.input, { backgroundColor: C.panel, borderColor: C.border, color: C.text }]} value={title} onChangeText={setTitle} placeholder="Habit title" placeholderTextColor={C.textSecondary} />
+              <View style={styles.iconGrid}>
+                {HABIT_ICONS.slice(0, 12).map((name) => (
+                  <TouchableOpacity key={name} style={[styles.pickIcon, { backgroundColor: icon === name ? color : C.panel, borderColor: C.border }]} onPress={() => setIcon(name)}>
+                    <Ionicons name={name} size={18} color={icon === name ? C.white : C.text} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.colorRow}>
+                {COLORS.map((swatch) => <TouchableOpacity key={swatch} style={[styles.swatch, { backgroundColor: swatch, borderColor: color === swatch ? C.text : 'transparent' }]} onPress={() => setColor(swatch)} />)}
+              </View>
+              <TouchableOpacity style={[styles.save, { backgroundColor: color }]} onPress={addHabit}>
+                <Text style={styles.saveText}>Add habit</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.colorRow}>
-              {COLORS.map((swatch) => <TouchableOpacity key={swatch} style={[styles.swatch, { backgroundColor: swatch, borderColor: color === swatch ? C.text : 'transparent' }]} onPress={() => setColor(swatch)} />)}
-            </View>
-            <TouchableOpacity style={[styles.save, { backgroundColor: color }]} onPress={addHabit}>
-              <Text style={styles.saveText}>Add ritual</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -167,6 +198,8 @@ const styles = StyleSheet.create({
   itemMeta: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800', marginTop: 3 },
   overlay: { flex: 1, backgroundColor: 'rgba(39,42,75,0.45)', justifyContent: 'flex-end' },
   backdrop: { flex: 1 },
+  modalScroll: { maxHeight: '82%' },
+  modalScrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
   sheetModal: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, paddingBottom: 34, gap: 14 },
   modalTitle: { fontFamily: 'Rounded', fontSize: 22, fontWeight: '900' },
   input: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontFamily: 'Rounded', fontWeight: '800' },

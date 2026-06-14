@@ -10,7 +10,6 @@ import { MOODS } from '../../src/constants/theme';
 import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db/habitDatabase';
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
-import { getPlanningSummary } from '../../src/db/plannerDatabase';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const catsArt = require('../../assets/illustrations/storybook-cats.png');
@@ -32,7 +31,6 @@ export default function DashboardScreen() {
   const [completed, setCompleted] = useState(new Set());
   const [sessions, setSessions] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
-  const [planningSummary, setPlanningSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(useCallback(() => {
@@ -40,18 +38,16 @@ export default function DashboardScreen() {
   }, []));
 
   async function load() {
-    const [h, done, focusSessions, moodEntry, planSummary] = await Promise.all([
+    const [h, done, focusSessions, moodEntry] = await Promise.all([
       getHabits(),
       getCompletionsForDate(today),
       getSessionsForDay(today),
       getEntry(today),
-      getPlanningSummary(today),
     ]);
     setHabits(h);
     setCompleted(done);
     setSessions(focusSessions);
     setTodayMood(moodEntry);
-    setPlanningSummary(planSummary);
     setLoading(false);
   }
 
@@ -97,7 +93,7 @@ export default function DashboardScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.playerTitle, { color: C.text }]}>Daily Story</Text>
               <Text style={[styles.playerSub, { color: C.textSecondary }]}>
-                {habits.length - doneCount > 0 ? `${habits.length - doneCount} tiny rituals left` : 'soft day complete'}
+                {habits.length - doneCount > 0 ? `${habits.length - doneCount} habits left` : 'soft day complete'}
               </Text>
             </View>
             <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push('/(tabs)/focus')}>
@@ -116,7 +112,6 @@ export default function DashboardScreen() {
           <View style={styles.storyRow}>
             <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
             <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="musical-notes-outline" onPress={() => router.push('/(tabs)/focus')} />
-            <StoryTile C={C} label="Tasks" value={planningSummary?.dueTasks ? `${planningSummary.dueTasks}` : '0'} tone={C.accent} icon="list-outline" onPress={() => router.push('/planner')} />
           </View>
 
           <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
@@ -129,7 +124,7 @@ export default function DashboardScreen() {
             ))}
           </View>
 
-          <Text style={[styles.sectionTitle, { color: C.text }]}>Tiny rituals</Text>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Tiny habits</Text>
           <View style={styles.habitStack}>
             {habits.length === 0 ? (
               <TouchableOpacity style={[styles.emptyCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/(tabs)/habits')}>

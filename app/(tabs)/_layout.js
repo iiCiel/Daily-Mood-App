@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
+
+const tabDockArt = require('../../assets/illustrations/nav/storybook-tab-dock.png');
 
 function TabBar({ state, navigation }) {
   const C = useTheme();
@@ -15,7 +17,7 @@ function TabBar({ state, navigation }) {
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.bar, { backgroundColor: C.card, borderColor: C.border }]}>
+      <ImageBackground source={tabDockArt} style={[styles.bar, { borderColor: C.border }]} imageStyle={styles.barImage}>
         {tabs.map((tab) => {
           const routeIndex = state.routes.findIndex((route) => route.name === tab.name);
           const isFocused = state.index === routeIndex;
@@ -28,7 +30,7 @@ function TabBar({ state, navigation }) {
             >
               <View style={[
                 styles.iconWrap,
-                { backgroundColor: isFocused ? C.primary : 'transparent' },
+                { backgroundColor: isFocused ? C.primary : 'rgba(255,255,255,0.54)' },
               ]}>
                 <Ionicons
                   name={isFocused ? tab.activeIcon : tab.icon}
@@ -42,7 +44,7 @@ function TabBar({ state, navigation }) {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ImageBackground>
     </View>
   );
 }
@@ -62,33 +64,38 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 18,
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 16,
   },
   bar: {
     flexDirection: 'row',
-    borderRadius: 18,
+    borderRadius: 28,
     borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    shadowColor: '#111827',
-    shadowOpacity: 0.08,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    overflow: 'hidden',
+    shadowColor: '#8A6A86',
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+  },
+  barImage: {
+    resizeMode: 'cover',
+    borderRadius: 28,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
-    minHeight: 48,
+    gap: 5,
+    minHeight: 52,
     justifyContent: 'center',
   },
   iconWrap: {
-    width: 34,
-    height: 30,
-    borderRadius: 12,
+    width: 38,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
