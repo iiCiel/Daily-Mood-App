@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 0 },
+  pageContent: { paddingBottom: 112 },
   heroImage: { height: 560, paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
   heroImageInner: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

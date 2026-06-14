@@ -141,7 +141,7 @@ function MiniStat({ C, label, value }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 0 },
+  pageContent: { paddingBottom: 112 },
   hero: { height: 570, paddingTop: 56, paddingHorizontal: 22, justifyContent: 'space-between' },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

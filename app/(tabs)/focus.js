@@ -177,7 +177,7 @@ function Stat({ C, value, label }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 0 },
+  pageContent: { paddingBottom: 112 },
   hero: { height: 560, paddingTop: 56, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

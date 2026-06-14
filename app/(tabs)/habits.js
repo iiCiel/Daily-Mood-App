@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -11,6 +11,7 @@ import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 
 const habitsArt = require('../../assets/illustrations/storybook-habits.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
+const deleteCardArt = require('../../assets/illustrations/dialogs/delete-habit-card.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
 
 function todayStr() {
@@ -28,6 +29,7 @@ export default function HabitsScreen() {
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState(DEFAULT_HABIT_ICON);
   const [color, setColor] = useState(COLORS[0]);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -58,23 +60,16 @@ export default function HabitsScreen() {
     await load();
   }
 
-  async function deleteHabit(habit) {
+  function requestDeleteHabit(habit) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
-      'Delete habit?',
-      habit.title,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await archiveHabit(habit.id);
-            await load();
-          },
-        },
-      ],
-    );
+    setPendingDelete(habit);
+  }
+
+  async function confirmDeleteHabit() {
+    if (!pendingDelete) return;
+    await archiveHabit(pendingDelete.id);
+    setPendingDelete(null);
+    await load();
   }
 
   const doneCount = habits.filter((habit) => completed.has(habit.id)).length;
@@ -116,7 +111,7 @@ export default function HabitsScreen() {
                   key={habit.id}
                   style={[styles.item, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }]}
                   onPress={() => toggle(habit.id)}
-                  onLongPress={() => deleteHabit(habit)}
+                  onLongPress={() => requestDeleteHabit(habit)}
                   delayLongPress={360}
                 >
                   <View style={[styles.iconWrap, { backgroundColor: done ? habit.color : C.primaryLight }]}>
@@ -162,6 +157,32 @@ export default function HabitsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={!!pendingDelete} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity style={styles.confirmBackdrop} onPress={() => setPendingDelete(null)} />
+          <ImageBackground source={deleteCardArt} style={styles.confirmCard} imageStyle={styles.confirmCardImage}>
+            <TouchableOpacity style={[styles.confirmClose, { backgroundColor: C.white }]} onPress={() => setPendingDelete(null)}>
+              <Ionicons name="close" size={16} color={C.text} />
+            </TouchableOpacity>
+            <View style={[styles.confirmIcon, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="trash-outline" size={24} color={C.primary} />
+            </View>
+            <Text style={[styles.confirmTitle, { color: C.text }]}>Delete habit?</Text>
+            <Text style={[styles.confirmBody, { color: C.textSecondary }]} numberOfLines={2}>
+              {pendingDelete?.title}
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={[styles.confirmButton, styles.cancelButton, { backgroundColor: C.white, borderColor: C.border }]} onPress={() => setPendingDelete(null)}>
+                <Text style={[styles.cancelText, { color: C.textSecondary }]}>Keep</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmButton, { backgroundColor: C.primary }]} onPress={confirmDeleteHabit}>
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </ImageBackground>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -169,7 +190,7 @@ export default function HabitsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
-  pageContent: { paddingBottom: 0 },
+  pageContent: { paddingBottom: 112 },
   hero: { height: 500, paddingTop: 58, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -183,12 +204,13 @@ const styles = StyleSheet.create({
   fill: { height: '100%', borderRadius: 999 },
   sheet: {
     marginTop: 0,
+    minHeight: 520,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     overflow: 'hidden',
   },
   sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
-  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 30 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 130 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },
   item: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -209,4 +231,17 @@ const styles = StyleSheet.create({
   swatch: { width: 32, height: 32, borderRadius: 12, borderWidth: 2 },
   save: { borderRadius: 20, alignItems: 'center', paddingVertical: 15 },
   saveText: { color: '#FFFFFF', fontFamily: 'Rounded', fontWeight: '900', fontSize: 15 },
+  confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,42,75,0.34)', padding: 22 },
+  confirmBackdrop: { ...StyleSheet.absoluteFillObject },
+  confirmCard: { width: '100%', maxWidth: 360, minHeight: 342, paddingHorizontal: 28, paddingTop: 34, paddingBottom: 26, alignItems: 'center', overflow: 'hidden' },
+  confirmCardImage: { resizeMode: 'stretch', borderRadius: 34 },
+  confirmClose: { position: 'absolute', right: 22, top: 20, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', shadowColor: '#8A6A86', shadowOpacity: 0.14, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
+  confirmIcon: { width: 58, height: 58, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  confirmTitle: { fontFamily: 'Rounded', fontSize: 26, fontWeight: '900', textAlign: 'center' },
+  confirmBody: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 8, minHeight: 42 },
+  confirmActions: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 22 },
+  confirmButton: { flex: 1, borderRadius: 20, paddingVertical: 15, alignItems: 'center', justifyContent: 'center' },
+  cancelButton: { borderWidth: 1 },
+  cancelText: { fontFamily: 'Rounded', fontWeight: '900', fontSize: 14 },
+  deleteText: { color: '#FFFFFF', fontFamily: 'Rounded', fontWeight: '900', fontSize: 14 },
 });

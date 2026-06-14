@@ -17,7 +17,7 @@ function TabBar({ state, navigation }) {
 
   return (
     <View style={styles.wrap}>
-      <ImageBackground source={tabDockArt} style={[styles.bar, { borderColor: C.border }]} imageStyle={styles.barImage}>
+      <ImageBackground source={tabDockArt} style={styles.bar} imageStyle={styles.barImage}>
         {tabs.map((tab) => {
           const routeIndex = state.routes.findIndex((route) => route.name === tab.name);
           const isFocused = state.index === routeIndex;
@@ -64,43 +64,46 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 16,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 8,
+    paddingHorizontal: 22,
+    backgroundColor: 'transparent',
   },
   bar: {
     flexDirection: 'row',
-    borderRadius: 28,
-    borderWidth: 1,
-    paddingVertical: 10,
+    height: 76,
+    borderRadius: 30,
+    paddingVertical: 4,
     paddingHorizontal: 8,
     overflow: 'hidden',
     shadowColor: '#8A6A86',
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 9,
   },
   barImage: {
-    resizeMode: 'cover',
-    borderRadius: 28,
+    resizeMode: 'stretch',
+    borderRadius: 30,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    gap: 5,
-    minHeight: 52,
+    gap: 3,
+    minHeight: 62,
     justifyContent: 'center',
   },
   iconWrap: {
-    width: 38,
-    height: 34,
-    borderRadius: 17,
+    width: 34,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   label: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     fontFamily: 'Rounded',
   },
