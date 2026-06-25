@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
+import GiftPhotoFrame from '../../src/components/GiftPhotoFrame';
 import HabitIcon from '../../src/components/HabitIcon';
 import { DEFAULT_HABIT_ICON, HABIT_ICONS } from '../../src/constants/habitIcons';
 import {
@@ -118,7 +119,6 @@ export default function HabitsScreen() {
         <ImageBackground source={habitsArt} style={[styles.hero, { height: heroHeight }]} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
-            <Text style={[styles.title, { color: C.text }]}>Routine Story</Text>
             <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => setShowAdd(true)}>
               <Ionicons name="add" size={20} color={C.primary} />
             </TouchableOpacity>
@@ -136,6 +136,8 @@ export default function HabitsScreen() {
         </ImageBackground>
 
         <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
+          <GiftPhotoFrame C={C} compact style={styles.habitMemory} />
+
           <Text style={[styles.sectionTitle, { color: C.text }]}>Today's habits</Text>
           <View style={styles.list}>
             {habits.length === 0 ? (
@@ -308,8 +310,7 @@ const styles = StyleSheet.create({
   pageContent: { paddingBottom: 0 },
   hero: { paddingTop: 58, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontFamily: 'Rounded', fontSize: 24, fontWeight: '900' },
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   circleBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', shadowColor: '#8792BE', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   progressCard: { marginTop: 88, width: 178, borderRadius: 28, padding: 18, shadowColor: '#7D88B8', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
   script: { fontFamily: 'Story', fontSize: 34 },
@@ -326,6 +327,7 @@ const styles = StyleSheet.create({
   },
   sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
   sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: STORY_TAB_BOTTOM_PADDING + 8 },
+  habitMemory: { width: '52%', maxWidth: 178, minHeight: 220, alignSelf: 'center', marginBottom: 20 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },
   item: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -154,7 +154,6 @@ export default function FocusScreen() {
         <ImageBackground source={focusArt} style={[styles.hero, { height: heroHeight }]} imageStyle={styles.heroImage}>
           <StorybookHeroFade />
           <View style={styles.topBar}>
-            <Text style={[styles.topTitle, { color: C.text }]}>Focus Story</Text>
             <TouchableOpacity style={[styles.statsChip, { backgroundColor: C.white }]} onPress={() => router.push('/focus-stats')}>
               <Ionicons name="stats-chart-outline" size={16} color={C.primary} />
               <Text style={[styles.statsChipText, { color: C.text }]}>Stats</Text>
@@ -234,9 +233,8 @@ const styles = StyleSheet.create({
   pageContent: { paddingBottom: 0 },
   hero: { paddingTop: 56, paddingHorizontal: 22 },
   heroImage: { resizeMode: 'cover' },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: '#8D94BE', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
-  topTitle: { fontFamily: 'Rounded', fontSize: 17, fontWeight: '900' },
   statsChip: {
     minHeight: 36,
     borderRadius: 18,

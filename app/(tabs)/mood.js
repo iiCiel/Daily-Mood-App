@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { getEntriesForMonth, getMonthStats, getStreak, exportMonthAsText } from '../../src/db/database';
 import { MOODS } from '../../src/constants/theme';
 import { useTheme } from '../../src/context/ThemeContext';
+import GiftPhotoFrame from '../../src/components/GiftPhotoFrame';
 import MoodFace from '../../src/components/MoodFace';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
 import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
@@ -94,6 +95,11 @@ export default function MoodScreen() {
             <MiniStat C={C} label="Entries" value={stats?.total || 0} />
             <MiniStat C={C} label="Streak" value={`${streak}d`} />
             <MiniStat C={C} label="Avg" value={stats?.avgMood ? stats.avgMood.toFixed(1) : '-'} />
+          </View>
+
+          <View style={styles.memoryStrip}>
+            <GiftPhotoFrame C={C} compact style={styles.memoryFrame} />
+            <GiftPhotoFrame C={C} compact style={styles.memoryFrame} />
           </View>
 
           <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -205,6 +211,8 @@ const styles = StyleSheet.create({
   stat: { flex: 1, borderRadius: 20, borderWidth: 1, padding: 13, alignItems: 'center' },
   statValue: { fontFamily: 'Rounded', fontSize: 20, fontWeight: '900' },
   statLabel: { fontFamily: 'Rounded', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  memoryStrip: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 16 },
+  memoryFrame: { flex: 1, maxWidth: 178, minHeight: 220, borderRadius: 20 },
   monthCard: { borderRadius: 24, borderWidth: 1, padding: 16 },
   monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   monthTitle: { fontFamily: 'Rounded', fontSize: 20, fontWeight: '900' },

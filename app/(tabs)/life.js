@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
+import GiftPhotoFrame from '../../src/components/GiftPhotoFrame';
 import HabitIcon from '../../src/components/HabitIcon';
 import MoodFace from '../../src/components/MoodFace';
 import { MOODS } from '../../src/constants/theme';
@@ -22,7 +23,9 @@ function todayStr() {
 }
 
 function clockLabel() {
-  return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return new Date()
+    .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .replace(/\s?[AP]M$/i, '');
 }
 
 export default function DashboardScreen() {
@@ -85,7 +88,6 @@ export default function DashboardScreen() {
   }
 
   const moodObj = todayMood ? MOODS.find((m) => m.value === todayMood.mood) : null;
-  const scheduledHabits = habits.filter((habit) => habitProgress[habit.id]?.dueToday);
   const previewHabits = [...habits].sort((a, b) => Number(habitProgress[b.id]?.dueToday) - Number(habitProgress[a.id]?.dueToday));
   const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
   const heroHeight = getStoryHeroHeight(screenHeight, { min: 500, max: 560, ratio: 0.56 });
@@ -110,19 +112,6 @@ export default function DashboardScreen() {
             <Text style={[styles.script, { color: C.text }]}>You can do it beautiful</Text>
           </View>
 
-          <View style={[styles.player, { backgroundColor: C.white }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.playerTitle, { color: C.text }]}>Today Story</Text>
-              <Text style={[styles.playerSub, { color: C.textSecondary }]}>
-                {scheduledHabits.length
-                  ? `${scheduledHabits.length} habits left`
-                  : 'no habits due today'}
-              </Text>
-            </View>
-            <TouchableOpacity style={[styles.play, { backgroundColor: C.primaryLight }]} onPress={() => router.push('/(tabs)/focus')}>
-              <Ionicons name="play" size={16} color={C.primary} />
-            </TouchableOpacity>
-          </View>
         </ImageBackground>
 
         <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
@@ -136,6 +125,22 @@ export default function DashboardScreen() {
             <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
             <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="timer-outline" onPress={() => router.push('/(tabs)/focus')} />
           </View>
+
+          <View style={styles.giftRow}>
+            <GiftPhotoFrame C={C} style={styles.mainMemory} />
+            <GiftPhotoFrame C={C} compact style={styles.sideMemory} />
+          </View>
+
+          <TouchableOpacity style={[styles.wordleCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/wordle')} activeOpacity={0.78}>
+            <View style={[styles.wordleIcon, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="grid-outline" size={20} color={C.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.wordleTitle, { color: C.text }]}>Play Wordle</Text>
+              <Text style={[styles.wordleSub, { color: C.textSecondary }]}>A new random word every round</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
 
           <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
           <View style={styles.moodRow}>
@@ -193,13 +198,9 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
   smallTime: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
   circleBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
-  heroCopy: { alignItems: 'center', marginTop: 10 },
+  heroCopy: { alignItems: 'center', marginTop: -26 },
   time: { fontFamily: 'Rounded', fontSize: 48, fontWeight: '900' },
   script: { fontFamily: 'Story', fontSize: 40, lineHeight: 44, textAlign: 'center', marginTop: 10, maxWidth: 270 },
-  player: { minHeight: 58, borderRadius: 14, padding: 10, marginBottom: 74, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#7282BF', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
-  playerTitle: { fontFamily: 'Rounded', fontSize: 13, fontWeight: '900' },
-  playerSub: { fontFamily: 'Rounded', fontSize: 10, marginTop: 2 },
-  play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sheet: {
     marginTop: 0,
     minHeight: 520,
@@ -257,6 +258,13 @@ const styles = StyleSheet.create({
   storyTile: { flex: 1, borderRadius: 20, borderWidth: 1, padding: 13, minHeight: 106, justifyContent: 'space-between', shadowColor: '#7D88B8', shadowOpacity: 0.11, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   tileValue: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900' },
   tileLabel: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800' },
+  giftRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 24 },
+  mainMemory: { flex: 1, maxWidth: 178, minHeight: 220 },
+  sideMemory: { flex: 1, maxWidth: 178, minHeight: 220 },
+  wordleCard: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24, shadowColor: '#7D88B8', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
+  wordleIcon: { width: 44, height: 44, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  wordleTitle: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
+  wordleSub: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800', marginTop: 2 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   moodRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
   moodButton: { flex: 1, alignItems: 'center', borderRadius: 18, borderWidth: 1, paddingVertical: 10, gap: 6 },
