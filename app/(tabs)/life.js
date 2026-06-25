@@ -7,7 +7,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import HabitIcon from '../../src/components/HabitIcon';
 import MoodFace from '../../src/components/MoodFace';
 import { MOODS } from '../../src/constants/theme';
-import { getHabits, getCompletionsForDate, isHabitScheduledOn, toggleCompletion } from '../../src/db/habitDatabase';
+import { getHabits, getCompletionsForDate, getHabitWeekProgress, toggleCompletion } from '../../src/db/habitDatabase';
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
 import StorybookHeroFade from '../../src/components/StorybookHeroFade';
@@ -31,6 +31,7 @@ export default function DashboardScreen() {
   const today = todayStr();
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
+  const [habitProgress, setHabitProgress] = useState({});
   const [sessions, setSessions] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -52,8 +53,10 @@ export default function DashboardScreen() {
       getSessionsForDay(today),
       getEntry(today),
     ]);
+    const progressPairs = await Promise.all(h.map(async (habit) => [habit.id, await getHabitWeekProgress(habit, today)]));
     setHabits(h);
     setCompleted(done);
+    setHabitProgress(Object.fromEntries(progressPairs));
     setSessions(focusSessions);
     setTodayMood(moodEntry);
     setLoading(false);
@@ -78,13 +81,12 @@ export default function DashboardScreen() {
   async function toggleHabit(id) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await toggleCompletion(id, today);
-    setCompleted(await getCompletionsForDate(today));
+    await load();
   }
 
   const moodObj = todayMood ? MOODS.find((m) => m.value === todayMood.mood) : null;
-  const scheduledHabits = habits.filter((habit) => isHabitScheduledOn(habit));
-  const doneCount = scheduledHabits.filter((h) => completed.has(h.id)).length;
-  const previewHabits = [...habits].sort((a, b) => Number(isHabitScheduledOn(b)) - Number(isHabitScheduledOn(a)));
+  const scheduledHabits = habits.filter((habit) => habitProgress[habit.id]?.dueToday);
+  const previewHabits = [...habits].sort((a, b) => Number(habitProgress[b.id]?.dueToday) - Number(habitProgress[a.id]?.dueToday));
   const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
   const heroHeight = getStoryHeroHeight(screenHeight, { min: 500, max: 560, ratio: 0.56 });
 
@@ -113,7 +115,7 @@ export default function DashboardScreen() {
               <Text style={[styles.playerTitle, { color: C.text }]}>Today Story</Text>
               <Text style={[styles.playerSub, { color: C.textSecondary }]}>
                 {scheduledHabits.length
-                  ? scheduledHabits.length - doneCount > 0 ? `${scheduledHabits.length - doneCount} habits left` : 'soft day complete'
+                  ? `${scheduledHabits.length} habits left`
                   : 'no habits due today'}
               </Text>
             </View>
@@ -153,7 +155,7 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             ) : previewHabits.slice(0, 4).map((habit) => {
               const done = completed.has(habit.id);
-              const scheduled = isHabitScheduledOn(habit);
+              const scheduled = habitProgress[habit.id]?.dueToday || done;
               return (
                 <TouchableOpacity key={habit.id} style={[styles.habitCard, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }, !scheduled && styles.offDayHabit]} onPress={() => toggleHabit(habit.id)}>
                   <View style={[styles.habitIcon, { backgroundColor: done ? habit.color : C.primaryLight }]}>

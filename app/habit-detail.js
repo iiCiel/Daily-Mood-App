@@ -8,22 +8,13 @@ import HabitIcon from '../src/components/HabitIcon';
 import {
   getHabits, getHabitHistory, getHabitStreak,
   getCompletionRate, toggleCompletion, getCompletionsForDate,
-  isHabitScheduledOn, parseScheduleDays,
+  getHabitWeekProgress, parseWeeklyTarget,
 } from '../src/db/habitDatabase';
 
 const SCREEN_W = Dimensions.get('window').width;
 const H_PAD = 24;
 const DOT_GAP = 4;
 const DOT_SIZE = Math.floor((SCREEN_W - H_PAD * 2 - DOT_GAP * 29) / 30);
-const WEEKDAYS = [
-  { value: 0, label: 'Sun' },
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-];
 
 function todayStr() {
   const d = new Date();
@@ -41,6 +32,7 @@ export default function HabitDetail() {
   const [rate30, setRate30] = useState(0);
   const [rate7, setRate7] = useState(0);
   const [todayDone, setTodayDone] = useState(false);
+  const [weekProgress, setWeekProgress] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -52,18 +44,20 @@ export default function HabitDetail() {
     if (!h) { router.back(); return; }
     setHabit(h);
 
-    const [hist, s, r30, r7, todayCompleted] = await Promise.all([
+    const [hist, s, r30, r7, todayCompleted, progress] = await Promise.all([
       getHabitHistory(habitId, 30),
       getHabitStreak(habitId),
       getCompletionRate(habitId, 30),
       getCompletionRate(habitId, 7),
       getCompletionsForDate(todayStr()),
+      getHabitWeekProgress(h, todayStr()),
     ]);
     setHistory(hist);
     setStreak(s);
     setRate30(r30);
     setRate7(r7);
     setTodayDone(todayCompleted.has(habitId));
+    setWeekProgress(progress);
   }
 
   async function handleToggleToday() {
@@ -76,11 +70,19 @@ export default function HabitDetail() {
   const totalDone = history.filter(d => d.done && d.scheduled).length;
   const scheduledCount = history.filter(d => d.scheduled).length;
   const bonusDone = history.filter(d => d.done && !d.scheduled).length;
-  const scheduledToday = isHabitScheduledOn(habit);
-  const scheduleLabel = formatSchedule(parseScheduleDays(habit.schedule_days));
+  const daysPerWeek = weekProgress?.target || parseWeeklyTarget(habit.schedule_days);
+  const scheduledToday = weekProgress?.dueToday ?? true;
+  const scheduleLabel = formatSchedule(daysPerWeek);
+  const weekRate = daysPerWeek === 7
+    ? rate7
+    : Math.min(100, Math.round(((weekProgress?.completed || 0) / daysPerWeek) * 100));
   const todayAction = todayDone
-    ? scheduledToday ? 'done today' : 'bonus done today'
-    : scheduledToday ? 'mark as done today' : 'bonus check-in today';
+    ? daysPerWeek === 7 ? 'done today' : 'checked in today'
+    : daysPerWeek === 7
+      ? 'mark as done today'
+      : scheduledToday
+        ? `check in (${weekProgress?.remaining ?? daysPerWeek} left this week)`
+        : 'bonus check-in today';
 
   return (
     <>
@@ -109,10 +111,10 @@ export default function HabitDetail() {
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
             <Text style={[styles.statVal, { color: C.text }]}>{streak}</Text>
-            <Text style={[styles.statLbl, { color: C.textSecondary }]}>streak</Text>
+            <Text style={[styles.statLbl, { color: C.textSecondary }]}>{daysPerWeek === 7 ? 'day streak' : 'week streak'}</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
-            <Text style={[styles.statVal, { color: C.text }]}>{rate7}%</Text>
+            <Text style={[styles.statVal, { color: C.text }]}>{weekRate}%</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>this week</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
@@ -121,7 +123,7 @@ export default function HabitDetail() {
           </View>
         </View>
         <Text style={[styles.scheduleText, { color: C.textSecondary }]}>
-          scheduled {scheduleLabel}
+          goal {scheduleLabel}
         </Text>
 
         {/* Today's check-in */}
@@ -164,7 +166,7 @@ export default function HabitDetail() {
             })}
           </View>
           <Text style={[styles.histCaption, { color: C.textSecondary }]}>
-            {totalDone} out of {scheduledCount} scheduled days completed{bonusDone ? `, plus ${bonusDone} bonus` : ''}
+            {totalDone} out of {scheduledCount} target days completed{bonusDone ? `, plus ${bonusDone} bonus` : ''}
           </Text>
         </View>
       </ScrollView>
@@ -172,9 +174,9 @@ export default function HabitDetail() {
   );
 }
 
-function formatSchedule(days) {
-  if (days.length === 7) return 'daily';
-  return WEEKDAYS.filter((day) => days.includes(day.value)).map((day) => day.label).join(', ');
+function formatSchedule(daysPerWeek) {
+  if (daysPerWeek === 7) return 'daily';
+  return `${daysPerWeek} days/week`;
 }
 
 const styles = StyleSheet.create({

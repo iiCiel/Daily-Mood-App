@@ -19,7 +19,7 @@ import { getGoals } from '../../src/db/goalsDatabase';
 import { getNotes } from '../../src/db/notesDatabase';
 import { getRecentSleep } from '../../src/db/sleepDatabase';
 import { getAllCalorieEntries } from '../../src/db/calorieDatabase';
-import { getAllHabitCompletions, getAllHabitsForBackup } from '../../src/db/habitDatabase';
+import { getAllHabitCompletions, getAllHabitsForBackup, parseWeeklyTarget } from '../../src/db/habitDatabase';
 import { getWeightEntries } from '../../src/db/weightDatabase';
 import {
   getAllPlannerEntries,
@@ -303,8 +303,8 @@ export default function SettingsScreen() {
         {
           name: 'habits.csv',
           content: toCSV(
-            ['date', 'habit', 'emoji', 'schedule_days'],
-            habitCompletions.map((e) => [e.date, e.title, e.emoji || '', e.schedule_days || '[0,1,2,3,4,5,6]'])
+            ['date', 'habit', 'emoji', 'days_per_week'],
+            habitCompletions.map((e) => [e.date, e.title, e.emoji || '', parseWeeklyTarget(e.schedule_days)])
           ),
         },
         {

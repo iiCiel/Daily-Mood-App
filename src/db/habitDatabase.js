@@ -1,16 +1,44 @@
 import { getDatabase } from './database';
 
 const DAILY_SCHEDULE = [0, 1, 2, 3, 4, 5, 6];
+const DAILY_TARGET = 7;
 const DEFAULT_HABIT_ICON = 'star-outline';
 
 export function parseScheduleDays(value) {
   if (Array.isArray(value)) return normalizeScheduleDays(value);
   if (!value) return DAILY_SCHEDULE;
   try {
-    return normalizeScheduleDays(JSON.parse(value));
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return normalizeScheduleDays(parsed);
+    return DAILY_SCHEDULE.slice(0, parseWeeklyTarget(parsed));
   } catch {
     return DAILY_SCHEDULE;
   }
+}
+
+export function parseWeeklyTarget(value) {
+  return normalizeWeeklyTarget(parseWeeklyTargetValue(value));
+}
+
+function parseWeeklyTargetValue(value) {
+  if (value == null || value === '') return DAILY_TARGET;
+  if (typeof value === 'number') return value;
+  if (Array.isArray(value)) return normalizeScheduleDays(value).length;
+  if (typeof value === 'object') {
+    return value.daysPerWeek ?? value.days_per_week ?? value.weeklyTarget ?? value.target ?? DAILY_TARGET;
+  }
+  try {
+    return parseWeeklyTargetValue(JSON.parse(value));
+  } catch {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : DAILY_TARGET;
+  }
+}
+
+function normalizeWeeklyTarget(value) {
+  const target = Math.round(Number(value));
+  if (!Number.isFinite(target)) return DAILY_TARGET;
+  return Math.min(DAILY_TARGET, Math.max(1, target));
 }
 
 function normalizeScheduleDays(days) {
@@ -18,12 +46,37 @@ function normalizeScheduleDays(days) {
   return unique.length ? unique.sort((a, b) => a - b) : DAILY_SCHEDULE;
 }
 
+function serializeWeeklyTarget(daysPerWeek) {
+  return JSON.stringify({ daysPerWeek: normalizeWeeklyTarget(daysPerWeek) });
+}
+
 function dateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
 
-export function isHabitScheduledOn(habit, date = new Date()) {
-  return parseScheduleDays(habit?.schedule_days).includes(date.getDay());
+function toLocalDate(date) {
+  if (date instanceof Date) return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return new Date(`${date}T00:00:00`);
+}
+
+function weekStart(date) {
+  const d = toLocalDate(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+function weekEnd(date) {
+  const d = weekStart(date);
+  d.setDate(d.getDate() + 6);
+  return d;
+}
+
+function weekKey(date) {
+  return dateStr(weekStart(date));
+}
+
+export function isHabitScheduledOn(habit) {
+  return parseWeeklyTarget(habit?.schedule_days) > 0;
 }
 
 export async function getHabits() {
@@ -31,19 +84,19 @@ export async function getHabits() {
   return database.getAllAsync('SELECT * FROM habits WHERE archived = 0 ORDER BY created_at ASC');
 }
 
-export async function createHabit(title, emoji, color, scheduleDays = DAILY_SCHEDULE) {
+export async function createHabit(title, emoji, color, daysPerWeek = DAILY_TARGET) {
   const database = await getDatabase();
   await database.runAsync(
     'INSERT INTO habits (title, emoji, color, schedule_days, created_at) VALUES (?, ?, ?, ?, ?)',
-    [title, emoji || DEFAULT_HABIT_ICON, color || '#C5A8E8', JSON.stringify(normalizeScheduleDays(scheduleDays)), new Date().toISOString()]
+    [title, emoji || DEFAULT_HABIT_ICON, color || '#C5A8E8', serializeWeeklyTarget(daysPerWeek), new Date().toISOString()]
   );
 }
 
-export async function updateHabit(id, title, emoji, color, scheduleDays = DAILY_SCHEDULE) {
+export async function updateHabit(id, title, emoji, color, daysPerWeek = DAILY_TARGET) {
   const database = await getDatabase();
   await database.runAsync(
     'UPDATE habits SET title = ?, emoji = ?, color = ?, schedule_days = ? WHERE id = ?',
-    [title, emoji, color, JSON.stringify(normalizeScheduleDays(scheduleDays)), id]
+    [title, emoji, color, serializeWeeklyTarget(daysPerWeek), id]
   );
 }
 
@@ -99,10 +152,54 @@ export async function getCompletionsForMonth(year, month) {
   return map;
 }
 
+export async function getHabitWeekProgress(habitOrId, date = new Date()) {
+  const database = await getDatabase();
+  const habit = typeof habitOrId === 'object'
+    ? habitOrId
+    : await database.getFirstAsync('SELECT id, schedule_days FROM habits WHERE id = ?', [habitOrId]);
+  if (!habit) {
+    return { target: DAILY_TARGET, completed: 0, remaining: 1, todayDone: false, dueToday: true, goalMet: false };
+  }
+
+  const target = parseWeeklyTarget(habit.schedule_days);
+  const current = toLocalDate(date);
+  const currentStr = dateStr(current);
+  const startStr = dateStr(weekStart(current));
+  const endStr = dateStr(weekEnd(current));
+  const rows = await database.getAllAsync(
+    'SELECT date FROM habit_completions WHERE habit_id = ? AND date >= ? AND date <= ?',
+    [habit.id, startStr, endStr]
+  );
+  const doneDates = new Set(rows.map((row) => row.date));
+  const completed = doneDates.size;
+  const todayDone = doneDates.has(currentStr);
+
+  if (target === DAILY_TARGET) {
+    return {
+      target,
+      completed,
+      remaining: todayDone ? 0 : 1,
+      todayDone,
+      dueToday: !todayDone,
+      goalMet: todayDone,
+    };
+  }
+
+  const goalMet = completed >= target;
+  return {
+    target,
+    completed,
+    remaining: Math.max(0, target - completed),
+    todayDone,
+    dueToday: !goalMet,
+    goalMet,
+  };
+}
+
 export async function getHabitStreak(habitId) {
   const database = await getDatabase();
   const habit = await database.getFirstAsync('SELECT schedule_days FROM habits WHERE id = ?', [habitId]);
-  const scheduleDays = parseScheduleDays(habit?.schedule_days);
+  const target = parseWeeklyTarget(habit?.schedule_days);
   const rows = await database.getAllAsync(
     'SELECT date FROM habit_completions WHERE habit_id = ? ORDER BY date DESC',
     [habitId]
@@ -111,17 +208,41 @@ export async function getHabitStreak(habitId) {
 
   const doneSet = new Set(rows.map((row) => row.date));
   const today = new Date();
+
+  if (target < DAILY_TARGET) {
+    let cursor = weekStart(today);
+    let streak = 0;
+    let skippedCurrentWeek = false;
+
+    for (let guard = 0; guard < 104; guard++) {
+      const start = dateStr(cursor);
+      const end = dateStr(weekEnd(cursor));
+      const completed = rows.filter((row) => row.date >= start && row.date <= end).length;
+
+      if (completed >= target) {
+        streak++;
+        cursor.setDate(cursor.getDate() - 7);
+        continue;
+      }
+
+      if (!skippedCurrentWeek && start === weekKey(today)) {
+        skippedCurrentWeek = true;
+        cursor.setDate(cursor.getDate() - 7);
+        continue;
+      }
+
+      break;
+    }
+
+    return streak;
+  }
+
   const check = new Date(today);
   let streak = 0;
   let skippedCurrentScheduledDay = false;
 
   for (let guard = 0; guard < 730; guard++) {
     const current = dateStr(check);
-    if (!scheduleDays.includes(check.getDay())) {
-      check.setDate(check.getDate() - 1);
-      continue;
-    }
-
     if (doneSet.has(current)) {
       streak++;
       check.setDate(check.getDate() - 1);
@@ -156,34 +277,85 @@ export async function getHabitHistory(habitId, days = 30) {
     [habitId, ...result]
   );
   const habit = await database.getFirstAsync('SELECT schedule_days FROM habits WHERE id = ?', [habitId]);
-  const scheduleDays = parseScheduleDays(habit?.schedule_days);
+  const target = parseWeeklyTarget(habit?.schedule_days);
   const doneSet = new Set(rows.map((row) => row.date));
 
-  return result.map((date) => {
-    const localDate = new Date(`${date}T00:00:00`);
-    return { date, done: doneSet.has(date), scheduled: scheduleDays.includes(localDate.getDay()) };
-  });
+  if (target === DAILY_TARGET) {
+    return result.map((date) => ({ date, done: doneSet.has(date), scheduled: true }));
+  }
+
+  const byWeek = {};
+  for (const date of result) {
+    const key = weekKey(date);
+    if (!byWeek[key]) byWeek[key] = [];
+    byWeek[key].push(date);
+  }
+
+  const todayKey = weekKey(new Date());
+  const scheduledSet = new Set();
+  for (const [key, dates] of Object.entries(byWeek)) {
+    const doneDates = dates.filter((date) => doneSet.has(date));
+    for (const date of doneDates.slice(0, target)) {
+      scheduledSet.add(date);
+    }
+
+    const doneInWeek = doneDates.length;
+    if (key === todayKey || doneInWeek >= target) continue;
+
+    const expected = Math.min(target, dates.length);
+    let missing = Math.max(0, expected - doneInWeek);
+    for (const date of [...dates].reverse()) {
+      if (missing <= 0) break;
+      if (doneSet.has(date)) continue;
+      scheduledSet.add(date);
+      missing--;
+    }
+  }
+
+  return result.map((date) => ({ date, done: doneSet.has(date), scheduled: scheduledSet.has(date) }));
 }
 
 export async function getCompletionRate(habitId, days = 30) {
   const database = await getDatabase();
   const habit = await database.getFirstAsync('SELECT schedule_days FROM habits WHERE id = ?', [habitId]);
-  const scheduleDays = parseScheduleDays(habit?.schedule_days);
-  const scheduledDates = [];
+  const target = parseWeeklyTarget(habit?.schedule_days);
+  const dates = [];
   const today = new Date();
 
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    if (scheduleDays.includes(d.getDay())) scheduledDates.push(dateStr(d));
+    dates.push(dateStr(d));
   }
-  if (!scheduledDates.length) return 0;
+  if (!dates.length) return 0;
 
-  const row = await database.getFirstAsync(
-    `SELECT COUNT(*) as count FROM habit_completions WHERE habit_id = ? AND date IN (${scheduledDates.map(() => '?').join(',')})`,
-    [habitId, ...scheduledDates]
+  const rows = await database.getAllAsync(
+    `SELECT date FROM habit_completions WHERE habit_id = ? AND date IN (${dates.map(() => '?').join(',')})`,
+    [habitId, ...dates]
   );
-  return Math.round(((row?.count || 0) / scheduledDates.length) * 100);
+  const doneSet = new Set(rows.map((row) => row.date));
+
+  if (target === DAILY_TARGET) {
+    return Math.round((rows.length / dates.length) * 100);
+  }
+
+  const weeks = {};
+  for (const date of dates) {
+    const key = weekKey(date);
+    if (!weeks[key]) weeks[key] = [];
+    weeks[key].push(date);
+  }
+
+  let opportunities = 0;
+  let completed = 0;
+  for (const weekDates of Object.values(weeks)) {
+    const expected = Math.min(target, weekDates.length);
+    const done = weekDates.filter((date) => doneSet.has(date)).length;
+    opportunities += expected;
+    completed += Math.min(done, expected);
+  }
+
+  return opportunities ? Math.round((completed / opportunities) * 100) : 0;
 }
 
 export async function getHabitInsights() {
@@ -206,15 +378,28 @@ export async function getHabitInsights() {
   let completed = 0;
 
   for (const habit of habits) {
-    const scheduleDays = parseScheduleDays(habit.schedule_days);
+    const target = parseWeeklyTarget(habit.schedule_days);
+    const weekBuckets = {};
     const cursor = new Date(since);
     for (let i = 0; i < 30; i++) {
       const current = dateStr(cursor);
-      if (scheduleDays.includes(cursor.getDay())) {
+      if (target === DAILY_TARGET) {
         opportunities++;
         if (doneSet.has(`${habit.id}:${current}`)) completed++;
+      } else {
+        const key = weekKey(cursor);
+        if (!weekBuckets[key]) weekBuckets[key] = [];
+        weekBuckets[key].push(current);
       }
       cursor.setDate(cursor.getDate() + 1);
+    }
+    if (target < DAILY_TARGET) {
+      for (const dates of Object.values(weekBuckets)) {
+        const expected = Math.min(target, dates.length);
+        const done = dates.filter((date) => doneSet.has(`${habit.id}:${date}`)).length;
+        opportunities += expected;
+        completed += Math.min(done, expected);
+      }
     }
   }
   const rate30 = opportunities ? Math.round((completed / opportunities) * 100) : 0;
@@ -230,16 +415,21 @@ export async function getHabitInsights() {
     [todayString]
   );
   const todayDoneSet = new Set(todayRows.map((row) => row.habit_id));
-  const todayDueHabits = habits.filter((habit) => parseScheduleDays(habit.schedule_days).includes(today.getDay()));
-  const todayDone = todayDueHabits.filter((habit) => todayDoneSet.has(habit.id)).length;
+  let todayDue = 0;
+  let todayDone = 0;
+  for (const habit of habits) {
+    const progress = await getHabitWeekProgress(habit, today);
+    if (progress.dueToday) todayDue++;
+    if (progress.goalMet || todayDoneSet.has(habit.id)) todayDone++;
+  }
 
-  return { total: habits.length, todayDue: todayDueHabits.length, rate30, bestStreak, todayDone };
+  return { total: habits.length, todayDue, rate30, bestStreak, todayDone };
 }
 
 export async function importHabitDefinition(habit) {
   if (!habit?.title) return;
   const database = await getDatabase();
-  const scheduleDays = JSON.stringify(parseScheduleDays(habit.schedule_days));
+  const scheduleDays = serializeWeeklyTarget(parseWeeklyTarget(habit.schedule_days));
   const now = new Date().toISOString();
   await database.runAsync(
     `INSERT INTO habits (id, title, emoji, color, schedule_days, created_at, archived)
@@ -272,7 +462,7 @@ export async function importHabitCompletion(title, emoji, date, scheduleDays = D
     const now = new Date().toISOString();
     await database.runAsync(
       'INSERT INTO habits (title, emoji, color, schedule_days, created_at, archived) VALUES (?, ?, ?, ?, ?, 0)',
-      [title, emoji || DEFAULT_HABIT_ICON, '#C5A8E8', JSON.stringify(parseScheduleDays(scheduleDays)), now]
+      [title, emoji || DEFAULT_HABIT_ICON, '#C5A8E8', serializeWeeklyTarget(parseWeeklyTarget(scheduleDays)), now]
     );
     habit = await database.getFirstAsync('SELECT id FROM habits WHERE LOWER(title) = LOWER(?)', [title]);
   }

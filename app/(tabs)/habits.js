@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Image, ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -11,9 +11,9 @@ import {
   createHabit,
   getCompletionsForDate,
   getHabitStreak,
+  getHabitWeekProgress,
   getHabits,
-  isHabitScheduledOn,
-  parseScheduleDays,
+  parseWeeklyTarget,
   toggleCompletion,
   updateHabit,
 } from '../../src/db/habitDatabase';
@@ -24,15 +24,7 @@ const habitsArt = require('../../assets/illustrations/storybook-habits.png');
 const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 const deleteCardArt = require('../../assets/illustrations/dialogs/delete-habit-card.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
-const WEEKDAYS = [
-  { value: 0, label: 'S', short: 'Sun' },
-  { value: 1, label: 'M', short: 'Mon' },
-  { value: 2, label: 'T', short: 'Tue' },
-  { value: 3, label: 'W', short: 'Wed' },
-  { value: 4, label: 'T', short: 'Thu' },
-  { value: 5, label: 'F', short: 'Fri' },
-  { value: 6, label: 'S', short: 'Sat' },
-];
+const TARGET_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
 
 function todayStr() {
   const d = new Date();
@@ -46,13 +38,14 @@ export default function HabitsScreen() {
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
   const [streaks, setStreaks] = useState({});
+  const [weekProgress, setWeekProgress] = useState({});
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState(DEFAULT_HABIT_ICON);
   const [color, setColor] = useState(COLORS[0]);
-  const [scheduleDays, setScheduleDays] = useState(WEEKDAYS.map((day) => day.value));
+  const [daysPerWeek, setDaysPerWeek] = useState(7);
   const [editingSchedule, setEditingSchedule] = useState(null);
-  const [editScheduleDays, setEditScheduleDays] = useState(WEEKDAYS.map((day) => day.value));
+  const [editDaysPerWeek, setEditDaysPerWeek] = useState(7);
   const [pendingDelete, setPendingDelete] = useState(null);
 
   useFocusEffect(useCallback(() => {
@@ -62,10 +55,14 @@ export default function HabitsScreen() {
   async function load() {
     const h = await getHabits();
     const done = await getCompletionsForDate(today);
-    const streakPairs = await Promise.all(h.map(async (habit) => [habit.id, await getHabitStreak(habit.id)]));
+    const [streakPairs, progressPairs] = await Promise.all([
+      Promise.all(h.map(async (habit) => [habit.id, await getHabitStreak(habit.id)])),
+      Promise.all(h.map(async (habit) => [habit.id, await getHabitWeekProgress(habit, today)])),
+    ]);
     setHabits(h);
     setCompleted(done);
     setStreaks(Object.fromEntries(streakPairs));
+    setWeekProgress(Object.fromEntries(progressPairs));
   }
 
   async function toggle(id) {
@@ -76,11 +73,11 @@ export default function HabitsScreen() {
 
   async function addHabit() {
     if (!title.trim()) return;
-    await createHabit(title.trim(), icon, color, scheduleDays);
+    await createHabit(title.trim(), icon, color, daysPerWeek);
     setTitle('');
     setIcon(DEFAULT_HABIT_ICON);
     setColor(COLORS[0]);
-    setScheduleDays(WEEKDAYS.map((day) => day.value));
+    setDaysPerWeek(7);
     setShowAdd(false);
     await load();
   }
@@ -93,12 +90,12 @@ export default function HabitsScreen() {
   function openScheduleEditor(habit) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditingSchedule(habit);
-    setEditScheduleDays(parseScheduleDays(habit.schedule_days));
+    setEditDaysPerWeek(parseWeeklyTarget(habit.schedule_days));
   }
 
   async function saveSchedule() {
     if (!editingSchedule) return;
-    await updateHabit(editingSchedule.id, editingSchedule.title, editingSchedule.emoji, editingSchedule.color, editScheduleDays);
+    await updateHabit(editingSchedule.id, editingSchedule.title, editingSchedule.emoji, editingSchedule.color, editDaysPerWeek);
     setEditingSchedule(null);
     await load();
   }
@@ -110,23 +107,9 @@ export default function HabitsScreen() {
     await load();
   }
 
-  function toggleScheduleDay(day) {
-    setScheduleDays((current) => {
-      const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
-      return next.length ? next.sort((a, b) => a - b) : current;
-    });
-  }
-
-  function toggleEditScheduleDay(day) {
-    setEditScheduleDays((current) => {
-      const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
-      return next.length ? next.sort((a, b) => a - b) : current;
-    });
-  }
-
-  const scheduledToday = habits.filter((habit) => isHabitScheduledOn(habit));
-  const doneCount = scheduledToday.filter((habit) => completed.has(habit.id)).length;
-  const percent = scheduledToday.length ? Math.round((doneCount / scheduledToday.length) * 100) : 100;
+  const goalsMet = habits.filter((habit) => weekProgress[habit.id]?.goalMet).length;
+  const dueCount = habits.filter((habit) => weekProgress[habit.id]?.dueToday).length;
+  const percent = habits.length ? Math.round((goalsMet / habits.length) * 100) : 100;
   const heroHeight = getStoryHeroHeight(screenHeight, { min: 480, max: 530, ratio: 0.52 });
 
   return (
@@ -144,7 +127,7 @@ export default function HabitsScreen() {
             <Text style={[styles.script, { color: C.text }]}>keep it gentle</Text>
             <Text style={[styles.percent, { color: C.primary }]}>{percent}%</Text>
             <Text style={[styles.caption, { color: C.textSecondary }]}>
-              {scheduledToday.length ? `${doneCount}/${scheduledToday.length} due today` : 'nothing due today'}
+              {habits.length ? dueCount ? `${dueCount} need a check-in` : 'all habit goals met' : 'nothing due today'}
             </Text>
             <View style={[styles.track, { backgroundColor: C.primaryLight }]}>
               <View style={[styles.fill, { width: `${percent}%`, backgroundColor: C.primary }]} />
@@ -162,8 +145,19 @@ export default function HabitsScreen() {
               </TouchableOpacity>
             ) : habits.map((habit) => {
               const done = completed.has(habit.id);
-              const scheduled = isHabitScheduledOn(habit);
-              const scheduleLabel = formatSchedule(parseScheduleDays(habit.schedule_days));
+              const progress = weekProgress[habit.id] || {
+                target: parseWeeklyTarget(habit.schedule_days),
+                completed: 0,
+                dueToday: true,
+                goalMet: false,
+                todayDone: done,
+              };
+              const scheduled = progress.dueToday || done;
+              const scheduleLabel = formatSchedule(progress.target);
+              const progressLabel = progress.target === 7
+                ? done ? 'done today' : scheduleLabel
+                : `${Math.min(progress.completed, progress.target)}/${progress.target} this week`;
+              const statusLabel = !progress.dueToday && !done ? `goal met - ${progressLabel}` : progressLabel;
               return (
                 <TouchableOpacity
                   key={habit.id}
@@ -178,7 +172,7 @@ export default function HabitsScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.itemTitle, { color: done ? C.textSecondary : C.text }, done && { textDecorationLine: 'line-through' }]}>{habit.title}</Text>
                     <Text style={[styles.itemMeta, { color: C.textSecondary }]}>
-                      {streaks[habit.id] || 0} streak · {scheduled ? scheduleLabel : `off today · ${scheduleLabel}`}
+                      {formatStreak(streaks[habit.id] || 0, progress.target)} - {statusLabel}
                     </Text>
                   </View>
                   <TouchableOpacity style={[styles.rowIconBtn, { backgroundColor: C.primaryLight }]} onPress={() => openScheduleEditor(habit)}>
@@ -204,17 +198,17 @@ export default function HabitsScreen() {
               <Text style={[styles.modalTitle, { color: C.text }]}>New habit</Text>
               <TextInput style={[styles.input, { backgroundColor: C.panel, borderColor: C.border, color: C.text }]} value={title} onChangeText={setTitle} placeholder="Habit title" placeholderTextColor={C.textSecondary} />
               <View>
-                <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Which days?</Text>
+                <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>How many days a week?</Text>
                 <View style={styles.dayRow}>
-                  {WEEKDAYS.map((day) => {
-                    const active = scheduleDays.includes(day.value);
+                  {TARGET_OPTIONS.map((target) => {
+                    const active = daysPerWeek === target;
                     return (
                       <TouchableOpacity
-                        key={`${day.value}-${day.label}`}
+                        key={`target-${target}`}
                         style={[styles.dayChip, { backgroundColor: active ? color : C.panel, borderColor: active ? color : C.border }]}
-                        onPress={() => toggleScheduleDay(day.value)}
+                        onPress={() => setDaysPerWeek(target)}
                       >
-                        <Text style={[styles.dayChipText, { color: active ? C.white : C.textSecondary }]}>{day.label}</Text>
+                        <Text style={[styles.dayChipText, { color: active ? C.white : C.textSecondary }]}>{target}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -246,16 +240,17 @@ export default function HabitsScreen() {
             <Text style={[styles.confirmBody, { color: C.textSecondary }]} numberOfLines={2}>
               {editingSchedule?.title}
             </Text>
+            <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>days per week</Text>
             <View style={styles.dayRow}>
-              {WEEKDAYS.map((day) => {
-                const active = editScheduleDays.includes(day.value);
+              {TARGET_OPTIONS.map((target) => {
+                const active = editDaysPerWeek === target;
                 return (
                   <TouchableOpacity
-                    key={`edit-${day.value}-${day.label}`}
+                    key={`edit-target-${target}`}
                     style={[styles.dayChip, { backgroundColor: active ? (editingSchedule?.color || C.primary) : C.panel, borderColor: active ? (editingSchedule?.color || C.primary) : C.border }]}
-                    onPress={() => toggleEditScheduleDay(day.value)}
+                    onPress={() => setEditDaysPerWeek(target)}
                   >
-                    <Text style={[styles.dayChipText, { color: active ? C.white : C.textSecondary }]}>{day.label}</Text>
+                    <Text style={[styles.dayChipText, { color: active ? C.white : C.textSecondary }]}>{target}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -275,29 +270,36 @@ export default function HabitsScreen() {
       <Modal visible={!!pendingDelete} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.confirmOverlay}>
           <TouchableOpacity style={styles.confirmBackdrop} onPress={() => setPendingDelete(null)} />
-          <ImageBackground source={deleteCardArt} style={styles.confirmCard} imageStyle={styles.confirmCardImage}>
-            <Text style={[styles.confirmTitle, { color: C.text }]}>Delete habit?</Text>
-            <Text style={[styles.confirmBody, { color: C.textSecondary }]} numberOfLines={2}>
-              {pendingDelete?.title}
-            </Text>
-            <View style={styles.confirmActions}>
-              <TouchableOpacity style={[styles.confirmButton, styles.cancelButton, { backgroundColor: C.white, borderColor: C.border }]} onPress={() => setPendingDelete(null)}>
-                <Text style={[styles.cancelText, { color: C.textSecondary }]}>Keep</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.confirmButton, { backgroundColor: C.primary }]} onPress={confirmDeleteHabit}>
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
+          <View style={styles.confirmCard}>
+            <Image source={deleteCardArt} style={styles.confirmCardImage} resizeMode="stretch" />
+            <View style={styles.confirmCardContent}>
+              <Text style={[styles.confirmTitle, { color: C.text }]}>Delete habit?</Text>
+              <Text style={[styles.confirmBody, { color: C.textSecondary }]} numberOfLines={2}>
+                {pendingDelete?.title}
+              </Text>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity style={[styles.confirmButton, styles.cancelButton, { backgroundColor: C.white, borderColor: C.border }]} onPress={() => setPendingDelete(null)}>
+                  <Text style={[styles.cancelText, { color: C.textSecondary }]}>Keep</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.confirmButton, { backgroundColor: C.primary }]} onPress={confirmDeleteHabit}>
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </ImageBackground>
+          </View>
         </View>
       </Modal>
     </View>
   );
 }
 
-function formatSchedule(days) {
-  if (days.length === 7) return 'daily';
-  return WEEKDAYS.filter((day) => days.includes(day.value)).map((day) => day.short).join(' ');
+function formatSchedule(daysPerWeek) {
+  if (daysPerWeek === 7) return 'daily';
+  return `${daysPerWeek} days/week`;
+}
+
+function formatStreak(streak, daysPerWeek) {
+  return `${streak} ${daysPerWeek === 7 ? 'day' : 'week'} streak`;
 }
 
 const styles = StyleSheet.create({
@@ -352,9 +354,10 @@ const styles = StyleSheet.create({
   saveText: { color: '#FFFFFF', fontFamily: 'Rounded', fontWeight: '900', fontSize: 15 },
   confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,42,75,0.28)', padding: 22 },
   confirmBackdrop: { ...StyleSheet.absoluteFillObject },
-  confirmCard: { width: '88%', maxWidth: 320, minHeight: 250, paddingHorizontal: 24, paddingTop: 46, paddingBottom: 24, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  confirmCard: { width: '88%', maxWidth: 320, minHeight: 250, alignItems: 'center', justifyContent: 'center' },
   scheduleCard: { width: '90%', maxWidth: 340, borderRadius: 30, borderWidth: 1, padding: 22, alignItems: 'center', shadowColor: '#7D88B8', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
-  confirmCardImage: { resizeMode: 'stretch', borderRadius: 30 },
+  confirmCardImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', borderRadius: 30 },
+  confirmCardContent: { width: '100%', paddingHorizontal: 24, paddingTop: 46, paddingBottom: 24, alignItems: 'center', justifyContent: 'center' },
   confirmTitle: { fontFamily: 'Rounded', fontSize: 24, fontWeight: '900', textAlign: 'center' },
   confirmBody: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '800', textAlign: 'center', marginTop: 8, minHeight: 34 },
   confirmActions: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 20 },
