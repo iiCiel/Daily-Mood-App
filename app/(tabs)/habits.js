@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, ImageBackground, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Image, ImageBackground, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -11,6 +11,7 @@ import {
   archiveHabit,
   createHabit,
   getCompletionsForDate,
+  getCompletionsForMonth,
   getHabitStreak,
   getHabitWeekProgress,
   getHabits,
@@ -26,6 +27,7 @@ const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 const deleteCardArt = require('../../assets/illustrations/dialogs/delete-habit-card.png');
 const COLORS = ['#F47F72', '#23B8D0', '#69B989', '#8E7DCA', '#F2A35F', '#D95763'];
 const TARGET_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 function todayStr() {
   const d = new Date();
@@ -36,6 +38,7 @@ export default function HabitsScreen() {
   const C = useTheme();
   const { height: screenHeight } = useWindowDimensions();
   const today = todayStr();
+  const now = new Date();
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
   const [streaks, setStreaks] = useState({});
@@ -48,28 +51,47 @@ export default function HabitsScreen() {
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [editDaysPerWeek, setEditDaysPerWeek] = useState(7);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [monthCompletions, setMonthCompletions] = useState({});
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
-  }, []));
+  }, [year, month]));
 
   async function load() {
     const h = await getHabits();
     const done = await getCompletionsForDate(today);
-    const [streakPairs, progressPairs] = await Promise.all([
+    const [streakPairs, progressPairs, monthDone] = await Promise.all([
       Promise.all(h.map(async (habit) => [habit.id, await getHabitStreak(habit.id)])),
       Promise.all(h.map(async (habit) => [habit.id, await getHabitWeekProgress(habit, today)])),
+      getCompletionsForMonth(year, month),
     ]);
     setHabits(h);
     setCompleted(done);
     setStreaks(Object.fromEntries(streakPairs));
     setWeekProgress(Object.fromEntries(progressPairs));
+    setMonthCompletions(monthDone);
   }
 
   async function toggle(id) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await toggleCompletion(id, today);
     await load();
+  }
+
+  async function toggleForSelectedDate(id) {
+    if (!selectedDate || selectedDate > today) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await toggleCompletion(id, selectedDate);
+    await load();
+  }
+
+  function changeMonth(offset) {
+    const next = new Date(year, month - 1 + offset, 1);
+    setYear(next.getFullYear());
+    setMonth(next.getMonth() + 1);
   }
 
   async function addHabit() {
@@ -112,6 +134,11 @@ export default function HabitsScreen() {
   const dueCount = habits.filter((habit) => weekProgress[habit.id]?.dueToday).length;
   const percent = habits.length ? Math.round((goalsMet / habits.length) * 100) : 100;
   const heroHeight = getStoryHeroHeight(screenHeight, { min: 480, max: 530, ratio: 0.52 });
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  const calendarCells = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, index) => index + 1)];
+  const monthName = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const selectedDone = selectedDate ? monthCompletions[selectedDate] || new Set() : new Set();
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
@@ -137,6 +164,56 @@ export default function HabitsScreen() {
 
         <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
           <GiftPhotoFrame C={C} compact style={styles.habitMemory} />
+
+          <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={styles.monthHeader}>
+              <View>
+                <Text style={[styles.monthTitle, { color: C.text }]}>{monthName}</Text>
+                <Text style={[styles.monthSubtitle, { color: C.textSecondary }]}>Tap a day to review every habit</Text>
+              </View>
+              <View style={styles.monthControls}>
+                <TouchableOpacity style={[styles.monthBtn, { backgroundColor: C.primaryLight }]} onPress={() => changeMonth(-1)} accessibilityLabel="Previous month">
+                  <Ionicons name="chevron-back" size={16} color={C.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.monthBtn, { backgroundColor: C.primaryLight }]} onPress={() => changeMonth(1)} accessibilityLabel="Next month">
+                  <Ionicons name="chevron-forward" size={16} color={C.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.dayLabels}>
+              {WEEKDAYS.map((day, index) => <Text key={`${day}-${index}`} style={[styles.dayLabel, { color: C.textSecondary }]}>{day}</Text>)}
+            </View>
+            <View style={styles.calendarGrid}>
+              {calendarCells.map((day, index) => {
+                if (!day) return <View key={`empty-${index}`} style={styles.calendarCell} />;
+                const date = formatDate(year, month, day);
+                const doneCount = monthCompletions[date]?.size || 0;
+                const allDone = habits.length > 0 && doneCount >= habits.length;
+                const partial = doneCount > 0 && !allDone;
+                const future = date > today;
+                return (
+                  <TouchableOpacity
+                    key={date}
+                    style={[
+                      styles.calendarCell,
+                      allDone && { backgroundColor: C.primary },
+                      partial && { backgroundColor: C.primaryLight },
+                      date === today && !allDone && { borderColor: C.primary, borderWidth: 2 },
+                      future && styles.futureCell,
+                    ]}
+                    onPress={() => setSelectedDate(date)}
+                    disabled={future}
+                    accessibilityLabel={`${date}, ${doneCount} of ${habits.length} habits completed`}
+                  >
+                    <Text style={[styles.calendarDay, { color: allDone ? C.white : C.textSecondary }]}>{day}</Text>
+                    {habits.length > 0 && !future && (
+                      <Text style={[styles.calendarCount, { color: allDone ? C.white : C.primary }]}>{doneCount}/{habits.length}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
 
           <Text style={[styles.sectionTitle, { color: C.text }]}>Today's habits</Text>
           <View style={styles.list}>
@@ -177,8 +254,12 @@ export default function HabitsScreen() {
                       {formatStreak(streaks[habit.id] || 0, progress.target)} - {statusLabel}
                     </Text>
                   </View>
-                  <TouchableOpacity style={[styles.rowIconBtn, { backgroundColor: C.primaryLight }]} onPress={() => openScheduleEditor(habit)}>
-                    <Ionicons name="calendar-outline" size={17} color={C.primary} />
+                  <TouchableOpacity
+                    style={[styles.rowIconBtn, { backgroundColor: C.primaryLight }]}
+                    onPress={() => openScheduleEditor(habit)}
+                    accessibilityLabel={`Edit ${habit.title} schedule`}
+                  >
+                    <Ionicons name="options-outline" size={17} color={C.primary} />
                   </TouchableOpacity>
                   <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={done ? habit.color : C.textSecondary} />
                 </TouchableOpacity>
@@ -188,15 +269,21 @@ export default function HabitsScreen() {
         </ImageBackground>
       </ScrollView>
 
-      <Modal visible={showAdd} transparent animationType="slide" statusBarTranslucent>
-        <KeyboardAvoidingView
+      <Modal visible={showAdd} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowAdd(false)}>
+        <Pressable
           style={styles.overlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={18}
+          onPress={() => setShowAdd(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close new habit form"
         >
-          <TouchableOpacity style={styles.backdrop} onPress={() => setShowAdd(false)} />
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <View style={[styles.sheetModal, { backgroundColor: C.card }]}>
+          <KeyboardAvoidingView
+            style={styles.addModalKeyboard}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={18}
+          >
+            <Pressable style={styles.addSheetTouchGuard} onPress={(event) => event.stopPropagation()}>
+              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={[styles.sheetModal, { backgroundColor: C.card }]}>
               <Text style={[styles.modalTitle, { color: C.text }]}>New habit</Text>
               <TextInput style={[styles.input, { backgroundColor: C.panel, borderColor: C.border, color: C.text }]} value={title} onChangeText={setTitle} placeholder="Habit title" placeholderTextColor={C.textSecondary} />
               <View>
@@ -229,9 +316,44 @@ export default function HabitsScreen() {
               <TouchableOpacity style={[styles.save, { backgroundColor: color }]} onPress={addHabit}>
                 <Text style={styles.saveText}>Add habit</Text>
               </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+                </View>
+              </ScrollView>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!selectedDate} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setSelectedDate(null)}>
+        <View style={styles.overlay}>
+          <Pressable style={styles.backdrop} onPress={() => setSelectedDate(null)} accessibilityLabel="Close day details" />
+          <View style={[styles.daySheet, { backgroundColor: C.card }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: C.border }]} />
+            <Text style={[styles.modalTitle, { color: C.text }]}>{selectedDate ? formatSelectedDate(selectedDate) : ''}</Text>
+            <Text style={[styles.dayProgress, { color: C.textSecondary }]}>
+              {selectedDone.size} of {habits.length} habits completed
+            </Text>
+            <ScrollView style={styles.dayHabitScroll} contentContainerStyle={styles.dayHabitList} showsVerticalScrollIndicator={false}>
+              {habits.length === 0 ? (
+                <Text style={[styles.emptyDayText, { color: C.textSecondary }]}>Add a habit first, then track it here.</Text>
+              ) : habits.map((habit) => {
+                const done = selectedDone.has(habit.id);
+                return (
+                  <TouchableOpacity
+                    key={`day-${habit.id}`}
+                    style={[styles.dayHabit, { backgroundColor: C.panel, borderColor: done ? habit.color : C.border }]}
+                    onPress={() => toggleForSelectedDate(habit.id)}
+                  >
+                    <View style={[styles.dayHabitIcon, { backgroundColor: done ? habit.color : C.primaryLight }]}>
+                      <HabitIcon name={habit.emoji} size={18} color={done ? C.white : habit.color} />
+                    </View>
+                    <Text style={[styles.dayHabitTitle, { color: C.text }]}>{habit.title}</Text>
+                    <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={25} color={done ? habit.color : C.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!editingSchedule} transparent animationType="fade" statusBarTranslucent>
@@ -304,6 +426,14 @@ function formatStreak(streak, daysPerWeek) {
   return `${streak} ${daysPerWeek === 7 ? 'day' : 'week'} streak`;
 }
 
+function formatDate(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function formatSelectedDate(date) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   pageScroll: { flex: 1 },
@@ -328,6 +458,19 @@ const styles = StyleSheet.create({
   sheetImage: { resizeMode: 'cover', borderTopLeftRadius: 34, borderTopRightRadius: 34 },
   sheetContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: STORY_TAB_BOTTOM_PADDING + 8 },
   habitMemory: { width: '52%', maxWidth: 178, minHeight: 220, alignSelf: 'center', marginBottom: 20 },
+  monthCard: { borderRadius: 24, borderWidth: 1, padding: 16, marginBottom: 24 },
+  monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  monthTitle: { fontFamily: 'Rounded', fontSize: 20, fontWeight: '900' },
+  monthSubtitle: { fontFamily: 'Rounded', fontSize: 10, fontWeight: '700', marginTop: 2 },
+  monthControls: { flexDirection: 'row', gap: 8 },
+  monthBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  dayLabels: { flexDirection: 'row', marginBottom: 8 },
+  dayLabel: { width: '14.2857%', textAlign: 'center', fontFamily: 'Rounded', fontSize: 10, fontWeight: '900' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 4 },
+  calendarCell: { width: '14.2857%', aspectRatio: 0.9, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  calendarDay: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
+  calendarCount: { fontFamily: 'Rounded', fontSize: 8, fontWeight: '900', marginTop: 1 },
+  futureCell: { opacity: 0.28 },
   sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
   list: { gap: 10 },
   item: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -338,8 +481,10 @@ const styles = StyleSheet.create({
   itemTitle: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
   itemMeta: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800', marginTop: 3 },
   overlay: { flex: 1, backgroundColor: 'rgba(39,42,75,0.45)', justifyContent: 'flex-end' },
-  backdrop: { flex: 1 },
-  modalScroll: { maxHeight: '82%' },
+  backdrop: { ...StyleSheet.absoluteFillObject },
+  addModalKeyboard: { flex: 1, justifyContent: 'flex-end' },
+  addSheetTouchGuard: { width: '100%', maxHeight: '82%' },
+  modalScroll: { flexGrow: 0 },
   modalScrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
   sheetModal: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, paddingBottom: 34, gap: 14 },
   modalTitle: { fontFamily: 'Rounded', fontSize: 22, fontWeight: '900' },
@@ -354,6 +499,15 @@ const styles = StyleSheet.create({
   swatch: { width: 32, height: 32, borderRadius: 12, borderWidth: 2 },
   save: { borderRadius: 20, alignItems: 'center', paddingVertical: 15 },
   saveText: { color: '#FFFFFF', fontFamily: 'Rounded', fontWeight: '900', fontSize: 15 },
+  daySheet: { maxHeight: '72%', borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 22, paddingTop: 10, paddingBottom: 30 },
+  sheetHandle: { width: 42, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 16 },
+  dayProgress: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '800', marginTop: 4, marginBottom: 16 },
+  dayHabitScroll: { flexGrow: 0 },
+  dayHabitList: { gap: 9, paddingBottom: 4 },
+  dayHabit: { minHeight: 60, borderRadius: 20, borderWidth: 1, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  dayHabitIcon: { width: 40, height: 40, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  dayHabitTitle: { flex: 1, fontFamily: 'Rounded', fontSize: 14, fontWeight: '900' },
+  emptyDayText: { fontFamily: 'Rounded', fontSize: 13, fontWeight: '700', paddingVertical: 20, textAlign: 'center' },
   confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,42,75,0.28)', padding: 22 },
   confirmBackdrop: { ...StyleSheet.absoluteFillObject },
   confirmCard: { width: '88%', maxWidth: 320, minHeight: 250, alignItems: 'center', justifyContent: 'center' },
