@@ -10,3 +10,7 @@ npm-debug.*
 *.orig.*
 web-build/
 .env
+expo-*-qr.png
+.codex-remote-attachments/
+/android
+/builds

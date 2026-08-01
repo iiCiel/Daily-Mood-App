@@ -12,7 +12,11 @@
     "doctor": "npx expo-doctor",
     "export:web": "expo export --platform web",
     "verify": "npm run check:deps && npm run audit:prod && npm run doctor && npm run export:web",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "build:apk": "npx expo prebuild --platform android && cd android && gradlew assembleRelease && cd .. && node scripts/copy-apk.js",
+    "serve-apk": "npx serve builds -l 8080",
+    "serve-backup": "npx serve backups -l 8081",
+    "repair-backup": "node scripts/repair-backup.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -33,6 +37,7 @@
     "expo-router": "~6.0.23",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
+    "expo-updates": "~29.0.19",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

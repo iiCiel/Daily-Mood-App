@@ -15,22 +15,19 @@ import {
 } from '../../src/notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Clipboard from 'expo-clipboard';
-import { getGoals } from '../../src/db/goalsDatabase';
-import { getNotes } from '../../src/db/notesDatabase';
+// Only what the CSV export still needs directly — the full backup payload is
+// assembled in src/lib/autoBackup.js so manual and automatic backups can't drift.
 import { getRecentSleep } from '../../src/db/sleepDatabase';
 import { getAllCalorieEntries } from '../../src/db/calorieDatabase';
-import { getAllHabitCompletions, getAllHabitsForBackup, parseWeeklyTarget } from '../../src/db/habitDatabase';
+import { getAllHabitCompletions, parseWeeklyTarget } from '../../src/db/habitDatabase';
 import { getWeightEntries } from '../../src/db/weightDatabase';
-import {
-  getAllPlannerEntries,
-  getAllPlanningTasksForBackup,
-  getAllProjectsForBackup,
-  getAllTaskListsForBackup,
-} from '../../src/db/plannerDatabase';
-import { getAllFocusSessions } from '../../src/db/focusDatabase';
-import { getSavedMeals } from '../../src/db/savedMealsDatabase';
 import { importBackup } from '../../src/db/backupDatabase';
-import * as FileSystem from 'expo-file-system';
+import {
+  buildBackupPayload, countRecords, writeVerifiedBackup,
+  chooseBackupFolder, getBackupFolder, setBackupFolder, getLastBackupInfo,
+} from '../../src/lib/autoBackup';
+// `/legacy` entry: v19's main entry dropped StorageAccessFramework/writeAsStringAsync.
+import * as FileSystem from 'expo-file-system/legacy';
 
 const STORAGE_KEYS = { SUPABASE_URL: 'supabase_url', SUPABASE_KEY: 'supabase_anon_key' };
 const APP_VERSION = '1.0.0';
@@ -72,6 +69,10 @@ export default function SettingsScreen() {
   const [lockEnabled, setLockEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [backupFiles, setBackupFiles] = useState([]);
+  const [backupFolder, setBackupFolderState] = useState(null);
+  const [lastBackup, setLastBackup] = useState(null);
   const [importText, setImportText] = useState('');
   const [importing, setImporting] = useState(false);
 
@@ -82,7 +83,14 @@ export default function SettingsScreen() {
     AsyncStorage.getItem('app_lock_enabled').then(v => setLockEnabled(v === 'true'));
     Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync()])
       .then(([hw, enrolled]) => setBiometricsAvailable(hw && enrolled));
+    refreshBackupStatus();
   }, []);
+
+  async function refreshBackupStatus() {
+    const [folder, info] = await Promise.all([getBackupFolder(), getLastBackupInfo()]);
+    setBackupFolderState(folder);
+    setLastBackup(info);
+  }
 
   async function loadSettings() {
     const url = await AsyncStorage.getItem(STORAGE_KEYS.SUPABASE_URL);
@@ -159,86 +167,176 @@ export default function SettingsScreen() {
     }
   }
 
+  async function saveBackupToPickedFolder() {
+    try {
+      const dirUri = await chooseBackupFolder();
+      if (!dirUri) return;
+      const info = await writeVerifiedBackup(dirUri);
+      await refreshBackupStatus();
+      Alert.alert(
+        'backup saved & verified',
+        `${info.fileName}\n${info.records.toLocaleString()} records · ${Math.round(info.bytes / 1024)} KB\n\n` +
+        'the file was read back and re-checked after writing, so it is known good.\n\n' +
+        'automatic daily backups are now on for this folder.'
+      );
+    } catch (err) {
+      Alert.alert('backup failed', String(err?.message || err));
+    }
+  }
+
   async function handleExportEverything() {
     try {
-      const [
-        moodEntries, sleepEntries, calorieEntries, habitCompletions, habitDefinitions, weightEntries,
-        goals, notes, plannerEntries, focusSessions, tasks, projects, taskLists, savedMeals,
-      ] = await Promise.all([
-        getEntries(10000),
-        getRecentSleep(3650),
-        getAllCalorieEntries(),
-        getAllHabitCompletions(),
-        getAllHabitsForBackup(),
-        getWeightEntries(3650),
-        getGoals(),
-        getNotes(),
-        getAllPlannerEntries(),
-        getAllFocusSessions(),
-        getAllPlanningTasksForBackup(),
-        getAllProjectsForBackup(),
-        getAllTaskListsForBackup(),
-        getSavedMeals(),
-      ]);
+      const payload = await buildBackupPayload();
+      const compact = JSON.stringify(payload);
+      const records = countRecords(payload);
+      const sizeKb = Math.round(compact.length / 1024);
 
-      const backup = {
-        app: 'Daily Mood',
-        exported_at: new Date().toISOString(),
-        version: 4,
-        photo_note: 'Photos stay local to this device and are not embedded in this backup.',
-        mood: moodEntries,
-        sleep: sleepEntries,
-        calories: calorieEntries,
-        habits: habitCompletions,
-        habit_definitions: habitDefinitions,
-        weight: weightEntries,
-        goals,
-        notes,
-        planner: plannerEntries,
-        focus_sessions: focusSessions,
-        tasks,
-        projects,
-        task_lists: taskLists,
-        saved_meals: savedMeals,
-      };
+      if (!FileSystem.StorageAccessFramework) {
+        await Clipboard.setStringAsync(compact);
+        await Share.share({ message: compact, title: 'daily_app_backup.json' });
+        return;
+      }
 
-      const json = JSON.stringify(backup, null, 2);
-      await Clipboard.setStringAsync(json);
-      await Share.share({
-        message: json,
-        title: `daily_app_backup_${new Date().toISOString().slice(0, 10)}.json`,
-      });
+      Alert.alert(
+        'export full backup',
+        `${records.toLocaleString()} records · ${sizeKb} KB.\n\nsaving to a file is the safe option — it is verified after writing. the clipboard can silently cut off large backups.`,
+        [
+          { text: 'cancel', style: 'cancel' },
+          {
+            text: 'copy to clipboard',
+            onPress: async () => {
+              await Clipboard.setStringAsync(compact);
+              // Read it straight back: this is the check that was missing when
+              // a truncated clipboard export silently destroyed a real backup.
+              const readBack = await Clipboard.getStringAsync();
+              if (readBack?.length !== compact.length) {
+                Alert.alert(
+                  'clipboard copy was cut off',
+                  `only ${Math.round((readBack?.length || 0) / 1024)} KB of ${sizeKb} KB survived — this copy is NOT a usable backup.\n\nuse "save to file" instead.`
+                );
+                return;
+              }
+              try {
+                JSON.parse(readBack);
+              } catch {
+                Alert.alert('clipboard copy is corrupt', 'the copied text does not parse. use "save to file" instead.');
+                return;
+              }
+              Alert.alert('copied & verified', `${sizeKb} KB copied intact.`);
+            },
+          },
+          { text: 'save to file', onPress: saveBackupToPickedFolder },
+        ]
+      );
     } catch (e) {
       Alert.alert('export error', String(e?.message || e));
+    }
+  }
+
+  async function handleBackupSettings() {
+    const info = lastBackup;
+    const folderLabel = backupFolder
+      ? decodeURIComponent(backupFolder).split('/').pop() || 'selected folder'
+      : null;
+    const status = !backupFolder
+      ? 'automatic backups are OFF.\n\npick a folder and the app will save a verified backup there once a day, automatically.'
+      : info?.error
+        ? `folder: ${folderLabel}\n\nLAST ATTEMPT FAILED:\n${info.error}\n\nthe folder may have been moved or access revoked — pick it again.`
+        : info
+          ? `folder: ${folderLabel}\nlast backup: ${new Date(info.at).toLocaleString()}\n${info.records?.toLocaleString?.() || '?'} records · ${Math.round((info.bytes || 0) / 1024)} KB\n\nruns automatically once a day.`
+          : `folder: ${folderLabel}\n\nno backup has run yet — it will on next app open.`;
+
+    Alert.alert('automatic backups', status, [
+      { text: 'close', style: 'cancel' },
+      ...(backupFolder ? [{
+        text: 'turn off',
+        style: 'destructive',
+        onPress: async () => { await setBackupFolder(null); await refreshBackupStatus(); },
+      }] : []),
+      { text: 'back up now', onPress: saveBackupToPickedFolder },
+    ]);
+  }
+
+  async function runImport(text, sourceLabel) {
+    let backup;
+    try {
+      backup = JSON.parse(text);
+    } catch (err) {
+      const len = text?.length || 0;
+      const looksTruncated = len > 0 && !text.trimEnd().endsWith('}');
+      Alert.alert(
+        'invalid backup',
+        looksTruncated
+          ? `the ${sourceLabel} data is cut off (${len.toLocaleString()} characters, doesn't end properly).\n\nthis usually means the clipboard couldn't hold the whole backup. re-export using "save to file" and restore from the file instead.`
+          : `could not read the ${sourceLabel} as JSON (${len.toLocaleString()} characters).\n\n${String(err?.message || err).slice(0, 120)}`
+      );
+      return;
+    }
+    if (!backup || typeof backup !== 'object' || Array.isArray(backup)) {
+      Alert.alert('invalid backup', 'that file is valid JSON but is not a Daily Mood backup.');
+      return;
+    }
+    try {
+      const counts = await importBackup(backup);
+      const summary = Object.entries(counts)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${v} ${k}`)
+        .join(', ');
+      Alert.alert('restore complete', summary || 'nothing was imported.');
+    } catch (e) {
+      console.error(e);
+      Alert.alert('error', `restore failed: ${e?.message || e}`);
+    }
+  }
+
+  async function handleRestoreFromFile() {
+    if (!FileSystem.StorageAccessFramework) {
+      Alert.alert('not available', 'restoring from a file is available on Android.');
+      return;
+    }
+    try {
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) return;
+      const entries = await FileSystem.StorageAccessFramework.readDirectoryAsync(permissions.directoryUri);
+      const jsonFiles = entries.filter((uri) => decodeURIComponent(uri).toLowerCase().endsWith('.json'));
+      if (!jsonFiles.length) {
+        Alert.alert('no backups found', 'that folder has no .json files. pick the folder where you saved the backup.');
+        return;
+      }
+      // Newest-looking first: backup names carry an ISO date, so plain sort works.
+      jsonFiles.sort((a, b) => decodeURIComponent(b).localeCompare(decodeURIComponent(a)));
+      setBackupFiles(jsonFiles);
+      setShowFilePicker(true);
+    } catch (e) {
+      Alert.alert('error', `could not read that folder: ${e?.message || e}`);
+    }
+  }
+
+  async function pickBackupFile(uri) {
+    setShowFilePicker(false);
+    try {
+      const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+      await runImport(text, 'file');
+    } catch (e) {
+      Alert.alert('error', `could not read that file: ${e?.message || e}`);
     }
   }
 
   async function handleImportBackup() {
     Alert.alert(
       'restore from backup',
-      'copy the backup JSON text to your clipboard first, then tap restore. matching records will be updated.',
+      'restore from a saved backup file, or from JSON you have copied to the clipboard.\n\nmatching records will be updated.',
       [
         { text: 'cancel', style: 'cancel' },
         {
-          text: 'restore',
+          text: 'from clipboard',
           onPress: async () => {
-            try {
-              const text = await Clipboard.getStringAsync();
-              if (!text?.trim()) { Alert.alert('nothing on clipboard', 'copy the backup JSON first.'); return; }
-              let backup;
-              try { backup = JSON.parse(text); } catch { Alert.alert('invalid backup', 'clipboard does not contain valid JSON.'); return; }
-              const counts = await importBackup(backup);
-              const summary = Object.entries(counts)
-                .filter(([, v]) => v > 0)
-                .map(([k, v]) => `${v} ${k}`)
-                .join(', ');
-              Alert.alert('restore complete', summary || 'nothing was imported.');
-            } catch (e) {
-              console.error(e);
-              Alert.alert('error', `restore failed: ${e?.message || e}`);
-            }
+            const text = await Clipboard.getStringAsync();
+            if (!text?.trim()) { Alert.alert('nothing on clipboard', 'copy the backup JSON first.'); return; }
+            await runImport(text, 'clipboard');
           },
         },
+        { text: 'from file', onPress: handleRestoreFromFile },
       ]
     );
   }
@@ -490,6 +588,28 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={17} color={C.textSecondary} />
           </TouchableOpacity>
+          <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleBackupSettings}>
+            <View style={ss.rowCopy}>
+              <Ionicons
+                name={backupFolder && !lastBackup?.error ? 'shield-checkmark' : 'shield-outline'}
+                size={18}
+                color={lastBackup?.error ? C.danger : backupFolder ? C.success : C.primary}
+              />
+              <View>
+                <Text style={[ss.aboutLabel, { color: C.text }]}>automatic backups</Text>
+                <Text style={[ss.backupStatus, { color: lastBackup?.error ? C.danger : C.textSecondary }]}>
+                  {!backupFolder
+                    ? 'off — tap to protect your data'
+                    : lastBackup?.error
+                      ? 'last attempt failed — tap to fix'
+                      : lastBackup?.at
+                        ? `last: ${new Date(lastBackup.at).toLocaleDateString()} · ${lastBackup.records?.toLocaleString?.() || '?'} records`
+                        : 'on — runs on next open'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={C.textSecondary} />
+          </TouchableOpacity>
           <TouchableOpacity style={[ss.aboutRow, { borderBottomWidth: 1, borderBottomColor: C.border }]} onPress={handleExportEverything}>
             <View style={ss.rowCopy}>
               <Ionicons name="archive-outline" size={18} color={C.primary} />
@@ -535,6 +655,39 @@ export default function SettingsScreen() {
         </View>
         </ScrollView>
       </ImageBackground>
+
+      <Modal visible={showFilePicker} animationType="slide" transparent onRequestClose={() => setShowFilePicker(false)}>
+        <View style={ss.modalOverlay}>
+          <View style={[ss.modalCard, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[ss.modalIcon, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="document-text-outline" size={24} color={C.primary} />
+            </View>
+            <Text style={[ss.modalTitle, { color: C.text }]}>choose a backup file</Text>
+            <Text style={[ss.modalDesc, { color: C.textSecondary }]}>
+              {backupFiles.length} json file{backupFiles.length === 1 ? '' : 's'} found in that folder.
+            </Text>
+            <ScrollView style={ss.fileList} showsVerticalScrollIndicator={false}>
+              {backupFiles.map((uri) => {
+                const label = decodeURIComponent(uri).split('/').pop() || uri;
+                return (
+                  <TouchableOpacity
+                    key={uri}
+                    style={[ss.fileRow, { borderBottomColor: C.border }]}
+                    onPress={() => pickBackupFile(uri)}
+                  >
+                    <Ionicons name="document-outline" size={17} color={C.primary} />
+                    <Text style={[ss.fileName, { color: C.text }]} numberOfLines={1}>{label}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={C.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={[ss.modalCancelBtn, { borderColor: C.border }]} onPress={() => setShowFilePicker(false)}>
+              <Text style={[ss.modalCancelText, { color: C.textSecondary }]}>cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={showImport} animationType="slide" transparent onRequestClose={() => setShowImport(false)}>
         <View style={ss.modalOverlay}>
@@ -728,6 +881,10 @@ const ss = StyleSheet.create({
   importInput: { borderWidth: 1, borderRadius: 20, padding: 14, fontFamily: 'Rounded', fontSize: 13, fontWeight: '800', height: 160, marginBottom: 16 },
   modalBtns: { flexDirection: 'row', gap: 12 },
   modalCancelBtn: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
+  backupStatus: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  fileList: { maxHeight: 280, width: '100%', marginBottom: 14 },
+  fileRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, borderBottomWidth: 1 },
+  fileName: { flex: 1, fontSize: 13, fontWeight: '600' },
   modalCancelText: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
   modalImportBtn: { flex: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
 });

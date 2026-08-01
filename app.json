@@ -55,6 +55,15 @@
         "projectId": "9cd610bd-40a4-4248-b3e2-2eb85e097440"
       }
     },
-    "owner": "lolaangelo"
+    "owner": "lolaangelo",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9cd610bd-40a4-4248-b3e2-2eb85e097440",
+      "requestHeaders": {
+        "expo-channel-name": "preview"
+      }
+    }
   }
 }

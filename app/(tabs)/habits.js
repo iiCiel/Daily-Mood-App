@@ -163,7 +163,7 @@ export default function HabitsScreen() {
         </ImageBackground>
 
         <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
-          <GiftPhotoFrame C={C} compact style={styles.habitMemory} />
+          <GiftPhotoFrame id="habits-1" C={C} compact style={styles.habitMemory} />
 
           <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
             <View style={styles.monthHeader}>
@@ -303,13 +303,20 @@ export default function HabitsScreen() {
                   })}
                 </View>
               </View>
-              <View style={styles.iconGrid}>
-                {HABIT_ICONS.slice(0, 12).map((name) => (
+              <Text style={[styles.fieldLabel, { color: C.textSecondary }]}>Pick an icon</Text>
+              <ScrollView
+                style={styles.iconScroll}
+                contentContainerStyle={styles.iconGrid}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {HABIT_ICONS.map((name) => (
                   <TouchableOpacity key={name} style={[styles.pickIcon, { backgroundColor: icon === name ? color : C.panel, borderColor: C.border }]} onPress={() => setIcon(name)}>
                     <Ionicons name={name} size={18} color={icon === name ? C.white : C.text} />
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
               <View style={styles.colorRow}>
                 {COLORS.map((swatch) => <TouchableOpacity key={swatch} style={[styles.swatch, { backgroundColor: swatch, borderColor: color === swatch ? C.text : 'transparent' }]} onPress={() => setColor(swatch)} />)}
               </View>
@@ -493,7 +500,8 @@ const styles = StyleSheet.create({
   dayRow: { flexDirection: 'row', gap: 7 },
   dayChip: { flex: 1, height: 38, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   dayChipText: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  iconScroll: { maxHeight: 200, marginTop: 4 },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, paddingBottom: 4 },
   pickIcon: { width: 40, height: 40, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   colorRow: { flexDirection: 'row', gap: 10 },
   swatch: { width: 32, height: 32, borderRadius: 12, borderWidth: 2 },

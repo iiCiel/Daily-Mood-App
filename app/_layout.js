@@ -9,6 +9,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 import { getEntry, saveEntry } from '../src/db/database';
 import { registerMoodCategory } from '../src/notifications';
+import { runAutoBackupIfDue } from '../src/lib/autoBackup';
 import LockScreen from './lock';
 
 const LOCK_KEY = 'app_lock_enabled';
@@ -24,6 +25,9 @@ function AppLayout() {
   useEffect(() => {
     registerMoodCategory();
     initLock();
+    // Fire-and-forget: writes at most one verified backup per day if a folder is set.
+    // Never blocks launch and never surfaces errors here — Settings reports status.
+    runAutoBackupIfDue();
 
     // Handle quick mood from notification action
     const notifSub = Notifications.addNotificationResponseReceivedListener(async (response) => {

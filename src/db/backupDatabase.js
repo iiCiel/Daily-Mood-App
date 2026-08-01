@@ -4,6 +4,7 @@ import { saveSleep } from './sleepDatabase';
 import { importCalorieEntry } from './calorieDatabase';
 import { importHabitCompletion, importHabitDefinition } from './habitDatabase';
 import { saveWeightEntry } from './weightDatabase';
+import { importWorkoutData } from './workoutDatabase';
 
 const SAVED_MEALS_KEY = 'saved_meals_v1';
 const DEFAULT_PROJECT_ID = 'default-project';
@@ -386,6 +387,7 @@ export async function importBackup(backup) {
   }
   await importFocusSessions(db, backup.focus_sessions, counts);
   await importSavedMeals(backup.saved_meals, counts);
+  Object.assign(counts, await importWorkoutData(backup.workouts));
 
   return counts;
 }

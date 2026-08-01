@@ -6,7 +6,7 @@ A personal all-in-one daily app built with React Native / Expo. Four tabs: mood 
 ## Build workflow
 The user has thought this through — do not suggest rebuilding after every change.
 
-### Two build types
+### Three ways to get code onto the phone
 
 **1. Dev Client — for active development**
 - Requires laptop on + phone on same wifi
@@ -15,23 +15,44 @@ The user has thought this through — do not suggest rebuilding after every chan
 - Code changes hot-reload in seconds, no rebuild needed
 - Use this while actively coding new features
 
-**2. Preview APK — the real standalone app**
-- Works everywhere, no laptop needed
+**2. Local build — fast standalone APK (set up 2026-07-29)**
+- Local Android build environment is installed: JDK 17 Temurin + Android SDK (platform-tools, platform 36, build-tools 36, NDK 27.1.12297006) via Google's `android` CLI tool (`winget install Google.AndroidCLI`)
+- `JAVA_HOME` and `ANDROID_HOME` are set as persistent user env vars
+- `npm run build:apk` — runs `npx expo prebuild --platform android` (syncs native config from `app.json`/`eas.json`) then `gradlew assembleRelease` locally (~5 min, no EAS queue), copies the signed APK to `builds/daily-mood-latest.apk` (gitignored, local only, not committed). The prebuild step is baked into this script now specifically so app.json/eas.json edits can never silently go stale in a local build again.
+- `npm run serve-apk` — serves `builds/` over local wifi (`npx serve`); phone downloads at `http://<laptop-lan-ip>:8080/daily-mood-latest.apk`
+- Alternative install: `adb install builds/daily-mood-latest.apk` over USB
+- Release build type is signed with the debug keystore (`android/app/debug.keystore`) — fine for personal use, not Play Store submission
+- **Known gotchas — all bit us once already, first time this was set up:**
+  - `android/local.properties` `sdk.dir` must use forward slashes (`C:/Users/...`). Backslashes get mangled by Java's `.properties` escape parsing and fail the build with a cryptic "filename, directory name, or volume label syntax is incorrect" error.
+  - `android/gradle.properties` `org.gradle.jvmargs` needs `-XX:MaxMetaspaceSize` raised to at least `1536m` (default `512m` OOMs during `expo-updates`' Kotlin/KSP compile step). Currently set to `-Xmx4096m -XX:MaxMetaspaceSize=1536m`.
+  - `android/` does not auto-sync with `app.json`/`eas.json` changes — editing them has zero effect on a local build until `expo prebuild` regenerates the native files. We hit this directly: adding `expo-updates` updated `app.json`/`eas.json` but the first local build silently shipped with updates disabled because prebuild was never re-run. Fixed by making `npm run build:apk` always run `expo prebuild --platform android` first (see below), so this can't happen again. Custom native code (the Android widget providers) is safe through prebuild — it's managed by the `./plugins/withAndroidWidgets` config plugin, not hand-edited.
+  - `eas.json`'s per-profile `channel` field only gets embedded on a real `eas build`. A local `gradlew`/`expo prebuild` build doesn't go through eas-cli, so it never picks that up — the channel has to be set manually via `app.json`'s `updates.requestHeaders: {"expo-channel-name": "preview"}` instead. **Every local build currently reports itself as the `preview` channel**, regardless of `eas.json`. Publish OTA updates for it with `eas update --branch preview`.
+  - **The EAS *channel* must exist server-side, and `eas update --branch X` does NOT create it.** `eas build` normally creates the channel as a side effect; local builds never do. Symptom: `eas update` publishes fine and `eas branch:list` shows the update, but the app never receives anything — because it asks by *channel* and `eas channel:list` is empty. Fix once with `eas channel:create preview` (links channel → same-named branch). Verify with `eas channel:view preview` — it must show Status `Active` with the branch pointed at it. This cost us a long debugging detour; check `channel:list` FIRST whenever an OTA update doesn't land.
+
+**3. EAS cloud build — Preview/Production, only when needed**
+- Works everywhere, no laptop needed at install time
 - `eas build --platform android --profile preview`
 - EAS free tier = ~2hr queue wait
 - User installs via QR code from EAS dashboard
-- Only build this when a meaningful batch of features is finished
+- Prefer the local build (option 2) unless you specifically want an EAS-hosted build or Play Store submission
+
+### EAS Update — for JS-only changes, no rebuild at all (set up 2026-07-29)
+- `expo-updates` is installed; `app.json` has `updates.url` + `runtimeVersion: {policy: "appVersion"}`; `eas.json` has a `channel` per build profile (`development`/`preview`/`production`) — that `eas.json` channel field only takes effect on real `eas build` (cloud or `--local`), NOT on a raw `gradlew`/`expo prebuild` build
+- Because local builds go through plain `gradlew`, not `eas build`, the channel has to be embedded manually: `app.json`'s `updates.requestHeaders` is hardcoded to `{"expo-channel-name": "preview"}`. This means **every local build currently reports itself as the `preview` channel**, regardless of which `eas.json` profile you were thinking of. Publish updates for it with `eas update --branch preview`.
+- Pure JS/UI change, no new native module or app.json native config change: `eas update --branch preview` pushes instantly, no rebuild, works over the internet — installed app fetches it on next launch
+- Native changes (new native module, new permission, new config plugin, or any other `app.json`/`eas.json` change) just need `npm run build:apk` — it runs `expo prebuild` automatically now, so native config can't go stale
+- The very first local build (2026-07-30) shipped with updates silently disabled because `prebuild` hadn't been re-run after adding `expo-updates` — that's why `build:apk` now always prebuilds first
 
 ### The honest constraints
-- The 2hr wait is the EAS free tier queue — no way around it for the standalone APK without paying ($99/mo for EAS priority) or setting up a local Android build environment
-- **Do not suggest a Preview build after small changes.** Batch features up first.
-- EAS free tier is 1 build/month per account. Secondary account `lolaangelo` was created to get an extra build when the main account (`iiciel`) runs out.
+- EAS cloud queue is still ~2hr on the free tier, but it's no longer the only option — local builds (option 2) are free, fast, and don't touch any EAS account/queue
+- **Do not suggest a full rebuild after every small change** — use `eas update` for JS-only changes instead
+- EAS free tier is 1 cloud build/month per account. Secondary account `lolaangelo` exists as overflow — less relevant now that local builds don't count against either account's limit
 
 ### Recommended workflow
-1. Use Dev Client on home wifi while coding — instant updates
-2. When a batch of features is done and tested, do one Preview build
-3. Install the Preview APK — this is the app used day-to-day, works everywhere
-4. Repeat: dev client for coding, preview build for releases
+1. Dev Client on home wifi while actively coding — instant hot reload, no build at all
+2. Shipping a pure JS/UI change to the already-installed build: `eas update --branch preview` — no rebuild
+3. Native code changed, or you want a fresh standalone APK: `npm run build:apk` (local, ~5 min) → `npm run serve-apk` or `adb install` to get it on the phone
+4. Reserve EAS cloud builds (`eas build`) for when you specifically want an EAS-hosted build or Play Store submission
 
 ### Current state (as of last session)
 - Active branch: `codex`

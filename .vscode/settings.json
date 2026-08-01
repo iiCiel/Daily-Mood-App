@@ -1,0 +1,18 @@
+{
+  "chatgpt.openOnStartup": false,
+  "chatgpt.runCodexInWindowsSubsystemForLinux": false,
+  "claudeCode.allowDangerouslySkipPermissions": false,
+  "claudeCode.initialPermissionMode": "default",
+  "files.watcherExclude": {
+    "**/.expo/**": true,
+    "**/android/.gradle/**": true,
+    "**/dist/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/.expo/**": true,
+    "**/android/.gradle/**": true,
+    "**/dist/**": true,
+    "**/node_modules/**": true
+  }
+}

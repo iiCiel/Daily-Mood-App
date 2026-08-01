@@ -127,8 +127,8 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.giftRow}>
-            <GiftPhotoFrame C={C} style={styles.mainMemory} />
-            <GiftPhotoFrame C={C} compact style={styles.sideMemory} />
+            <GiftPhotoFrame id="life-main" C={C} style={styles.mainMemory} />
+            <GiftPhotoFrame id="life-side" C={C} compact style={styles.sideMemory} />
           </View>
 
           <TouchableOpacity style={[styles.wordleCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/wordle')} activeOpacity={0.78}>
@@ -140,6 +140,19 @@ export default function DashboardScreen() {
               <Text style={[styles.wordleSub, { color: C.textSecondary }]}>A new random word every round</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.workoutCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/workout')} activeOpacity={0.78}>
+            <View style={[styles.workoutIcon, { backgroundColor: C.mint }]}>
+              <Ionicons name="barbell-outline" size={22} color={C.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.wordleTitle, { color: C.text }]}>Workout tracker</Text>
+              <Text style={[styles.wordleSub, { color: C.textSecondary }]}>Routines, sets, reps & progress</Text>
+            </View>
+            <View style={[styles.workoutGo, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="play" size={15} color={C.primary} />
+            </View>
           </TouchableOpacity>
 
           <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
@@ -262,6 +275,9 @@ const styles = StyleSheet.create({
   mainMemory: { flex: 1, maxWidth: 178, minHeight: 220 },
   sideMemory: { flex: 1, maxWidth: 178, minHeight: 220 },
   wordleCard: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24, shadowColor: '#7D88B8', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
+  workoutCard: { minHeight: 72, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24, shadowColor: '#7D88B8', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
+  workoutIcon: { width: 46, height: 46, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  workoutGo: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   wordleIcon: { width: 44, height: 44, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   wordleTitle: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
   wordleSub: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800', marginTop: 2 },

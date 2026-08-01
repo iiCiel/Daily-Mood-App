@@ -190,6 +190,62 @@ async function _initDatabase() {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_weight_date ON weight_entries(date);
+    CREATE TABLE IF NOT EXISTS workout_routines (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS workout_routine_exercises (
+      id TEXT PRIMARY KEY,
+      routine_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      muscle TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      target_sets INTEGER NOT NULL DEFAULT 3,
+      target_reps INTEGER NOT NULL DEFAULT 8,
+      target_weight REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (routine_id) REFERENCES workout_routines(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS workout_sessions (
+      id TEXT PRIMARY KEY,
+      routine_id TEXT,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      duration_minutes INTEGER NOT NULL DEFAULT 0,
+      total_sets INTEGER NOT NULL DEFAULT 0,
+      total_volume REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS workout_session_exercises (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      muscle TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (session_id) REFERENCES workout_sessions(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS workout_sets (
+      id TEXT PRIMARY KEY,
+      session_exercise_id TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      weight REAL NOT NULL DEFAULT 0,
+      reps INTEGER NOT NULL DEFAULT 0,
+      prev_weight REAL NOT NULL DEFAULT 0,
+      prev_reps INTEGER NOT NULL DEFAULT 0,
+      completed INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (session_exercise_id) REFERENCES workout_session_exercises(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_workout_routine_exercises ON workout_routine_exercises(routine_id);
+    CREATE INDEX IF NOT EXISTS idx_workout_sessions_status ON workout_sessions(status, started_at);
+    CREATE INDEX IF NOT EXISTS idx_workout_session_exercises ON workout_session_exercises(session_id);
+    CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON workout_sets(session_exercise_id);
   `);
   // Migrations for existing installs
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN target_pomodoros INTEGER DEFAULT 1'); } catch {}

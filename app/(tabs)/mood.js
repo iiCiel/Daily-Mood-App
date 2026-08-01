@@ -98,8 +98,8 @@ export default function MoodScreen() {
           </View>
 
           <View style={styles.memoryStrip}>
-            <GiftPhotoFrame C={C} compact style={styles.memoryFrame} />
-            <GiftPhotoFrame C={C} compact style={styles.memoryFrame} />
+            <GiftPhotoFrame id="mood-1" C={C} compact style={styles.memoryFrame} />
+            <GiftPhotoFrame id="mood-2" C={C} compact style={styles.memoryFrame} />
           </View>
 
           <View style={[styles.monthCard, { backgroundColor: C.card, borderColor: C.border }]}>
