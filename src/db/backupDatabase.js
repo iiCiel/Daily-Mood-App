@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase, saveEntry } from './database';
 import { saveSleep } from './sleepDatabase';
 import { importCalorieEntry } from './calorieDatabase';
-import { importHabitCompletion } from './habitDatabase';
+import { importHabitCompletion, importHabitDefinition } from './habitDatabase';
 import { saveWeightEntry } from './weightDatabase';
+import { importWorkoutData } from './workoutDatabase';
 
 const SAVED_MEALS_KEY = 'saved_meals_v1';
 const DEFAULT_PROJECT_ID = 'default-project';
@@ -25,6 +26,17 @@ function parseArray(value) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function parseObject(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
   }
 }
 
@@ -254,10 +266,11 @@ async function importFocusSessions(db, sessions, counts) {
   for (const session of asArray(sessions)) {
     if (!session?.date || !session.started_at) continue;
     await db.runAsync(
-      `INSERT INTO pomodoro_sessions (id, task_id, duration, completed, date, started_at, ended_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO pomodoro_sessions (id, task_id, label, duration, completed, date, started_at, ended_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
         task_id = excluded.task_id,
+        label = excluded.label,
         duration = excluded.duration,
         completed = excluded.completed,
         date = excluded.date,
@@ -266,6 +279,7 @@ async function importFocusSessions(db, sessions, counts) {
       [
         session.id || genId(),
         session.task_id || null,
+        session.label || session.task_title || null,
         Math.max(1, parseInt(session.duration, 10) || 25),
         intFlag(session.completed),
         session.date,
@@ -320,7 +334,9 @@ export async function importBackup(backup) {
       entry.note || '',
       [],
       parseArray(entry.tags),
-      parseArray(entry.gratitude)
+      parseArray(entry.gratitude),
+      numberOrNull(entry.productivity),
+      parseObject(entry.prayers)
     );
     count(counts, 'mood');
   }
@@ -346,12 +362,6 @@ export async function importBackup(backup) {
     count(counts, 'calories');
   }
 
-  for (const entry of asArray(backup.habits)) {
-    if (!entry?.date || !textOrNull(entry.title)) continue;
-    await importHabitCompletion(entry.title, entry.emoji, entry.date);
-    count(counts, 'habits');
-  }
-
   for (const entry of asArray(backup.weight)) {
     if (!entry?.date || !Number.isFinite(Number(entry.weight))) continue;
     await saveWeightEntry({
@@ -366,8 +376,18 @@ export async function importBackup(backup) {
   await importGoals(db, backup.goals, counts);
   await importNotes(db, backup.notes, counts);
   await importPlannerEntries(db, backup.planner, counts);
+  for (const habit of asArray(backup.habit_definitions)) {
+    await importHabitDefinition(habit);
+    count(counts, 'habitDefinitions');
+  }
+  for (const entry of asArray(backup.habits)) {
+    if (!entry?.date || !textOrNull(entry.title)) continue;
+    await importHabitCompletion(entry.title, entry.emoji, entry.date, entry.schedule_days);
+    count(counts, 'habits');
+  }
   await importFocusSessions(db, backup.focus_sessions, counts);
   await importSavedMeals(backup.saved_meals, counts);
+  Object.assign(counts, await importWorkoutData(backup.workouts));
 
   return counts;
 }

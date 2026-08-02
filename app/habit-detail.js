@@ -4,9 +4,11 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, router, Stack } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
+import HabitIcon from '../src/components/HabitIcon';
 import {
   getHabits, getHabitHistory, getHabitStreak,
   getCompletionRate, toggleCompletion, getCompletionsForDate,
+  getHabitWeekProgress, parseWeeklyTarget,
 } from '../src/db/habitDatabase';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -30,6 +32,7 @@ export default function HabitDetail() {
   const [rate30, setRate30] = useState(0);
   const [rate7, setRate7] = useState(0);
   const [todayDone, setTodayDone] = useState(false);
+  const [weekProgress, setWeekProgress] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -41,18 +44,20 @@ export default function HabitDetail() {
     if (!h) { router.back(); return; }
     setHabit(h);
 
-    const [hist, s, r30, r7, todayCompleted] = await Promise.all([
+    const [hist, s, r30, r7, todayCompleted, progress] = await Promise.all([
       getHabitHistory(habitId, 30),
       getHabitStreak(habitId),
       getCompletionRate(habitId, 30),
       getCompletionRate(habitId, 7),
       getCompletionsForDate(todayStr()),
+      getHabitWeekProgress(h, todayStr()),
     ]);
     setHistory(hist);
     setStreak(s);
     setRate30(r30);
     setRate7(r7);
     setTodayDone(todayCompleted.has(habitId));
+    setWeekProgress(progress);
   }
 
   async function handleToggleToday() {
@@ -62,7 +67,22 @@ export default function HabitDetail() {
 
   if (!habit) return null;
 
-  const totalDone = history.filter(d => d.done).length;
+  const totalDone = history.filter(d => d.done && d.scheduled).length;
+  const scheduledCount = history.filter(d => d.scheduled).length;
+  const bonusDone = history.filter(d => d.done && !d.scheduled).length;
+  const daysPerWeek = weekProgress?.target || parseWeeklyTarget(habit.schedule_days);
+  const scheduledToday = weekProgress?.dueToday ?? true;
+  const scheduleLabel = formatSchedule(daysPerWeek);
+  const weekRate = daysPerWeek === 7
+    ? rate7
+    : Math.min(100, Math.round(((weekProgress?.completed || 0) / daysPerWeek) * 100));
+  const todayAction = todayDone
+    ? daysPerWeek === 7 ? 'done today' : 'checked in today'
+    : daysPerWeek === 7
+      ? 'mark as done today'
+      : scheduledToday
+        ? `check in (${weekProgress?.remaining ?? daysPerWeek} left this week)`
+        : 'bonus check-in today';
 
   return (
     <>
@@ -71,7 +91,8 @@ export default function HabitDetail() {
         style={[styles.container, { backgroundColor: C.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-      >`n        {/* Header */}
+      >
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={[styles.backText, { color: C.text }]}>←</Text>
@@ -81,7 +102,7 @@ export default function HabitDetail() {
         {/* Habit title */}
         <View style={styles.titleRow}>
           <View style={[styles.emojiCircle, { backgroundColor: habit.color }]}>
-            <Text style={styles.emoji}>{habit.emoji}</Text>
+            <HabitIcon name={habit.emoji} size={26} color="#FFFFFF" />
           </View>
           <Text style={[styles.habitName, { color: C.text }]}>{habit.title}</Text>
         </View>
@@ -89,11 +110,11 @@ export default function HabitDetail() {
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
-            <Text style={[styles.statVal, { color: C.text }]}>🔥 {streak}</Text>
-            <Text style={[styles.statLbl, { color: C.textSecondary }]}>streak</Text>
+            <Text style={[styles.statVal, { color: C.text }]}>{streak}</Text>
+            <Text style={[styles.statLbl, { color: C.textSecondary }]}>{daysPerWeek === 7 ? 'day streak' : 'week streak'}</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
-            <Text style={[styles.statVal, { color: C.text }]}>{rate7}%</Text>
+            <Text style={[styles.statVal, { color: C.text }]}>{weekRate}%</Text>
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>this week</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: C.card }]}>
@@ -101,6 +122,9 @@ export default function HabitDetail() {
             <Text style={[styles.statLbl, { color: C.textSecondary }]}>30 days</Text>
           </View>
         </View>
+        <Text style={[styles.scheduleText, { color: C.textSecondary }]}>
+          goal {scheduleLabel}
+        </Text>
 
         {/* Today's check-in */}
         <TouchableOpacity
@@ -115,7 +139,7 @@ export default function HabitDetail() {
           activeOpacity={0.7}
         >
           <Text style={[styles.todayBtnText, { color: todayDone ? '#fff' : C.text }]}>
-            {todayDone ? '✓  done today' : 'mark as done today'}
+            {todayAction}
           </Text>
         </TouchableOpacity>
 
@@ -123,14 +147,18 @@ export default function HabitDetail() {
         <Text style={[styles.sectionLabel, { color: C.textSecondary }]}>last 30 days</Text>
         <View style={[styles.histCard, { backgroundColor: C.card }]}>
           <View style={styles.dotGrid}>
-            {history.map(({ date, done }) => {
+            {history.map(({ date, done, scheduled }) => {
               const isToday = date === todayStr();
               return (
                 <View
                   key={date}
                   style={[
                     styles.dot,
-                    { backgroundColor: done ? habit.color : C.border },
+                    scheduled
+                      ? { backgroundColor: done ? habit.color : C.border }
+                      : done
+                        ? { backgroundColor: habit.color, opacity: 0.35 }
+                        : { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border, opacity: 0.45 },
                     isToday && { borderWidth: 1.5, borderColor: C.text },
                   ]}
                 />
@@ -138,12 +166,17 @@ export default function HabitDetail() {
             })}
           </View>
           <Text style={[styles.histCaption, { color: C.textSecondary }]}>
-            {totalDone} out of 30 days completed
+            {totalDone} out of {scheduledCount} target days completed{bonusDone ? `, plus ${bonusDone} bonus` : ''}
           </Text>
         </View>
       </ScrollView>
     </>
   );
+}
+
+function formatSchedule(daysPerWeek) {
+  if (daysPerWeek === 7) return 'daily';
+  return `${daysPerWeek} days/week`;
 }
 
 const styles = StyleSheet.create({
@@ -157,7 +190,6 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: 28,
     alignItems: 'center', justifyContent: 'center',
   },
-  emoji: { fontSize: 26 },
   habitName: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, flex: 1 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
@@ -166,6 +198,7 @@ const styles = StyleSheet.create({
   },
   statVal: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   statLbl: { fontSize: 11, letterSpacing: 0.3 },
+  scheduleText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.2, marginTop: -8, marginBottom: 18 },
   todayBtn: {
     borderRadius: 999, borderWidth: 1.5,
     paddingVertical: 16, alignItems: 'center',

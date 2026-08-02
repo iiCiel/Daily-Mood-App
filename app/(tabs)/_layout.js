@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../src/context/ThemeContext';
+
+const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 
 function TabBar({ state, navigation }) {
   const C = useTheme();
@@ -15,7 +17,7 @@ function TabBar({ state, navigation }) {
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.bar, { backgroundColor: C.card, borderColor: C.border }]}>
+      <ImageBackground source={paperArt} style={styles.bar} imageStyle={styles.barImage}>
         {tabs.map((tab) => {
           const routeIndex = state.routes.findIndex((route) => route.name === tab.name);
           const isFocused = state.index === routeIndex;
@@ -28,7 +30,7 @@ function TabBar({ state, navigation }) {
             >
               <View style={[
                 styles.iconWrap,
-                { backgroundColor: isFocused ? C.primary : 'transparent' },
+                { backgroundColor: isFocused ? C.primary : 'rgba(255,255,255,0.54)' },
               ]}>
                 <Ionicons
                   name={isFocused ? tab.activeIcon : tab.icon}
@@ -42,7 +44,7 @@ function TabBar({ state, navigation }) {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ImageBackground>
     </View>
   );
 }
@@ -62,38 +64,50 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 18,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 2,
+    paddingHorizontal: 30,
+    backgroundColor: 'transparent',
   },
   bar: {
     flexDirection: 'row',
-    borderRadius: 18,
+    height: 68,
+    borderRadius: 26,
     borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    shadowColor: '#111827',
-    shadowOpacity: 0.08,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    borderColor: 'rgba(174,132,113,0.2)',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    overflow: 'hidden',
+    shadowColor: '#8A6A86',
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 7,
+  },
+  barImage: {
+    resizeMode: 'cover',
+    borderRadius: 26,
+    opacity: 0.92,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
-    minHeight: 48,
+    gap: 2,
+    minHeight: 56,
     justifyContent: 'center',
   },
   iconWrap: {
-    width: 34,
+    width: 32,
     height: 30,
-    borderRadius: 12,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
   label: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
+    fontFamily: 'Rounded',
   },
 });

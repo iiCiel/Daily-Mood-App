@@ -1,0 +1,19 @@
+node_modules/
+.expo/
+dist/
+web-build/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+.env
+
+# Local development artifacts
+.codex-remote-attachments/
+.vscode/
+android/
+ios/
+expo-*-qr.png

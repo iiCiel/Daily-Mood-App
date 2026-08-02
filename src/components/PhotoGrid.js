@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Image, TouchableOpacity, Text, StyleSheet, Dimensions } from 'react-native';
+import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { persistPhotoAsync } from '../lib/photoStorage';
@@ -8,11 +9,11 @@ import PhotoViewer from './PhotoViewer';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const PHOTO_SIZE = (SCREEN_WIDTH - 64 - 16) / 3;
 
-export default function PhotoGrid({ photos = [], onPhotosChange, editable = true }) {
+export default function PhotoGrid({ photos = [], onPhotosChange, editable = true, showLabel = true }) {
   const C = useTheme();
   const [viewingUri, setViewingUri] = useState(null);
 
-  const pickImage = async () => {
+  async function pickImage() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       alert('We need photo library access to add photos.');
@@ -25,12 +26,12 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
       selectionLimit: 10,
     });
     if (!result.canceled) {
-      const stored = await Promise.all(result.assets.map((a) => persistPhotoAsync(a.uri)));
+      const stored = await Promise.all(result.assets.map((asset) => persistPhotoAsync(asset.uri)));
       onPhotosChange([...photos, ...stored.filter(Boolean)]);
     }
-  };
+  }
 
-  const takePhoto = async () => {
+  async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       alert('We need camera access to take photos.');
@@ -41,14 +42,16 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
       const stored = await persistPhotoAsync(result.assets[0].uri);
       onPhotosChange([...photos, stored].filter(Boolean));
     }
-  };
+  }
 
-  const removePhoto = (index) => onPhotosChange(photos.filter((_, i) => i !== index));
+  function removePhoto(index) {
+    onPhotosChange(photos.filter((_, i) => i !== index));
+  }
 
   return (
     <View style={styles.container}>
       <PhotoViewer uri={viewingUri} onClose={() => setViewingUri(null)} />
-      <Text style={[styles.label, { color: C.textSecondary }]}>photos</Text>
+      {showLabel && <Text style={[styles.label, { color: C.textSecondary }]}>photos</Text>}
       <View style={styles.grid}>
         {photos.map((uri, index) => (
           <View key={uri + index} style={styles.photoWrapper}>
@@ -56,29 +59,20 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
               <Image source={{ uri }} style={styles.photo} />
             </TouchableOpacity>
             {editable && (
-              <TouchableOpacity
-                style={[styles.removeBtn, { backgroundColor: C.danger }]}
-                onPress={() => removePhoto(index)}
-              >
-                <Text style={styles.removeText}>✕</Text>
+              <TouchableOpacity style={[styles.removeBtn, { backgroundColor: C.danger }]} onPress={() => removePhoto(index)}>
+                <Ionicons name="close" size={12} color="#FFFFFF" />
               </TouchableOpacity>
             )}
           </View>
         ))}
         {editable && (
           <>
-            <TouchableOpacity
-              style={[styles.addBtn, { borderColor: C.border }]}
-              onPress={pickImage}
-            >
-              <Text style={styles.addIcon}>🖼</Text>
+            <TouchableOpacity style={[styles.addBtn, { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.56)' }]} onPress={pickImage}>
+              <Ionicons name="images-outline" size={22} color={C.primary} style={styles.addIcon} />
               <Text style={[styles.addText, { color: C.textSecondary }]}>gallery</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.addBtn, { borderColor: C.border }]}
-              onPress={takePhoto}
-            >
-              <Text style={styles.addIcon}>📷</Text>
+            <TouchableOpacity style={[styles.addBtn, { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.56)' }]} onPress={takePhoto}>
+              <Ionicons name="camera-outline" size={22} color={C.primary} style={styles.addIcon} />
               <Text style={[styles.addText, { color: C.textSecondary }]}>camera</Text>
             </TouchableOpacity>
           </>
@@ -89,22 +83,30 @@ export default function PhotoGrid({ photos = [], onPhotosChange, editable = true
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 20 },
-  label: { fontSize: 13, marginBottom: 10, letterSpacing: 0.3 },
+  container: { marginBottom: 0 },
+  label: { fontFamily: 'Rounded', fontSize: 13, fontWeight: '900', marginBottom: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photoWrapper: { position: 'relative' },
-  photo: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 12 },
+  photo: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 16 },
   removeBtn: {
-    position: 'absolute', top: -6, right: -6,
-    width: 22, height: 22, borderRadius: 11,
-    alignItems: 'center', justifyContent: 'center',
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   addBtn: {
-    width: PHOTO_SIZE, height: PHOTO_SIZE,
-    borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed',
-    alignItems: 'center', justifyContent: 'center',
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addIcon: { fontSize: 22, marginBottom: 4 },
-  addText: { fontSize: 11, letterSpacing: 0.2 },
+  addIcon: { marginBottom: 4 },
+  addText: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '900' },
 });

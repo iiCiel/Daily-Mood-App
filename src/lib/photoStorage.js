@@ -1,4 +1,8 @@
-import * as FileSystem from 'expo-file-system';
+// NOTE: must be the `/legacy` entry. In expo-file-system v19 (SDK 54) the main
+// entry only exports the new File/Directory API — documentDirectory is undefined
+// there and copyAsync/deleteAsync/makeDirectoryAsync throw at runtime, which
+// silently left photos sitting in the ImagePicker cache instead of persisting them.
+import * as FileSystem from 'expo-file-system/legacy';
 
 const PHOTO_DIR = FileSystem.documentDirectory
   ? `${FileSystem.documentDirectory}mood-photos/`

@@ -1,104 +1,68 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { useFocusEffect, router } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
-import AestheticBackground from '../../src/components/AestheticBackground';
+import GiftPhotoFrame from '../../src/components/GiftPhotoFrame';
+import HabitIcon from '../../src/components/HabitIcon';
 import MoodFace from '../../src/components/MoodFace';
-import { getPlannerEntry, getPlanningSummary } from '../../src/db/plannerDatabase';
-import { getSleepEntry, calcDuration } from '../../src/db/sleepDatabase';
-import { getGoals } from '../../src/db/goalsDatabase';
-import { getNotes } from '../../src/db/notesDatabase';
-import { getHabits, getCompletionsForDate, toggleCompletion } from '../../src/db/habitDatabase';
+import { MOODS } from '../../src/constants/theme';
+import { getHabits, getCompletionsForDate, getHabitWeekProgress, toggleCompletion } from '../../src/db/habitDatabase';
 import { getSessionsForDay } from '../../src/db/focusDatabase';
 import { getEntry, saveEntry } from '../../src/db/database';
-import { getCalorieDaySummary, getCalorieGoal } from '../../src/db/calorieDatabase';
-import { getLatestWeight } from '../../src/db/weightDatabase';
-import { MOODS } from '../../src/constants/theme';
+import StorybookHeroFade from '../../src/components/StorybookHeroFade';
+import { getStoryHeroHeight, STORY_TAB_BOTTOM_PADDING } from '../../src/constants/storybookLayout';
+
+const catsArt = require('../../assets/illustrations/storybook-cats.png');
+const paperArt = require('../../assets/illustrations/storybook-paper-rich.png');
 
 function todayStr() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function fmtDuration(mins) {
-  if (!mins) return null;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}`.trim() : `${m}m`;
+function clockLabel() {
+  return new Date()
+    .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .replace(/\s?[AP]M$/i, '');
 }
-
-const TOOL_ICONS = {
-  Planner: '📋',
-  Sleep: '🌙',
-  Goals: '🎯',
-  Notes: '📝',
-};
 
 export default function DashboardScreen() {
   const C = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const today = todayStr();
-  const hour = new Date().getHours();
-
-  const [planner, setPlanner] = useState(null);
-  const [planningSummary, setPlanningSummary] = useState(null);
-  const [sleep, setSleep] = useState(null);
-  const [goals, setGoals] = useState([]);
-  const [notes, setNotes] = useState([]);
   const [habits, setHabits] = useState([]);
   const [completed, setCompleted] = useState(new Set());
+  const [habitProgress, setHabitProgress] = useState({});
   const [sessions, setSessions] = useState([]);
   const [todayMood, setTodayMood] = useState(null);
-  const [calorieSummary, setCalorieSummary] = useState(null);
-  const [calorieGoal, setCalorieGoal] = useState(2000);
-  const [latestWeight, setLatestWeight] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [clockNow, setClockNow] = useState(clockLabel());
 
   useFocusEffect(useCallback(() => {
     load();
   }, []));
 
+  useEffect(() => {
+    const id = setInterval(() => setClockNow(clockLabel()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
   async function load() {
-    setLoadError(false);
-    try {
-    const [p, planSummary, sl, g, n, h, done, focusSessions, moodEntry, cals, cGoal, wt] = await Promise.all([
-      getPlannerEntry(today),
-      getPlanningSummary(today),
-      getSleepEntry(today),
-      getGoals(),
-      getNotes(),
+    const [h, done, focusSessions, moodEntry] = await Promise.all([
       getHabits(),
       getCompletionsForDate(today),
       getSessionsForDay(today),
       getEntry(today),
-      getCalorieDaySummary(today),
-      getCalorieGoal(),
-      getLatestWeight(),
     ]);
-    setPlanner(p);
-    setPlanningSummary(planSummary);
-    setSleep(sl);
-    setGoals(g);
-    setNotes(n);
+    const progressPairs = await Promise.all(h.map(async (habit) => [habit.id, await getHabitWeekProgress(habit, today)]));
     setHabits(h);
     setCompleted(done);
+    setHabitProgress(Object.fromEntries(progressPairs));
     setSessions(focusSessions);
     setTodayMood(moodEntry);
-    setCalorieSummary(cals);
-    setCalorieGoal(cGoal);
-    setLatestWeight(wt);
-    } catch (e) {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function toggleHabit(id) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await toggleCompletion(id, today);
-    setCompleted(await getCompletionsForDate(today));
+    setLoading(false);
   }
 
   async function handleQuickMood(value) {
@@ -110,367 +74,222 @@ export default function DashboardScreen() {
       existing?.note || '',
       existing?.photos?.map((p) => p.uri) || [],
       existing?.tags || [],
-      existing?.gratitude || []
+      existing?.gratitude || [],
+      existing?.productivity || null,
+      existing?.prayers || {}
     );
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTodayMood(await getEntry(today));
   }
 
-  const completedHabits = habits.filter((h) => completed.has(h.id)).length;
-  const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const activeGoals = goals.filter(g => !g.completed);
-  const sleepDur = sleep ? fmtDuration(calcDuration(sleep.bedtime, sleep.wake_time)) : null;
+  async function toggleHabit(id) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await toggleCompletion(id, today);
+    await load();
+  }
+
   const moodObj = todayMood ? MOODS.find((m) => m.value === todayMood.mood) : null;
+  const previewHabits = [...habits].sort((a, b) => Number(habitProgress[b.id]?.dueToday) - Number(habitProgress[a.id]?.dueToday));
+  const focusMinutes = sessions.filter((s) => s.completed).reduce((sum, s) => sum + s.duration, 0);
+  const heroHeight = getStoryHeroHeight(screenHeight, { min: 500, max: 560, ratio: 0.56 });
 
-  if (loading) return (
-    <View style={[styles.container, { backgroundColor: C.background, alignItems: 'center', justifyContent: 'center' }]}>
-      <Text style={{ color: C.textSecondary, fontSize: 14 }}>loading...</Text>
-    </View>
-  );
-
-  if (loadError) return (
-    <View style={[styles.container, { backgroundColor: C.background, alignItems: 'center', justifyContent: 'center', gap: 12 }]}>
-      <Text style={{ color: C.textSecondary, fontSize: 14 }}>couldn't load your data</Text>
-      <TouchableOpacity onPress={load} style={{ backgroundColor: C.card, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}>
-        <Text style={{ color: C.text, fontSize: 14 }}>try again</Text>
-      </TouchableOpacity>
-    </View>
-  );
-  const completedSessions = sessions.filter((s) => s.completed).length;
+  if (loading) {
+    return <View style={[styles.loading, { backgroundColor: C.background }]}><Text style={[styles.body, { color: C.textSecondary }]}>loading...</Text></View>;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      <AestheticBackground />
-      <ScrollView
-        style={{ flex: 1, backgroundColor: 'transparent' }}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-
-      {/* Header */}
-      <View style={styles.todayHeader}>
-        <View>
-          <Text style={[styles.greeting, { color: C.textSecondary }]}>{greeting}</Text>
-          <Text style={[styles.dateLabel, { color: C.text }]}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} hitSlop={10}>
-          <Text style={[styles.settingsBtn, { color: C.textSecondary }]}>⚙</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Hero */}
-      <View style={[styles.heroCard, { backgroundColor: C.card }]}>
-        <View style={[styles.heroAccent, { backgroundColor: C.primary }]} />
-        <View style={[styles.heroAccent2, { backgroundColor: '#C5A8E8' }]} />
-        <View style={styles.heroInner}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.heroGreeting, { color: C.textSecondary }]}>{greeting}</Text>
-            <Text style={[styles.heroTitle, { color: C.text }]}>Ready to find{'\n'}your flow?</Text>
-            <Text style={[styles.heroSub, { color: C.textSecondary }]}>
-              {habits.length - completedHabits > 0
-                ? `${habits.length - completedHabits} habits remaining today`
-                : habits.length > 0 ? 'all habits done' : 'start building your routine'}
-            </Text>
-          </View>
-          <View style={[styles.flowBadge, { backgroundColor: C.primaryLight, borderColor: C.primary }]}>
-            <Text style={[styles.flowBadgeNum, { color: C.primary }]}>{completedHabits}</Text>
-            <Text style={[styles.flowBadgeSlash, { color: C.textSecondary }]}>/{habits.length}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Stats row */}
-      <View style={styles.statsRow}>
-        <StatPill bg={C.mint}    label="mood"   value={moodObj ? moodObj.label : '—'}                                      color={moodObj?.color || C.primary} />
-        <StatPill bg={C.lavender} label="habits" value={habits.length ? `${completedHabits}/${habits.length}` : '—'}       color="#715B86" />
-        <StatPill bg={C.sand}    label="focus"  value={focusMinutes > 0 ? `${focusMinutes}m` : '—'}                        color={C.primary} />
-        <StatPill bg={C.peach}   label="tasks"  value={planningSummary?.dueTasks > 0 ? `${planningSummary.dueTasks} due` : '✓'} color={C.accent} />
-      </View>
-
-      {/* Deep Work */}
-      <TouchableOpacity
-        style={[styles.sessionCard, { backgroundColor: C.primary }]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.navigate('/(tabs)/focus');
-        }}
-        activeOpacity={0.82}
-      >
-        <View style={styles.sessionGlow} />
-        <View style={styles.sessionTop}>
-          <View>
-            <Text style={styles.sessionKicker}>DEEP WORK</Text>
-            <Text style={styles.sessionTitle}>Start a Session</Text>
-          </View>
-          <View style={styles.sessionChip}>
-            <Text style={styles.sessionChipText}>{completedSessions} today</Text>
-          </View>
-        </View>
-        <Text style={styles.sessionSub}>Block distractions and dive into focused work.</Text>
-        <View style={styles.sessionBottom}>
-          <View>
-            <Text style={styles.sessionTime}>25:00</Text>
-            <Text style={styles.sessionTiny}>focus time</Text>
-          </View>
-          <View style={styles.playBtn}>
-            <Text style={[styles.playText, { color: C.primary }]}>▶</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      {/* Quick Mood */}
-      <View style={[styles.card, { backgroundColor: C.card }]}>
-        <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: C.text }]}>how are you feeling?</Text>
-          {moodObj && <MoodFace color={moodObj.color} moodValue={moodObj.value} size={24} />}
-        </View>
-        <View style={styles.moodRow}>
-          {MOODS.map((mood) => {
-            const isSelected = moodObj?.value === mood.value;
-            return (
-              <TouchableOpacity
-                key={mood.value}
-                style={[styles.moodItem, { backgroundColor: isSelected ? mood.color + '22' : C.background }, isSelected && { borderColor: mood.color, borderWidth: 1.5 }]}
-                onPress={() => handleQuickMood(mood.value)}
-                activeOpacity={0.7}
-              >
-                <MoodFace color={mood.color} moodValue={mood.value} size={32} />
-                <Text style={[styles.moodLabel, { color: isSelected ? mood.color : C.textSecondary }]}>{mood.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Habits today */}
-      <View style={[styles.card, { backgroundColor: C.card }]}>
-        <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: C.text }]}>habits</Text>
-          <TouchableOpacity onPress={() => router.navigate('/(tabs)/habits')}>
-            <Text style={[styles.linkText, { color: C.primary }]}>all →</Text>
-          </TouchableOpacity>
-        </View>
-        {habits.length === 0 ? (
-          <Text style={[styles.emptyText, { color: C.textSecondary }]}>no habits yet — add some in the Habits tab</Text>
-        ) : habits.slice(0, 5).map((habit) => {
-          const done = completed.has(habit.id);
-          return (
-            <TouchableOpacity
-              key={habit.id}
-              style={[styles.habitRow, { backgroundColor: done ? C.primaryLight : C.background }]}
-              onPress={() => toggleHabit(habit.id)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.habitEmoji, { backgroundColor: done ? habit.color : C.card }]}>
-                <Text style={{ fontSize: 15 }}>{habit.emoji}</Text>
-              </View>
-              <Text style={[styles.habitTitle, { color: done ? C.textSecondary : C.text }, done && { textDecorationLine: 'line-through', opacity: 0.55 }]} numberOfLines={1}>{habit.title}</Text>
-              <View style={[styles.habitCheck, { borderColor: done ? C.primary : C.border, backgroundColor: done ? C.primary : 'transparent' }]}>
-                {done && <Text style={styles.checkMark}>✓</Text>}
-              </View>
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+        <ImageBackground source={catsArt} style={[styles.heroImage, { height: heroHeight }]} imageStyle={styles.heroImageInner}>
+          <StorybookHeroFade />
+          <View style={styles.topBar}>
+            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: C.white }]} onPress={() => router.push('/(tabs)/settings')}>
+              <Ionicons name="settings-outline" size={17} color={C.text} />
             </TouchableOpacity>
-          );
-        })}
-        {habits.length > 0 && (
-          <View style={[styles.progressBar, { backgroundColor: C.background }]}>
-            <View style={[styles.progressFill, { width: `${(completedHabits / habits.length) * 100}%`, backgroundColor: completedHabits === habits.length ? '#6CC97C' : C.primary }]} />
           </View>
-        )}
-      </View>
 
-      {/* Tool cards */}
-      <View style={styles.toolsGrid}>
-        <ToolCard C={C} title="Sleep"     sub={sleepDur || 'log sleep'}                                                       icon="🌙"  onPress={() => router.push('/sleep')} />
-        <ToolCard C={C} title="Calories"  sub={calorieSummary ? `${calorieSummary.calories}/${calorieGoal} kcal` : 'log food'} icon="🍽"  onPress={() => router.push('/calories')} />
-        <ToolCard C={C} title="Weight"    sub={latestWeight ? `${latestWeight.weight} ${latestWeight.unit}` : 'log weight'}    icon="⚖️"  onPress={() => router.push('/weight')} />
-        <ToolCard C={C} title="Goals"     sub={`${activeGoals.length} active`}                                                 icon="🎯"  onPress={() => router.push('/goals')} />
-        <ToolCard C={C} title="Notes"     sub={notes.length ? `${notes.length} notes` : 'write a note'}                       icon="📝"  onPress={() => router.push('/notes')} />
-        <ToolCard C={C} title="Planner"   sub={planningSummary ? `${planningSummary.dueTasks} due today` : 'daily plan'}       icon="📋"  onPress={() => router.push('/planner')} />
-      </View>
+          <View style={styles.heroCopy}>
+            <Text style={[styles.time, { color: C.text }]}>{clockNow}</Text>
+            <Text style={[styles.script, { color: C.text }]}>You can do it beautiful</Text>
+          </View>
 
-      {/* Bottom links */}
-      <View style={styles.bottomRow}>
-        <TouchableOpacity style={[styles.bottomBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/insights')} activeOpacity={0.75}>
-          <Text style={styles.bottomBtnEmoji}>📊</Text>
-          <Text style={[styles.bottomBtnText, { color: C.primary }]}>Insights</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.bottomBtn, { backgroundColor: C.card, borderColor: C.border }]}
-          onPress={() => router.push('/weekly-review')}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.bottomBtnEmoji}>📅</Text>
-          <Text style={[styles.bottomBtnText, { color: C.primary }]}>Weekly review</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        </ImageBackground>
+
+        <ImageBackground source={paperArt} style={[styles.sheet, styles.sheetContent]} imageStyle={styles.sheetImage}>
+          <View pointerEvents="none" style={styles.sheetDecor}>
+            <View style={[styles.sheetBlobLarge, { backgroundColor: C.lavender }]} />
+            <View style={[styles.sheetBlobSmall, { backgroundColor: C.peach }]} />
+            <Ionicons name="musical-note" size={24} color={C.primary} style={styles.decorNoteOne} />
+            <Ionicons name="sparkles-outline" size={21} color={C.teal} style={styles.decorNoteTwo} />
+          </View>
+          <View style={styles.storyRow}>
+            <StoryTile C={C} label="Mood" value={moodObj?.label || 'Pick'} tone={moodObj?.color || C.primary} icon="happy-outline" onPress={() => router.push('/(tabs)/mood')} />
+            <StoryTile C={C} label="Focus" value={`${focusMinutes || 0}m`} tone={C.teal} icon="timer-outline" onPress={() => router.push('/(tabs)/focus')} />
+          </View>
+
+          <View style={styles.giftRow}>
+            <GiftPhotoFrame id="life-main" C={C} style={styles.mainMemory} />
+            <GiftPhotoFrame id="life-side" C={C} compact style={styles.sideMemory} />
+          </View>
+
+          <TouchableOpacity style={[styles.wordleCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/wordle')} activeOpacity={0.78}>
+            <View style={[styles.wordleIcon, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="grid-outline" size={20} color={C.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.wordleTitle, { color: C.text }]}>Play Wordle</Text>
+              <Text style={[styles.wordleSub, { color: C.textSecondary }]}>A new random word every round</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.workoutCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/workout')} activeOpacity={0.78}>
+            <View style={[styles.workoutIcon, { backgroundColor: C.mint }]}>
+              <Ionicons name="barbell-outline" size={22} color={C.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.wordleTitle, { color: C.text }]}>Workout tracker</Text>
+              <Text style={[styles.wordleSub, { color: C.textSecondary }]}>Routines, sets, reps & progress</Text>
+            </View>
+            <View style={[styles.workoutGo, { backgroundColor: C.primaryLight }]}>
+              <Ionicons name="play" size={15} color={C.primary} />
+            </View>
+          </TouchableOpacity>
+
+          <Text style={[styles.sectionTitle, { color: C.text }]}>How does today feel?</Text>
+          <View style={styles.moodRow}>
+            {MOODS.map((mood) => (
+              <TouchableOpacity key={mood.value} style={[styles.moodButton, { backgroundColor: C.card, borderColor: todayMood?.mood === mood.value ? mood.color : C.border }]} onPress={() => handleQuickMood(mood.value)}>
+                <MoodFace color={mood.color} moodValue={mood.value} size={38} />
+                <Text style={[styles.moodLabel, { color: C.textSecondary }]}>{mood.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Tiny habits</Text>
+          <View style={styles.habitStack}>
+            {habits.length === 0 ? (
+              <TouchableOpacity style={[styles.emptyCard, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => router.push('/(tabs)/habits')}>
+                <Text style={[styles.body, { color: C.textSecondary }]}>Add one soft routine for today</Text>
+              </TouchableOpacity>
+            ) : previewHabits.slice(0, 4).map((habit) => {
+              const done = completed.has(habit.id);
+              const scheduled = habitProgress[habit.id]?.dueToday || done;
+              return (
+                <TouchableOpacity key={habit.id} style={[styles.habitCard, { backgroundColor: C.card, borderColor: done ? habit.color : C.border }, !scheduled && styles.offDayHabit]} onPress={() => toggleHabit(habit.id)}>
+                  <View style={[styles.habitIcon, { backgroundColor: done ? habit.color : C.primaryLight }]}>
+                    <HabitIcon name={habit.emoji} size={18} color={done ? C.white : habit.color} />
+                  </View>
+                  <Text style={[styles.habitTitle, { color: C.text }, done && { textDecorationLine: 'line-through', color: C.textSecondary }]}>{habit.title}</Text>
+                  <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={done ? habit.color : C.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ImageBackground>
+      </ScrollView>
     </View>
   );
 }
 
-function ToolCard({ C, title, sub, icon, onPress }) {
+function StoryTile({ C, label, value, tone, icon, onPress }) {
   return (
-    <TouchableOpacity style={[styles.toolCard, { backgroundColor: C.card, borderWidth: 1, borderColor: C.border }]} onPress={onPress} activeOpacity={0.75}>
-      <View style={styles.toolCardTop}>
-        <Text style={styles.toolIcon}>{icon}</Text>
-        <Text style={[styles.toolArrow, { color: C.border }]}>›</Text>
-      </View>
-      <Text style={[styles.toolTitle, { color: C.text }]}>{title}</Text>
-      <Text style={[styles.toolSub, { color: C.textSecondary }]} numberOfLines={1}>{sub}</Text>
+    <TouchableOpacity style={[styles.storyTile, { backgroundColor: C.card, borderColor: C.border }]} onPress={onPress} activeOpacity={0.76}>
+      <Ionicons name={icon} size={18} color={tone} />
+      <Text style={[styles.tileValue, { color: tone }]}>{value}</Text>
+      <Text style={[styles.tileLabel, { color: C.textSecondary }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-function StatPill({ C, bg, label, value, color }) {
-  return (
-    <View style={[styles.statPill, { backgroundColor: bg }]}>
-      <Text style={[styles.statValue, { color: color }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: color, opacity: 0.7 }]}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, position: 'relative' },
-  content: { padding: 20, paddingTop: 58, paddingBottom: 32 },
-
-  // Today header
-  todayHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 },
-  greeting: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
-  dateLabel: { fontSize: 20, fontWeight: '900' },
-  settingsBtn: { fontSize: 20, marginTop: 4 },
-
-  // Hero
-  heroCard: {
-    borderRadius: 26,
-    padding: 20,
-    marginBottom: 16,
+  container: { flex: 1 },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  pageScroll: { flex: 1 },
+  pageContent: { paddingBottom: 0 },
+  heroImage: { paddingTop: 56, paddingHorizontal: 24, justifyContent: 'space-between' },
+  heroImageInner: { resizeMode: 'cover' },
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+  smallTime: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
+  circleBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  heroCopy: { alignItems: 'center', marginTop: -26 },
+  time: { fontFamily: 'Rounded', fontSize: 48, fontWeight: '900' },
+  script: { fontFamily: 'Story', fontSize: 40, lineHeight: 44, textAlign: 'center', marginTop: 10, maxWidth: 270 },
+  sheet: {
+    marginTop: 0,
+    minHeight: 520,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
     overflow: 'hidden',
-    shadowColor: '#1A0A00',
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
   },
-  heroAccent: {
-    position: 'absolute',
-    top: -42,
-    right: -42,
-    width: 164,
-    height: 164,
-    borderRadius: 82,
-    opacity: 0.12,
+  sheetImage: {
+    resizeMode: 'cover',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
   },
-  heroAccent2: {
-    position: 'absolute',
-    bottom: -34,
-    left: -34,
-    width: 124,
-    height: 124,
-    borderRadius: 62,
-    opacity: 0.18,
+  sheetContent: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: STORY_TAB_BOTTOM_PADDING,
   },
-  heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  heroGreeting: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
-  heroTitle: { fontSize: 26, lineHeight: 31, fontWeight: '900', letterSpacing: 0 },
-  heroSub: { marginTop: 8, fontSize: 12, lineHeight: 17, fontWeight: '700' },
-  flowBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  flowBadgeNum: { fontSize: 26, fontWeight: '900', letterSpacing: 0 },
-  flowBadgeSlash: { fontSize: 14, fontWeight: '800', marginTop: 4 },
-
-  // Stats row
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  statPill: { flex: 1, borderRadius: 18, paddingVertical: 14, alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 14, fontWeight: '900' },
-  statLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
-
-  // Deep Work
-  sessionCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    minHeight: 158,
+  sheetDecor: {
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
-    elevation: 4,
   },
-  sessionGlow: {
+  sheetBlobLarge: {
     position: 'absolute',
-    top: -22,
-    right: -22,
-    width: 142,
-    height: 142,
-    borderRadius: 71,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    right: -72,
+    top: 36,
+    opacity: 0.45,
   },
-  sessionTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  sessionChip: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  sheetBlobSmall: {
+    position: 'absolute',
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    left: -42,
+    top: 185,
+    opacity: 0.5,
   },
-  sessionChipText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
-  sessionKicker: { color: 'rgba(255,255,255,0.66)', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  sessionTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', marginTop: 6 },
-  sessionSub: { color: 'rgba(255,255,255,0.86)', fontSize: 12, lineHeight: 17, marginTop: 8, maxWidth: 260 },
-  sessionBottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18 },
-  sessionTime: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: 0 },
-  sessionTiny: { color: 'rgba(255,255,255,0.66)', fontSize: 10, fontWeight: '900', textTransform: 'uppercase', marginTop: -2 },
-  playBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
+  decorNoteOne: {
+    position: 'absolute',
+    right: 34,
+    top: 178,
+    opacity: 0.28,
+    transform: [{ rotate: '12deg' }],
   },
-  playText: { fontSize: 14, fontWeight: '900', marginLeft: 2 },
-
-  // Cards
-  card: { borderRadius: 20, padding: 16, marginBottom: 14, elevation: 2 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  cardTitle: { fontSize: 16, fontWeight: '900' },
-  linkText: { fontSize: 12, fontWeight: '800' },
-  emptyText: { fontSize: 13, fontWeight: '600' },
-
-  // Mood
-  moodRow: { flexDirection: 'row', gap: 4 },
-  moodItem: { flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 10, gap: 5, borderWidth: 1, borderColor: 'transparent' },
-  moodLabel: { fontSize: 9, fontWeight: '800', textTransform: 'capitalize' },
-
-  // Habits
-  habitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, padding: 10, marginBottom: 6 },
-  habitEmoji: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  habitTitle: { flex: 1, fontSize: 14, fontWeight: '700' },
-  habitCheck: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  checkMark: { color: '#fff', fontSize: 11, fontWeight: '900' },
-  progressBar: { height: 4, borderRadius: 2, overflow: 'hidden', marginTop: 10 },
-  progressFill: { height: 4, borderRadius: 2 },
-
-  // Tool cards
-  toolsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-  toolCard: { width: '47%', borderRadius: 18, padding: 14, minHeight: 86, justifyContent: 'space-between', elevation: 1 },
-  toolCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  toolIcon: { fontSize: 20 },
-  toolArrow: { fontSize: 18, fontWeight: '300' },
-  toolTitle: { fontSize: 14, fontWeight: '900' },
-  toolSub: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-
-  // Bottom
-  bottomRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  bottomBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 16, paddingVertical: 13, borderWidth: 1 },
-  bottomBtnEmoji: { fontSize: 14 },
-  bottomBtnText: { fontSize: 12, fontWeight: '900' },
+  decorNoteTwo: {
+    position: 'absolute',
+    left: 34,
+    top: 86,
+    opacity: 0.22,
+    transform: [{ rotate: '-10deg' }],
+  },
+  storyRow: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  storyTile: { flex: 1, borderRadius: 20, borderWidth: 1, padding: 13, minHeight: 106, justifyContent: 'space-between', shadowColor: '#7D88B8', shadowOpacity: 0.11, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
+  tileValue: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900' },
+  tileLabel: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800' },
+  giftRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 24 },
+  mainMemory: { flex: 1, maxWidth: 178, minHeight: 220 },
+  sideMemory: { flex: 1, maxWidth: 178, minHeight: 220 },
+  wordleCard: { minHeight: 68, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24, shadowColor: '#7D88B8', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
+  workoutCard: { minHeight: 72, borderRadius: 22, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24, shadowColor: '#7D88B8', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 4 },
+  workoutIcon: { width: 46, height: 46, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  workoutGo: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  wordleIcon: { width: 44, height: 44, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  wordleTitle: { fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
+  wordleSub: { fontFamily: 'Rounded', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  sectionTitle: { fontFamily: 'Rounded', fontSize: 18, fontWeight: '900', marginBottom: 12 },
+  moodRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+  moodButton: { flex: 1, alignItems: 'center', borderRadius: 18, borderWidth: 1, paddingVertical: 10, gap: 6 },
+  moodLabel: { fontFamily: 'Rounded', fontSize: 9, fontWeight: '900' },
+  habitStack: { gap: 10 },
+  habitCard: { minHeight: 62, borderRadius: 20, borderWidth: 1, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  offDayHabit: { opacity: 0.72 },
+  habitIcon: { width: 40, height: 40, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  habitTitle: { flex: 1, fontFamily: 'Rounded', fontSize: 15, fontWeight: '900' },
+  emptyCard: { borderRadius: 20, borderWidth: 1, padding: 18 },
+  body: { fontFamily: 'Rounded', fontSize: 14, fontWeight: '800' },
 });

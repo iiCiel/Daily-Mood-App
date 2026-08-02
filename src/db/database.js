@@ -108,6 +108,7 @@ async function _initDatabase() {
       title TEXT NOT NULL,
       emoji TEXT DEFAULT '✦',
       color TEXT DEFAULT '#C5A8E8',
+      schedule_days TEXT DEFAULT '[0,1,2,3,4,5,6]',
       created_at TEXT NOT NULL,
       archived INTEGER DEFAULT 0
     );
@@ -189,6 +190,62 @@ async function _initDatabase() {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_weight_date ON weight_entries(date);
+    CREATE TABLE IF NOT EXISTS workout_routines (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS workout_routine_exercises (
+      id TEXT PRIMARY KEY,
+      routine_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      muscle TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      target_sets INTEGER NOT NULL DEFAULT 3,
+      target_reps INTEGER NOT NULL DEFAULT 8,
+      target_weight REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (routine_id) REFERENCES workout_routines(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS workout_sessions (
+      id TEXT PRIMARY KEY,
+      routine_id TEXT,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      duration_minutes INTEGER NOT NULL DEFAULT 0,
+      total_sets INTEGER NOT NULL DEFAULT 0,
+      total_volume REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS workout_session_exercises (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      exercise_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      muscle TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (session_id) REFERENCES workout_sessions(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS workout_sets (
+      id TEXT PRIMARY KEY,
+      session_exercise_id TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      weight REAL NOT NULL DEFAULT 0,
+      reps INTEGER NOT NULL DEFAULT 0,
+      prev_weight REAL NOT NULL DEFAULT 0,
+      prev_reps INTEGER NOT NULL DEFAULT 0,
+      completed INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (session_exercise_id) REFERENCES workout_session_exercises(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_workout_routine_exercises ON workout_routine_exercises(routine_id);
+    CREATE INDEX IF NOT EXISTS idx_workout_sessions_status ON workout_sessions(status, started_at);
+    CREATE INDEX IF NOT EXISTS idx_workout_session_exercises ON workout_session_exercises(session_id);
+    CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON workout_sets(session_exercise_id);
   `);
   // Migrations for existing installs
   try { await database.runAsync('ALTER TABLE tasks ADD COLUMN target_pomodoros INTEGER DEFAULT 1'); } catch {}
@@ -208,7 +265,10 @@ async function _initDatabase() {
   try { await database.runAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date)'); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN tags TEXT DEFAULT '[]'"); } catch {}
   try { await database.runAsync("ALTER TABLE entries ADD COLUMN gratitude TEXT DEFAULT '[]'"); } catch {}
+  try { await database.runAsync('ALTER TABLE entries ADD COLUMN productivity INTEGER'); } catch {}
+  try { await database.runAsync("ALTER TABLE entries ADD COLUMN prayers TEXT DEFAULT '{}'"); } catch {}
   try { await database.runAsync('ALTER TABLE pomodoro_sessions ADD COLUMN label TEXT'); } catch {}
+  try { await database.runAsync("ALTER TABLE habits ADD COLUMN schedule_days TEXT DEFAULT '[0,1,2,3,4,5,6]'"); } catch {}
   await database.runAsync(
     `INSERT OR IGNORE INTO projects (id, name, color, status, notes, archived, created_at, updated_at)
      VALUES ('default-project', 'Personal', '#4A7856', 'active', NULL, 0, datetime('now'), datetime('now'))`
@@ -229,7 +289,7 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
 
-export async function saveEntry(date, mood, note, photoUris = [], tags = [], gratitude = []) {
+export async function saveEntry(date, mood, note, photoUris = [], tags = [], gratitude = [], productivity = null, prayers = {}) {
   const database = await getDatabase();
   const existing = await database.getFirstAsync(
     'SELECT id FROM entries WHERE date = ?',
@@ -240,16 +300,17 @@ export async function saveEntry(date, mood, note, photoUris = [], tags = [], gra
   const now = new Date().toISOString();
   const tagsJson = JSON.stringify(tags || []);
   const gratitudeJson = JSON.stringify(gratitude || []);
+  const prayersJson = JSON.stringify(prayers || {});
 
   if (existing) {
     await database.runAsync(
-      'UPDATE entries SET mood = ?, note = ?, tags = ?, gratitude = ?, updated_at = ?, synced = 0 WHERE id = ?',
-      [mood, note, tagsJson, gratitudeJson, now, entryId]
+      'UPDATE entries SET mood = ?, note = ?, tags = ?, gratitude = ?, productivity = ?, prayers = ?, updated_at = ?, synced = 0 WHERE id = ?',
+      [mood, note, tagsJson, gratitudeJson, productivity, prayersJson, now, entryId]
     );
   } else {
     await database.runAsync(
-      'INSERT INTO entries (id, date, mood, note, tags, gratitude, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [entryId, date, mood, note, tagsJson, gratitudeJson, now, now]
+      'INSERT INTO entries (id, date, mood, note, tags, gratitude, productivity, prayers, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [entryId, date, mood, note, tagsJson, gratitudeJson, productivity, prayersJson, now, now]
     );
   }
 
@@ -302,7 +363,9 @@ export async function getEntry(date) {
   try { parsedTags = JSON.parse(entry.tags || '[]'); } catch {}
   let parsedGratitude = [];
   try { parsedGratitude = JSON.parse(entry.gratitude || '[]'); } catch {}
-  return { ...entry, photos, tags: parsedTags, gratitude: parsedGratitude };
+  let parsedPrayers = {};
+  try { parsedPrayers = JSON.parse(entry.prayers || '{}'); } catch {}
+  return { ...entry, photos, tags: parsedTags, gratitude: parsedGratitude, prayers: parsedPrayers };
 }
 
 export async function getEntries(limit = 50, offset = 0) {

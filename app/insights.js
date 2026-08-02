@@ -79,6 +79,7 @@ export default function InsightsScreen() {
   const maxMealCalories = calories
     ? Math.max(1, ...MEALS.map((meal) => calories.mealTotals[meal.key]?.calories || 0))
     : 1;
+  const habitsDueToday = habits?.todayDue ?? habits?.total ?? 0;
 
   return (
     <>
@@ -234,7 +235,7 @@ export default function InsightsScreen() {
             <View style={s.row}>
               <View style={s.mini}><Text style={[s.miniNum, { color: C.text }]}>{habits.rate30}%</Text><Text style={[s.miniLbl, { color: C.textSecondary }]}>30-day rate</Text></View>
               <View style={s.mini}><Text style={[s.miniNum, { color: C.text }]}>{habits.bestStreak}d</Text><Text style={[s.miniLbl, { color: C.textSecondary }]}>best streak</Text></View>
-              <View style={s.mini}><Text style={[s.miniNum, { color: C.text }]}>{habits.todayDone}/{habits.total}</Text><Text style={[s.miniLbl, { color: C.textSecondary }]}>today</Text></View>
+              <View style={s.mini}><Text style={[s.miniNum, { color: C.text }]}>{habits.todayDone}/{habitsDueToday}</Text><Text style={[s.miniLbl, { color: C.textSecondary }]}>due today</Text></View>
             </View>
             <View style={[s.bigTrack, { backgroundColor: C.border }]}>
               <View style={[s.bigFill, { width: `${habits.rate30}%`, backgroundColor: '#6CC97C' }]} />

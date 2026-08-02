@@ -1,36 +1,43 @@
 import React, { useState } from 'react';
 import {
-  View,
+  ImageBackground,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  ScrollView,
+  View,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Stack, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import MoodFace from '../src/components/MoodFace';
-import { COLORS, MOODS } from '../src/constants/theme';
 import { useTheme } from '../src/context/ThemeContext';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const paperArt = require('../assets/illustrations/storybook-paper-rich.png');
+const catsArt = require('../assets/illustrations/storybook-cats.png');
+const focusArt = require('../assets/illustrations/storybook-focus.png');
+const journalArt = require('../assets/illustrations/storybook-calm-cat.png');
 
 const SLIDES = [
   {
-    title: 'your daily mood,\ncaptured.',
-    body: 'a simple place to track how you feel each day. no pressure, just a moment for you.',
-    visual: 'faces',
+    title: 'Daily Mood',
+    script: 'a softer way to check in',
+    body: 'Pick a mood, write a little note, and let the day become part of your story.',
+    image: catsArt,
+    icon: 'happy-outline',
   },
   {
-    title: 'look back,\nsee patterns.',
-    body: 'your calendar fills up with color as you log each day. watch your mood story unfold.',
-    visual: 'calendar',
+    title: 'Gentle Focus',
+    script: 'small sessions count',
+    body: 'Start a focus session, name what matters, and see your minutes add up.',
+    image: focusArt,
+    icon: 'timer-outline',
   },
   {
-    title: 'takes 10 seconds.\nfeels good.',
-    body: 'tap a mood, write a note if you feel like it. that\'s it. you\'re done.',
-    visual: 'streak',
+    title: 'Your Journal',
+    script: 'look back without pressure',
+    body: 'Your calendar fills with reflections, patterns, habits, and tiny wins.',
+    image: journalArt,
+    icon: 'book-outline',
   },
 ];
 
@@ -40,205 +47,111 @@ export default function OnboardingScreen() {
   const slide = SLIDES[page];
   const isLast = page === SLIDES.length - 1;
 
+  async function finish() {
+    await AsyncStorage.setItem('onboarding_done', 'true');
+    router.replace('/(tabs)/life');
+  }
+
   async function handleNext() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isLast) {
-      await AsyncStorage.setItem('onboarding_done', 'true');
-      router.replace('/');
+      await finish();
     } else {
-      setPage(page + 1);
+      setPage((p) => p + 1);
     }
   }
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.container, { backgroundColor: C.background }]}>
-        {/* Visual */}
-        <View style={styles.visual}>
-          {slide.visual === 'faces' && (
-            <View style={styles.facesGrid}>
-              {[
-                [5, 4, 3],
-                [2, 1, 4],
-                [3, 5, 2],
-              ].map((row, r) => (
-                <View key={r} style={styles.faceRow}>
-                  {row.map((v, i) => (
-                    <MoodFace
-                      key={i}
-                      color={MOODS.find((m) => m.value === v).color}
-                      moodValue={v}
-                      size={64}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          )}
-          {slide.visual === 'calendar' && (
-            <View style={styles.calendarPreview}>
-              {[5,3,4,2,5,1,4,3,5,4,2,3,1,5,4].map((v, i) => (
-                <MoodFace
-                  key={i}
-                  color={MOODS.find((m) => m.value === v).color}
-                  moodValue={v}
-                  size={44}
-                />
-              ))}
-            </View>
-          )}
-          {slide.visual === 'streak' && (
-            <View style={styles.streakVisual}>
-              <Text style={[styles.streakNum, { color: C.text }]}>7</Text>
-              <Text style={[styles.streakLabel, { color: C.textSecondary }]}>day streak 🔥</Text>
-              <View style={styles.streakDots}>
-                {[5,4,3,5,4,5,5].map((v, i) => (
-                  <MoodFace
-                    key={i}
-                    color={MOODS.find((m) => m.value === v).color}
-                    moodValue={v}
-                    size={36}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
+      <ImageBackground source={paperArt} style={[styles.container, { backgroundColor: C.background }]} imageStyle={styles.backgroundImage}>
+        <View style={styles.topRow}>
+          {!isLast ? (
+            <TouchableOpacity style={[styles.skipBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={finish}>
+              <Text style={[styles.skipText, { color: C.textSecondary }]}>Skip</Text>
+            </TouchableOpacity>
+          ) : <View />}
         </View>
 
-        {/* Text */}
-        <View style={styles.textBlock}>
+        <ImageBackground source={slide.image} style={styles.poster} imageStyle={styles.posterImage}>
+          <View style={[styles.iconBubble, { backgroundColor: C.white }]}>
+            <Ionicons name={slide.icon} size={22} color={C.primary} />
+          </View>
+        </ImageBackground>
+
+        <View style={[styles.copyCard, { backgroundColor: C.card, borderColor: C.border }]}>
           <Text style={[styles.title, { color: C.text }]}>{slide.title}</Text>
+          <Text style={[styles.script, { color: C.text }]}>{slide.script}</Text>
           <Text style={[styles.body, { color: C.textSecondary }]}>{slide.body}</Text>
         </View>
 
-        {/* Dots */}
         <View style={styles.dots}>
           {SLIDES.map((_, i) => (
-            <View key={i} style={[styles.dot, { backgroundColor: C.border }, i === page && [styles.dotActive, { backgroundColor: C.primary }]]} />
+            <View key={i} style={[styles.dot, { backgroundColor: i === page ? C.primary : C.border }, i === page && styles.dotActive]} />
           ))}
         </View>
 
-        {/* Button */}
-        <TouchableOpacity style={[styles.btn, { backgroundColor: C.accent }]} onPress={handleNext} activeOpacity={0.8}>
-          <Text style={[styles.btnText, { color: C.white }]}>{isLast ? 'get started' : 'next'}</Text>
+        <TouchableOpacity style={[styles.btn, { backgroundColor: C.primary }]} onPress={handleNext} activeOpacity={0.82}>
+          <Text style={[styles.btnText, { color: C.white }]}>{isLast ? 'Start' : 'Next'}</Text>
+          <Ionicons name={isLast ? 'sparkles-outline' : 'chevron-forward'} size={18} color={C.white} />
         </TouchableOpacity>
-
-        {/* Skip */}
-        {!isLast && (
-          <TouchableOpacity
-            style={styles.skip}
-            onPress={async () => {
-              await AsyncStorage.setItem('onboarding_done', 'true');
-              router.replace('/');
-            }}
-          >
-            <Text style={[styles.skipText, { color: C.textSecondary }]}>skip</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      </ImageBackground>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1, paddingHorizontal: 22, paddingTop: 56, paddingBottom: 34 },
+  backgroundImage: { resizeMode: 'cover' },
+  topRow: { minHeight: 42, alignItems: 'flex-end', justifyContent: 'center' },
+  skipBtn: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 8 },
+  skipText: { fontFamily: 'Rounded', fontSize: 12, fontWeight: '900' },
+  poster: {
     flex: 1,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 32,
-    paddingTop: 80,
-    paddingBottom: 50,
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    minHeight: 320,
+    borderRadius: 34,
+    overflow: 'hidden',
+    marginTop: 12,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    padding: 16,
+    shadowColor: '#7D88B8',
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
-  visual: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  posterImage: { resizeMode: 'cover', borderRadius: 34 },
+  iconBubble: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  copyCard: {
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: 20,
+    marginTop: 18,
+    shadowColor: '#8A6A86',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
-  facesGrid: {
-    gap: 12,
-    alignItems: 'center',
-  },
-  faceRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  calendarPreview: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    maxWidth: SCREEN_W - 80,
-  },
-  streakVisual: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  streakNum: {
-    fontSize: 80,
-    fontWeight: '800',
-    letterSpacing: -4,
-    lineHeight: 88,
-  },
-  streakLabel: {
-    fontSize: 18,
-    letterSpacing: 0.3,
-  },
-  streakDots: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  textBlock: {
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: -0.5,
-    lineHeight: 36,
-  },
-  body: {
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-    letterSpacing: 0.2,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 24,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  dotActive: {
-    width: 18,
-  },
+  title: { fontFamily: 'Rounded', fontSize: 30, fontWeight: '900', textAlign: 'center' },
+  script: { fontFamily: 'Story', fontSize: 31, lineHeight: 34, textAlign: 'center', marginTop: 3 },
+  body: { fontFamily: 'Rounded', fontSize: 14, fontWeight: '800', lineHeight: 21, textAlign: 'center', marginTop: 10 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginVertical: 20 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotActive: { width: 24 },
   btn: {
+    minHeight: 54,
     borderRadius: 999,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
     alignItems: 'center',
-    width: '100%',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    shadowColor: '#A5664E',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
-  btnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-  },
-  skip: {
-    marginTop: 16,
-    padding: 8,
-  },
-  skipText: {
-    fontSize: 13,
-    letterSpacing: 0.3,
-  },
+  btnText: { fontFamily: 'Rounded', fontSize: 16, fontWeight: '900' },
 });

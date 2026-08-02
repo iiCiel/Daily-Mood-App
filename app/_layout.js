@@ -1,13 +1,15 @@
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { useEffect, useState, useRef } from 'react';
 import { useColorScheme, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
-import { saveEntry } from '../src/db/database';
+import { getEntry, saveEntry } from '../src/db/database';
 import { registerMoodCategory } from '../src/notifications';
+import { runAutoBackupIfDue } from '../src/lib/autoBackup';
 import LockScreen from './lock';
 
 const LOCK_KEY = 'app_lock_enabled';
@@ -21,9 +23,11 @@ function AppLayout() {
   const bgTimestampRef = useRef(null);
 
   useEffect(() => {
-    checkOnboarding();
     registerMoodCategory();
     initLock();
+    // Fire-and-forget: writes at most one verified backup per day if a folder is set.
+    // Never blocks launch and never surfaces errors here — Settings reports status.
+    runAutoBackupIfDue();
 
     // Handle quick mood from notification action
     const notifSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
@@ -32,7 +36,17 @@ function AppLayout() {
       if (mood >= 1 && mood <= 5) {
         const d = new Date();
         const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        await saveEntry(date, mood, '', []);
+        const existing = await getEntry(date);
+        await saveEntry(
+          date,
+          mood,
+          existing?.note || '',
+          existing?.photos?.map((p) => p.uri) || [],
+          existing?.tags || [],
+          existing?.gratitude || [],
+          existing?.productivity || null,
+          existing?.prayers || {}
+        );
       }
     });
 
@@ -66,13 +80,6 @@ function AppLayout() {
     if (hasHardware && enrolled) setLocked(true);
   }
 
-  async function checkOnboarding() {
-    const done = await AsyncStorage.getItem('onboarding_done');
-    if (!done) {
-      router.replace('/onboarding');
-    }
-  }
-
   if (locked) {
     return <LockScreen onUnlock={() => setLocked(false)} />;
   }
@@ -96,6 +103,13 @@ function AppLayout() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Story: require('../assets/fonts/Caveat.ttf'),
+    Rounded: require('../assets/fonts/Nunito.ttf'),
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
     <ThemeProvider>
       <AppLayout />
